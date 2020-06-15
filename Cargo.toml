@@ -15,5 +15,11 @@ bitflags = "1.2.1"
 byteorder = "1.3.4"
 zerocopy = "0.3.0"
 
+libfuzzer-sys = { version = "0.3", optional = true }
+
 [dev-dependencies]
 ring = "0.16.11"
+
+[features]
+# Enables deriving `arbitrary::Arbitrary` for various manticore types.
+arbitrary-derive = ["libfuzzer-sys"]

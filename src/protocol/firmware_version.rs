@@ -18,6 +18,9 @@ use crate::protocol::Response;
 use crate::protocol::Serialize;
 use crate::protocol::SerializeError;
 
+#[cfg(feature = "arbitrary-derive")]
+use libfuzzer_sys::arbitrary::{self, Arbitrary};
+
 /// A command for requesting a firmware version.
 ///
 /// Corresponds to [`CommandType::FirmwareVersion`].
@@ -38,7 +41,8 @@ impl<'a> Command<'a> for FirmwareVersion {
 /// The [`FirmwareVersion`] request.
 ///
 /// [`FirmwareVersion`]: enum.FirmwareVersion.html
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub struct FirmwareVersionRequest {
     /// Which portion of the RoT firmware to look up. `0` means the overall
     /// firmware image version. All other values are reserved for use by the
@@ -67,7 +71,7 @@ impl<'a> Serialize for FirmwareVersionRequest {
 /// The [`FirmwareVersion`] response.
 ///
 /// [`FirmwareVersion`]: enum.FirmwareVersion.html
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct FirmwareVersionResponse<'a> {
     /// The firmware version, as an ASCII string.
     ///

@@ -1,0 +1,43 @@
+# Copyright lowRISC contributors.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "manticore-fuzz"
+version = "0.0.0"
+authors = ["lowRISC Contributors"]
+license = "Apache-2.0"
+edition = "2018"
+
+# Never publish this "crate" to crates.io.
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies.libfuzzer-sys]
+version = "0.3"
+features = ["arbitrary-derive"]
+
+[dependencies.manticore]
+path = ".."
+features = ["arbitrary-derive"]
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+# The definitions below are auto-generated.
+# See `$REPO_TOP/util/new_protocol_target.py`
+
+[[bin]]
+name = "firmware_version_request_deserialize"
+path = "fuzz_targets/firmware_version_request_deserialize.rs"
+
+[[bin]]
+name = "firmware_version_request_serialize"
+path = "fuzz_targets/firmware_version_request_serialize.rs"
+
+[[bin]]
+name = "firmware_version_response_deserialize"
+path = "fuzz_targets/firmware_version_response_deserialize.rs"
