@@ -12,8 +12,9 @@
 #   Please refer the link for the detail
 #   https://help.github.com/en/articles/about-code-owners
 
+# Default Owners
+*                   @mcy @lenary @gkelly @moidx
+
 # License related files
 LICENSE*            @asb
 CLA*                @asb
-
-*                   @mcy @lenary @gkelly @moidx
