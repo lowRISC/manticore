@@ -15,7 +15,10 @@ bitflags = "1.2.1"
 byteorder = "1.3.4"
 zerocopy = "0.3.0"
 
-libfuzzer-sys = { version = "0.3", optional = true }
+[dependencies.libfuzzer-sys]
+version = "0.3"
+optional = true
+features = ["arbitrary-derive"]
 
 [dev-dependencies]
 ring = "0.16.11"

@@ -109,3 +109,9 @@ impl Serialize for FirmwareVersionResponse<'_> {
         Ok(())
     }
 }
+
+static_arbitrary! {
+    struct FirmwareVersionResponse<'static> in mod fvr {
+        version: Ref<'static, str>,
+    }
+}
