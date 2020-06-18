@@ -86,7 +86,7 @@ where
                 }
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
-                    version: zelf.opts.identity.firmware_version(),
+                    version: zelf.opts.identity.firmware_version().into(),
                 })
             })
             .handle::<protocol::DeviceCapabilities, _>(|zelf, req| {

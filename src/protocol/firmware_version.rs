@@ -9,6 +9,7 @@
 
 use crate::io::Read;
 use crate::io::Write;
+use crate::mem::Ref;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Deserialize;
@@ -41,7 +42,7 @@ impl<'a> Command<'a> for FirmwareVersion {
 /// The [`FirmwareVersion`] request.
 ///
 /// [`FirmwareVersion`]: enum.FirmwareVersion.html
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub struct FirmwareVersionRequest {
     /// Which portion of the RoT firmware to look up. `0` means the overall
@@ -71,14 +72,14 @@ impl<'a> Serialize for FirmwareVersionRequest {
 /// The [`FirmwareVersion`] response.
 ///
 /// [`FirmwareVersion`]: enum.FirmwareVersion.html
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FirmwareVersionResponse<'a> {
     /// The firmware version, as an ASCII string.
     ///
     /// This string may be at most 32 characters long; longer strings will
     /// result in serialization errors, and shorter strings will be padded with
     /// NULs.
-    pub version: &'a str,
+    pub version: Ref<'a, str>,
 }
 
 impl<'a> Response<'a> for FirmwareVersionResponse<'a> {
@@ -93,7 +94,9 @@ impl<'a> Deserialize<'a> for FirmwareVersionResponse<'a> {
         if !version.is_ascii() {
             return Err(DeserializeError::OutOfRange);
         }
-        Ok(Self { version })
+        Ok(Self {
+            version: Ref::new(version),
+        })
     }
 }
 
