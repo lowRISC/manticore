@@ -13,6 +13,7 @@ targets tend to be quite simple.
 import argparse
 import os
 import sys
+import re
 
 SERIALIZE_TEMPLATE = """// Copyright lowRISC contributors.
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
@@ -26,7 +27,7 @@ SERIALIZE_TEMPLATE = """// Copyright lowRISC contributors.
 use libfuzzer_sys::fuzz_target;
 
 use manticore::protocol::Serialize;
-use manticore::protocol::{module}::{typename};
+use manticore::protocol::{module}::{typeid};
 
 fuzz_target!(|data: {typename}| {{
     let mut out = [0u8; 1024];
@@ -46,7 +47,7 @@ DESERIALIZE_TEMPLATE = """// Copyright lowRISC contributors.
 use libfuzzer_sys::fuzz_target;
 
 use manticore::protocol::Deserialize;
-use manticore::protocol::{module}::{typename};
+use manticore::protocol::{module}::{typeid};
 
 fuzz_target!(|data: &[u8]| {{
     let mut data = data;
@@ -98,12 +99,12 @@ def main():
                          type=str,
                          help='the name of the type to fuzz, such as '\
                               'firmware_version::FirmwareVersionRequest')
-  argparser.add_argument('--skip-traits',
+  argparser.add_argument('--target-templates',
                          type=str,
-                         choices=['Serialize', 'Deserialize'],
+                         choices=['serialize', 'deserialize'],
                          nargs='*',
-                         default=[],
-                         help='traits to skip generating fuzz targets for')
+                         default=['serialize', 'deserialize'],
+                         help='which target templates to use; defaults to all')
   argparser.add_argument('--fuzz-dir',
                          type=str,
                          default='fuzz',
@@ -113,20 +114,23 @@ def main():
 
   fuzz_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), args.fuzz_dir)
   (module, typename) = tuple(args.typename.split('::'))
-  snake_case_name = camel_to_snake(typename)
+  typeid = re.search('^\w+', typename)[0]  # Remove a trailing <'static>
+  snake_case_name = camel_to_snake(typeid)
   command = ' '.join(sys.argv)
 
-  if 'Deserialize' not in args.skip_traits:
+  if 'deserialize' in args.target_templates:
     deserialize_name = "{}_deserialize".format(snake_case_name)
     deserialize_src = DESERIALIZE_TEMPLATE.format(module=module,
                                                   typename=typename,
+                                                  typeid=typeid,
                                                   command=command)
     add_target(fuzz_dir, deserialize_name, deserialize_src)
 
-  if 'Serialize' not in args.skip_traits:
+  if 'serialize' in args.target_templates:
     serialize_name = "{}_serialize".format(snake_case_name)
     serialize_src = SERIALIZE_TEMPLATE.format(module=module,
                                               typename=typename,
+                                              typeid=typeid,
                                               command=command)
     add_target(fuzz_dir, serialize_name, serialize_src)
 

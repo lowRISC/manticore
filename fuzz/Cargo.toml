@@ -41,3 +41,7 @@ path = "fuzz_targets/firmware_version_request_serialize.rs"
 [[bin]]
 name = "firmware_version_response_deserialize"
 path = "fuzz_targets/firmware_version_response_deserialize.rs"
+
+[[bin]]
+name = "firmware_version_response_serialize"
+path = "fuzz_targets/firmware_version_response_serialize.rs"
