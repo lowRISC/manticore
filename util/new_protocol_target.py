@@ -69,7 +69,7 @@ def main():
                               'firmware_version::FirmwareVersionRequest')
   argparser.add_argument('--target-templates',
                          type=str,
-                         choices=['serialize', 'deserialize'],
+                         choices=['serialize', 'deserialize', 'serialize_fuzz_safe'],
                          nargs='*',
                          default=['serialize', 'deserialize'],
                          help='which target templates to use; defaults to all')
@@ -87,10 +87,13 @@ def main():
   snake_case_name = camel_to_snake(typeid)
   command = ' '.join(sys.argv)
 
+  renames = {'serialize_fuzz_safe': 'serialize'}
   for template_name in args.target_templates:
     template = read_file(os.path.join(
         util_dir, '{}.rs.template'.format(template_name)))
 
+    if template_name in renames:
+      template_name = renames[template_name]
     name = "{}_{}".format(snake_case_name, template_name)
     src = template.format(module=module, typename=typename,
                           typeid=typeid, command=command)
