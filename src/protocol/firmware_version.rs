@@ -68,17 +68,19 @@ impl<'a> Serialize for FirmwareVersionRequest {
     }
 }
 
-/// The [`FirmwareVersion`] response.
-///
-/// [`FirmwareVersion`]: enum.FirmwareVersion.html
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct FirmwareVersionResponse<'a> {
-    /// The firmware version, as an ASCII string.
+make_fuzz_safe! {
+    /// The [`FirmwareVersion`] response.
     ///
-    /// This string may be at most 32 characters long; longer strings will
-    /// result in serialization errors, and shorter strings will be padded with
-    /// NULs.
-    pub version: &'a str,
+    /// [`FirmwareVersion`]: enum.FirmwareVersion.html
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    pub struct FirmwareVersionResponse<'a> as FVRWrap {
+        /// The firmware version, as an ASCII string.
+        ///
+        /// This string may be at most 32 characters long; longer strings will
+        /// result in serialization errors, and shorter strings will be padded with
+        /// NULs.
+        pub version: (&'a str),
+    }
 }
 
 impl<'a> Response<'a> for FirmwareVersionResponse<'a> {

@@ -44,6 +44,8 @@ use crate::io::Write;
 
 #[macro_use]
 mod macros;
+#[cfg(feature = "arbitrary-derive")]
+pub use macros::FuzzSafe;
 
 pub mod device_id;
 pub use device_id::DeviceId;
