@@ -27,6 +27,9 @@ use crate::protocol::Serialize;
 use crate::protocol::SerializeError;
 use crate::protocol::WireEnum;
 
+#[cfg(feature = "arbitrary-derive")]
+use libfuzzer_sys::arbitrary::{self, Arbitrary};
+
 /// A command for negotiating shared device capabilities.
 ///
 /// Corresponds to [`CommandType::DeviceCapabilities`].
@@ -43,7 +46,8 @@ impl Command<'_> for DeviceCapabilities {
 /// The [`DeviceCapabilities`] request.
 ///
 /// [`DeviceCapabilities`]: enum.DeviceCapabilities.html
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub struct DeviceCapabilitiesRequest {
     /// The advertised capabilities of the client.
     pub capabilities: Capabilities,
@@ -69,7 +73,8 @@ impl Serialize for DeviceCapabilitiesRequest {
 /// The [`DeviceCapabilities`] response.
 ///
 /// [`DeviceCapabilities`]: enum.DeviceCapabilities.html
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub struct DeviceCapabilitiesResponse {
     /// Capabilities negotiated based on the request.
     pub capabilities: Capabilities,
@@ -120,6 +125,7 @@ impl Serialize for DeviceCapabilitiesResponse {
 
 wire_enum! {
     /// A "mode" for a Cerberus RoT: "active" or "platform".
+    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
     pub enum RotMode: u8 {
         /// Represents an "AC-RoT" or "Active Root of Trust", an RoT chip which
         /// protects some kind of peripheral hardware.
@@ -135,6 +141,7 @@ bitflags! {
     /// The role of this device on a shared bus.
     ///
     /// (Cerberus refers to these capabilities as master/slave.)
+    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
     pub struct BusRole: u8 {
         /// This device can act as a "host".
         const HOST = 0b01;
@@ -148,6 +155,7 @@ bitflags! {
     ///
     /// I.e, this enum describes different security primitives the device might
     /// support.
+    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
     pub struct Security: u8 {
         /// This device has hash and key derivation capabilities.
         const HASH_AND_KDF = 0b001;
@@ -162,6 +170,7 @@ bitflags! {
 
 bitflags! {
     /// Represents a supported elliptic curve cryptography key strength.
+    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
     pub struct EccKeyStrength: u8 {
         /// A key strength of 160 bits.
         const BITS_160 = 0b001;
@@ -172,6 +181,7 @@ bitflags! {
 
 bitflags! {
     /// Represents a supported RSA key strength.
+    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
     pub struct RsaKeyStrength: u8 {
         /// A key strength of 2048 bits.
         const BITS_2048 = 0b001;
@@ -202,6 +212,7 @@ impl RsaKeyStrength {
 
 bitflags! {
     /// Represents a supported AES key strength.
+    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
     pub struct AesKeyStrength: u8 {
         /// A key strength of 128 bits.
         const BITS_128 = 0b001;
@@ -214,7 +225,8 @@ bitflags! {
 ///
 /// A value of this type needs to be provided to `manticore` by an integration,
 /// so that it can faithfully report it during capabilities negotiation.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub struct Networking {
     /// The maximum message size this device can buffer, in bytes.
     ///
@@ -246,7 +258,8 @@ pub struct Networking {
 ///
 /// Some fields in this struct may apear unused or redundant. This struct is
 /// meant to be a strict reflection of the wire format specified by Cerberus.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub struct Capabilities {
     /// Integration-provided information on the device's networking
     /// capabilities.
@@ -419,7 +432,8 @@ impl Serialize for Capabilities {
 /// Timeout "capabilities", that is, how long a client should expect a device
 /// to take to respond to a request before it decides that the device is
 /// unreachable.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub struct Timeouts {
     /// The timeout for a "regular" request, that is, one which does not
     /// perform expensive cryptography.

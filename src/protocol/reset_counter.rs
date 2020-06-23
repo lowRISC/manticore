@@ -19,6 +19,9 @@ use crate::protocol::Response;
 use crate::protocol::Serialize;
 use crate::protocol::SerializeError;
 
+#[cfg(feature = "arbitrary-derive")]
+use libfuzzer_sys::arbitrary::{self, Arbitrary};
+
 /// A command for requesting a firmware version.
 ///
 /// Corresponds to [`CommandType::ResetCounter`].
@@ -38,6 +41,7 @@ impl<'a> Command<'a> for ResetCounter {
 
 wire_enum! {
     /// A reset type, i.e., the kind of reset counter that is being queried.
+    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
     pub enum ResetType: u8 {
         /// A reset of the RoT handling the request.
         Local = 0x00,
@@ -52,7 +56,8 @@ wire_enum! {
 /// The [`ResetCounter`] request.
 ///
 /// [`ResetCounter`]: enum.ResetCounter.html
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub struct ResetCounterRequest {
     /// The type of counter being looked up.
     pub reset_type: ResetType,
@@ -86,7 +91,8 @@ impl<'a> Serialize for ResetCounterRequest {
 /// The [`ResetCounter`] response.
 ///
 /// [`ResetCounter`]: enum.ResetCounter.html
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub struct ResetCounterResponse {
     /// The number of resets since POR, for the requested device.
     pub count: u16,
