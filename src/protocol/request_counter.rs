@@ -20,6 +20,9 @@ use crate::protocol::Response;
 use crate::protocol::Serialize;
 use crate::protocol::SerializeError;
 
+#[cfg(feature = "arbitrary-derive")]
+use libfuzzer_sys::arbitrary::{self, Arbitrary};
+
 /// A command for querying the reqest counters.
 ///
 /// Corresponds to [`CommandType::RequestCounter`].
@@ -36,7 +39,8 @@ impl<'a> Command<'a> for RequestCounter {
 /// The [`RequestCounter`] request.
 ///
 /// [`RequestCounter`]: enum.RequestCounter.html
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub struct RequestCounterRequest;
 
 impl Request<'_> for RequestCounterRequest {
@@ -58,7 +62,8 @@ impl<'a> Serialize for RequestCounterRequest {
 /// The [`RequestCounter`] response.
 ///
 /// [`RequestCounter`]: enum.RequestCounter.html
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub struct RequestCounterResponse {
     /// The number of successful requests since reset.
     pub ok_count: u16,

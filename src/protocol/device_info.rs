@@ -18,6 +18,9 @@ use crate::protocol::Response;
 use crate::protocol::Serialize;
 use crate::protocol::SerializeError;
 
+#[cfg(feature = "arbitrary-derive")]
+use libfuzzer_sys::arbitrary::{self, Arbitrary};
+
 /// A command for requesting device information.
 ///
 /// Corresponds to [`CommandType::DeviceInfo`].
@@ -33,6 +36,7 @@ impl<'a> Command<'a> for DeviceInfo {
 
 wire_enum! {
     /// A type of "device information" that can be requested.
+    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
     pub enum InfoIndex: u8 {
         /// Represents getting the Unique Chip Identifier for the device.
         UniqueChipIndex = 0x00,
@@ -42,7 +46,8 @@ wire_enum! {
 /// The [`DeviceInfo`] request.
 ///
 /// [`DeviceInfo`]: enum.DeviceInfo.html
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub struct DeviceInfoRequest {
     /// Which device information to look up.
     pub index: InfoIndex,
@@ -66,17 +71,19 @@ impl<'a> Serialize for DeviceInfoRequest {
     }
 }
 
-/// The [`DeviceInfo`] response.
-///
-/// [`DeviceInfo`]: enum.DeviceInfo.html
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct DeviceInfoResponse<'a> {
-    /// The requested information, in some binary format.
+make_fuzz_safe! {
+    /// The [`DeviceInfo`] response.
     ///
-    /// The format of the response depends on which information index was sent.
-    /// Only `0x00` is specified by Cerberus, which is reqired to produce the
-    /// "Unique Chip Identifier".
-    pub info: &'a [u8],
+    /// [`DeviceInfo`]: enum.DeviceInfo.html
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    pub struct DeviceInfoResponse<'a> as DIRWrap {
+        /// The requested information, in some binary format.
+        ///
+        /// The format of the response depends on which information index was sent.
+        /// Only `0x00` is specified by Cerberus, which is reqired to produce the
+        /// "Unique Chip Identifier".
+        pub info: (&'a [u8]),
+    }
 }
 
 impl<'a> Response<'a> for DeviceInfoResponse<'a> {
