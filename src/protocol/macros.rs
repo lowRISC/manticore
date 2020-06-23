@@ -101,12 +101,12 @@ macro_rules! make_fuzz_safe {
                 )*}
             }
         }
-
+        #[cfg(feature = "arbitrary-derive")]
         impl<$($lt)?> $crate::protocol::macros::FuzzSafe for $name<$($lt)?> {
             type Safe = $wrapper_name;
         }
     };
-    (@convert_ty, (&$lt:tt [$ty:ty])) => {std::boxed::Box<[T]>};
+    (@convert_ty, (&$lt:tt [$ty:ty])) => {std::boxed::Box<[$ty]>};
     (@convert_ty, (&$lt:tt str)) => {std::boxed::Box<str>};
     (@convert_ty, (&$lt:tt $ty:ty)) => {$ty};
     (@convert_ty, $ty:ty) => {$ty};
