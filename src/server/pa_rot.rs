@@ -13,6 +13,7 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::protocol;
 use crate::protocol::capabilities;
+use crate::protocol::device_id;
 use crate::server::Error;
 
 use crate::server::handler::prelude::*;
@@ -30,6 +31,8 @@ pub struct Options<'a, Identity, Reset, Rsa> {
     /// A handle to an RSA engine builder.
     pub rsa: &'a Rsa,
 
+    /// This device's silicon identifier.
+    pub device_id: device_id::DeviceIdentifier,
     /// Integration-provided description of the device's networking
     /// capabilities.
     pub networking: capabilities::Networking,
@@ -123,7 +126,12 @@ where
             })
             .handle::<protocol::DeviceId, _>(|zelf, _| {
                 Ok(protocol::device_id::DeviceIdResponse {
-                    id: zelf.opts.identity.device_identity(),
+                    id: zelf.opts.device_id,
+                })
+            })
+            .handle::<protocol::DeviceInfo, _>(|zelf, _| {
+                Ok(protocol::device_info::DeviceInfoResponse {
+                    info: zelf.opts.identity.unique_device_identity(),
                 })
             })
             .handle::<protocol::ResetCounter, _>(|zelf, req| {
@@ -191,16 +199,23 @@ mod test {
         crypto: Duration::from_millis(200),
     };
 
-    const FIRMWARE_VERSION: &str = "test_version";
-    const DEVICE_ID: u64 = 0xa5a5a5a5_5a5a5a5a;
+    const DEVICE_ID: device_id::DeviceIdentifier =
+        device_id::DeviceIdentifier {
+            vendor_id: 1,
+            device_id: 2,
+            subsys_vendor_id: 3,
+            subsys_id: 4,
+        };
 
+    const FIRMWARE_VERSION: &str = "test_version";
+    const UDI: &[u8] = b"totally random bits";
     struct Identity;
     impl hardware::Identity for Identity {
         fn firmware_version(&self) -> &str {
             FIRMWARE_VERSION
         }
-        fn device_identity(&self) -> u64 {
-            DEVICE_ID
+        fn unique_device_identity(&self) -> &[u8] {
+            UDI
         }
     }
 
@@ -220,6 +235,7 @@ mod test {
             identity: &Identity,
             reset: &Reset,
             rsa: &ring::Rsa,
+            device_id: DEVICE_ID,
             networking: NETWORKING,
             timeouts: TIMEOUTS,
         });
