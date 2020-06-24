@@ -62,10 +62,8 @@ impl Serialize for DeviceIdRequest {
 /// [`DeviceId`]: enum.DeviceId.html
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct DeviceIdResponse {
-    /// A "device id".
-    ///
-    /// Currently, this is an unstructured collection of 64 bits.
-    pub id: u64,
+    /// A device identifier that uniquely identifies this device's silicon.
+    pub id: DeviceIdentifier,
 }
 
 impl Response<'_> for DeviceIdResponse {
@@ -74,14 +72,57 @@ impl Response<'_> for DeviceIdResponse {
 
 impl<'a> Deserialize<'a> for DeviceIdResponse {
     fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
-        let id = r.read_le()?;
+        let id = DeviceIdentifier::deserialize(r)?;
         Ok(Self { id })
     }
 }
 
 impl Serialize for DeviceIdResponse {
     fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
-        w.write_le(self.id)?;
+        self.id.serialize(w)?;
+        Ok(())
+    }
+}
+
+/// An identifier for a physical device.
+///
+/// This identifier is not of a secret nature, but mostly serves to allow
+/// other devices on a Cerberus network to identify its make and model.
+///
+/// The meaning of the fields below is currently unspecified by Cerberus
+/// beyond their names.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+// TODO: Remove this once we have a better idea of what Cerberus expects of
+// these fields.
+#[allow(missing_docs)]
+pub struct DeviceIdentifier {
+    pub vendor_id: u16,
+    pub device_id: u16,
+    pub subsys_vendor_id: u16,
+    pub subsys_id: u16,
+}
+
+impl<'a> Deserialize<'a> for DeviceIdentifier {
+    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
+        let vendor_id = r.read_le::<u16>()?;
+        let device_id = r.read_le::<u16>()?;
+        let subsys_vendor_id = r.read_le::<u16>()?;
+        let subsys_id = r.read_le::<u16>()?;
+        Ok(Self {
+            vendor_id,
+            device_id,
+            subsys_vendor_id,
+            subsys_id,
+        })
+    }
+}
+
+impl Serialize for DeviceIdentifier {
+    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
+        w.write_le(self.vendor_id)?;
+        w.write_le(self.device_id)?;
+        w.write_le(self.subsys_vendor_id)?;
+        w.write_le(self.subsys_id)?;
         Ok(())
     }
 }

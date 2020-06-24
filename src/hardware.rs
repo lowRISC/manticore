@@ -22,9 +22,9 @@ pub trait Identity {
     /// should be robust against this contract not being upheld.
     fn firmware_version(&self) -> &str;
 
-    /// Returns the "device identity" for the current device; this is a
-    /// 64-bit integer of otherwise unspecified structure.
-    fn device_identity(&self) -> u64;
+    /// Returns the "unique device identity" for the device. This is a binary
+    /// value of unspecified format.
+    fn unique_device_identity(&self) -> &[u8];
 }
 
 /// Provides access to device reset-related information for a particular
