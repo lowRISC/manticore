@@ -115,3 +115,31 @@ impl Serialize for ResetCounterResponse {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    round_trip_test! {
+        request_round_trip: {
+            bytes: &[0x01, 0x00],
+            value: ResetCounterRequest {
+                reset_type: ResetType::External,
+                port_id: 0
+            },
+        },
+        request_round_trip2: {
+            bytes: &[0x00, 0xaa],
+            value: ResetCounterRequest {
+                reset_type: ResetType::Local,
+                port_id: 0xaa
+            },
+        },
+        response_round_trip: {
+            bytes: &[0x20, 0x00],
+            value: ResetCounterResponse {
+                count: 32
+            },
+        },
+    }
+}

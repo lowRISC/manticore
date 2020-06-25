@@ -132,3 +132,26 @@ impl Serialize for DeviceIdentifier {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    round_trip_test! {
+        request_round_trip: {
+            bytes: &[],
+            value: DeviceIdRequest,
+        },
+        response_round_trip: {
+            bytes: b"abcdefgh",
+            value: DeviceIdResponse {
+                id: DeviceIdentifier {
+                    vendor_id: 0x6261,
+                    device_id: 0x6463,
+                    subsys_vendor_id: 0x6665,
+                    subsys_id: 0x6867,
+                }
+            },
+        },
+    }
+}
