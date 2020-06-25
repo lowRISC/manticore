@@ -16,11 +16,10 @@ use zerocopy::FromBytes;
 
 /// Provides access to "chip identity" information of various types.
 pub trait Identity {
-    /// Returns a string indicating the RoT's firmware version, in ASCII.
+    /// Returns a string indicating the RoT's firmware version.
     ///
-    /// This string should be ASCII and at most 32 bytes long, though callers
-    /// should be robust against this contract not being upheld.
-    fn firmware_version(&self) -> &str;
+    /// Although not enforced, it is recommended that this be an ASCII string.
+    fn firmware_version(&self) -> &[u8; 32];
 
     /// Returns the "unique device identity" for the device. This is a binary
     /// value of unspecified format.

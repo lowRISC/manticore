@@ -297,6 +297,9 @@ mod test {
     use super::*;
     use crate::protocol::test_util;
 
+    const VERSION1: &[u8; 32] = &[2; 32];
+    const VERSION2: &[u8; 32] = &[5; 32];
+
     #[test]
     fn empty_handler() {
         let handler = Handler::new();
@@ -325,7 +328,7 @@ mod test {
                 assert_eq!(req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
-                    version: "some value",
+                    version: VERSION1,
                 })
             },
         );
@@ -345,7 +348,7 @@ mod test {
         let resp = test_util::read_resp::<
             protocol::firmware_version::FirmwareVersionResponse,
         >(resp);
-        assert!(resp.version.starts_with("some value"));
+        assert!(resp.version.starts_with(VERSION1));
     }
 
     #[test]
@@ -358,7 +361,7 @@ mod test {
                 assert_eq!(req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
-                    version: "some value",
+                    version: VERSION1,
                 })
             },
         );
@@ -388,7 +391,7 @@ mod test {
                 assert_eq!(req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
-                    version: "some value",
+                    version: VERSION1,
                 })
             },
         );
@@ -420,7 +423,7 @@ mod test {
                 assert_eq!(req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
-                    version: "some value",
+                    version: VERSION1,
                 })
             })
             .handle::<protocol::DeviceId, _>(|_, _| {
@@ -442,7 +445,7 @@ mod test {
         let resp = test_util::read_resp::<
             protocol::firmware_version::FirmwareVersionResponse,
         >(resp);
-        assert!(resp.version.starts_with("some value"));
+        assert!(resp.version.starts_with(VERSION1));
     }
 
     #[test]
@@ -458,7 +461,7 @@ mod test {
                 assert_eq!(req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
-                    version: "some value",
+                    version: VERSION1,
                 })
             });
 
@@ -477,7 +480,7 @@ mod test {
         let resp = test_util::read_resp::<
             protocol::firmware_version::FirmwareVersionResponse,
         >(resp);
-        assert!(resp.version.starts_with("some value"));
+        assert!(resp.version.starts_with(VERSION1));
     }
 
     #[test]
@@ -489,7 +492,7 @@ mod test {
                 handler1_called = true;
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
-                    version: "some value #1",
+                    version: VERSION1,
                 })
             })
             .handle::<protocol::DeviceId, _>(|_, _| {
@@ -499,7 +502,7 @@ mod test {
                 handler2_called = true;
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
-                    version: "some value #2",
+                    version: VERSION2,
                 })
             });
 
@@ -518,6 +521,6 @@ mod test {
         let resp = test_util::read_resp::<
             protocol::firmware_version::FirmwareVersionResponse,
         >(resp);
-        assert!(resp.version.starts_with("some value"));
+        assert!(resp.version == VERSION1 || resp.version == VERSION2);
     }
 }
