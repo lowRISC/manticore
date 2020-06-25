@@ -7,6 +7,8 @@
 //! This module provides a Cerberus command allowing the versions of various
 //! on-device firmware to be queried.
 
+use core::convert::TryInto as _;
+
 use crate::io::Read;
 use crate::io::Write;
 use crate::protocol::Command;
@@ -74,12 +76,8 @@ make_fuzz_safe! {
     /// [`FirmwareVersion`]: enum.FirmwareVersion.html
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     pub struct FirmwareVersionResponse<'a> as FVRWrap {
-        /// The firmware version, as an ASCII string.
-        ///
-        /// This string may be at most 32 characters long; longer strings will
-        /// result in serialization errors, and shorter strings will be padded with
-        /// NULs.
-        pub version: (&'a str),
+        /// The firmware version. In practice, this is usually an ASCII string.
+        pub version: (&'a [u8; 32]),
     }
 }
 

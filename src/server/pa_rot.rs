@@ -182,10 +182,12 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use core::convert::TryInto as _;
+    use core::time::Duration;
+
     use crate::crypto::ring;
     use crate::protocol::capabilities::*;
     use crate::protocol::test_util;
-    use core::time::Duration;
 
     const NETWORKING: Networking = Networking {
         max_message_size: 1024,
@@ -207,15 +209,16 @@ mod test {
             subsys_id: 4,
         };
 
-    const FIRMWARE_VERSION: &str = "test_version";
-    const UDI: &[u8] = b"totally random bits";
-    struct Identity;
+    struct Identity {
+        version: Vec<u8>,
+        device_id: Vec<u8>,
+    }
     impl hardware::Identity for Identity {
-        fn firmware_version(&self) -> &str {
-            FIRMWARE_VERSION
+        fn firmware_version(&self) -> &[u8; 32] {
+            self.version[..].try_into().unwrap()
         }
         fn unique_device_identity(&self) -> &[u8] {
-            UDI
+            &self.device_id
         }
     }
 
@@ -231,8 +234,19 @@ mod test {
 
     #[test]
     fn sanity() {
+        let identity = Identity {
+            version: {
+                let mut vec = b"test version".to_vec();
+                while vec.len() < 32 {
+                    vec.push(0);
+                }
+                vec
+            },
+            device_id: b"totally random bits".to_vec(),
+        };
+
         let mut server = PaRot::new(Options {
-            identity: &Identity,
+            identity: &identity,
             reset: &Reset,
             rsa: &ring::Rsa,
             device_id: DEVICE_ID,
@@ -254,7 +268,7 @@ mod test {
         let resp = test_util::read_resp::<
             protocol::firmware_version::FirmwareVersionResponse,
         >(resp);
-        assert!(resp.version.starts_with(FIRMWARE_VERSION));
+        assert_eq!(&resp.version[..], &identity.version[..]);
 
         let mut req = test_util::write_req(
             protocol::device_id::DeviceIdRequest,
