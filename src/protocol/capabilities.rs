@@ -362,7 +362,6 @@ impl<'a> Deserialize<'a> for Capabilities {
         // The eighth byte consists of the aes strength, four reserved bits,
         // and the ecc bit.
         let mut byte_eight = BitBuf::from_bits(r.read_le::<u8>()?);
-        let _ = byte_eight.read_bits(1)?;
         let has_ecc = byte_eight.read_bit()?;
         let _ = byte_eight.read_bits(4)?;
         let aes_bits = byte_eight.read_bits(AES_SIZE)?;
@@ -419,7 +418,6 @@ impl Serialize for Capabilities {
         w.write_le(seventh_byte.bits())?;
 
         let mut eighth_byte = BitBuf::new();
-        eighth_byte.write_zero_bits(1)?;
         eighth_byte.write_bit(self.has_ecc)?;
         eighth_byte.write_zero_bits(4)?;
         eighth_byte.write_bits(AES_SIZE, self.aes_strength.bits())?;
@@ -449,4 +447,80 @@ pub struct Timeouts {
     /// it is encoded as a byte with units of 100 ms (not 10 ms, as
     /// `response_timeout` would suggest).
     pub crypto: Duration,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    round_trip_test! {
+        request_round_trip: {
+            bytes: &[
+                0x00, 0x01,  // Message size.
+                0x80, 0x00,  // Packet size.
+                0b01_11_0_011,  // PA-RoT, Host + Target, KDF + Auth
+                0b1_0_0_00000,  // PFM support.
+                0b1_0_000_001,  // RSA-2048 only.
+                0b0_0000_011,  // AES-128 and -256
+            ],
+            value: DeviceCapabilitiesRequest {
+                capabilities: Capabilities {
+                    networking: Networking {
+                        max_message_size: 0x100,
+                        max_packet_size: 0x80,
+                        mode: RotMode::Platform,
+                        roles: BusRole::HOST | BusRole::TARGET,
+                    },
+                    security: Security::HASH_AND_KDF | Security::AUTHENTICATION,
+                    has_pfm_support: true,
+                    has_policy_support: false,
+                    has_firmware_protection: false,
+                    has_ecdsa: false,
+                    has_ecc: false,
+                    has_rsa: true,
+                    has_aes: false,
+                    ecc_strength: EccKeyStrength::empty(),
+                    rsa_strength: RsaKeyStrength::BITS_2048,
+                    aes_strength: AesKeyStrength::BITS_128 | AesKeyStrength::BITS_256,
+                },
+            },
+        },
+        response_round_trip: {
+            bytes: &[
+                0x00, 0x01,  // Message size.
+                0x80, 0x00,  // Packet size.
+                0b01_11_0_011,  // PA-RoT, Host + Target, KDF + Auth
+                0b1_0_0_00000,  // PFM support.
+                0b1_0_000_001,  // RSA-2048 only.
+                0b0_0000_011,  // AES-128 and -256
+                50,  // 500ms normal timeout.
+                2,  // 200ms crypto timeout.
+            ],
+            value: DeviceCapabilitiesResponse {
+                capabilities: Capabilities {
+                    networking: Networking {
+                        max_message_size: 0x100,
+                        max_packet_size: 0x80,
+                        mode: RotMode::Platform,
+                        roles: BusRole::HOST | BusRole::TARGET,
+                    },
+                    security: Security::HASH_AND_KDF | Security::AUTHENTICATION,
+                    has_pfm_support: true,
+                    has_policy_support: false,
+                    has_firmware_protection: false,
+                    has_ecdsa: false,
+                    has_ecc: false,
+                    has_rsa: true,
+                    has_aes: false,
+                    ecc_strength: EccKeyStrength::empty(),
+                    rsa_strength: RsaKeyStrength::BITS_2048,
+                    aes_strength: AesKeyStrength::BITS_128 | AesKeyStrength::BITS_256,
+                },
+                timeouts: Timeouts {
+                    regular: Duration::from_millis(500),
+                    crypto: Duration::from_millis(200),
+                }
+            },
+        },
+    }
 }

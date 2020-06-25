@@ -102,3 +102,25 @@ impl Serialize for DeviceUptimeResponse {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    round_trip_test! {
+        request_round_trip: {
+            bytes: &[0x0],
+            value: DeviceUptimeRequest { port_id: 0 },
+        },
+        request_round_trip2: {
+            bytes: &[0xaa],
+            value: DeviceUptimeRequest { port_id: 0xaa },
+        },
+        response_round_trip: {
+            bytes: &5555u32.to_le_bytes(),
+            value: DeviceUptimeResponse {
+                uptime: Duration::from_micros(5555),
+            },
+        },
+    }
+}

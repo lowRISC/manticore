@@ -51,6 +51,52 @@ macro_rules! wire_enum {
     }
 }
 
+/// Covenience macro for generating a "round trip unit test".
+///
+/// This macro generates a unit test for a protocol struct that ensures that a
+/// given byte slice can be converted back and forth with a given value of a
+/// protocol struct, exactly.
+///
+/// Syntax:
+/// ```text
+/// rount_trip_test! {
+///     test_name: {
+///         bytes: <contant expression of type &[u8]>,
+///         value: <struct initializer for the corresponding protocol value>,
+///     }
+///     // more cases ...
+/// }
+/// ```
+#[cfg(test)]
+macro_rules! round_trip_test {
+    ($($name:ident: {
+        bytes: $bytes:expr,
+        value: $ty:ident $({ $($field:ident: $field_val:expr),* $(,)? })?,
+    },)+) => {$(
+        #[test]
+        fn $name() {
+            use $crate::protocol::*;
+            let bytes: &[u8] = $bytes;
+            let value: $ty = $ty $({ $($field: $field_val,)* })?;
+
+            let mut bytes_reader = bytes;
+            let deserialized = $ty::deserialize(&mut bytes_reader)
+                .expect("deserialization failed");
+            assert_eq!(bytes_reader.len(), 0,
+                "expected bytes to be fully read");
+            assert_eq!(deserialized, value);
+
+            const BUF_LEN: usize = 1 << 10;
+            let mut buf = [0u8; BUF_LEN];
+            let mut buf_ref = &mut buf[..];
+            value.serialize(&mut buf_ref).expect("serialization failed");
+            let len = BUF_LEN - buf_ref.len();
+            let serialized = &buf[..len];
+            assert_eq!(serialized, bytes);
+        }
+    )+}
+}
+
 #[cfg(feature = "arbitrary-derive")]
 /// Convenience trait for use with `make_fuzz_safe`.
 #[doc(hidden)]

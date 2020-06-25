@@ -93,3 +93,22 @@ impl Serialize for RequestCounterResponse {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    round_trip_test! {
+        request_round_trip: {
+            bytes: &[],
+            value: RequestCounterRequest,
+        },
+        response_round_trip: {
+            bytes: &[0x44, 0x01, 0x07, 0x00],
+            value: RequestCounterResponse {
+                ok_count: 324,
+                err_count: 7,
+            },
+        },
+    }
+}
