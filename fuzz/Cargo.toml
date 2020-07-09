@@ -141,3 +141,7 @@ path = "fuzz_targets/request_counter_response_serialize.rs"
 [[bin]]
 name = "request_counter_response_deserialize"
 path = "fuzz_targets/request_counter_response_deserialize.rs"
+
+[[bin]]
+name = "manifest_parse"
+path = "fuzz_targets/manifest_parse.rs"
