@@ -244,6 +244,9 @@ mod test {
 
     use crate::crypto::ring;
     use crate::crypto::rsa::Builder as _;
+    use crate::crypto::rsa::Keypair as _;
+    use crate::crypto::rsa::Signer as _;
+    use crate::crypto::rsa::SignerBuilder as _;
     use crate::crypto::testdata;
 
     const MANIFEST_HEADER: &[u8] = &[
@@ -259,18 +262,21 @@ mod test {
 
     #[test]
     fn parse_manifest() {
+        let keypair =
+            ring::RsaKeypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
+                .unwrap();
+        let pub_key = keypair.public();
+        let mut signer = ring::Rsa.new_signer(keypair).unwrap();
+        let mut rsa = ring::Rsa.new_engine(pub_key).unwrap();
+
         let mut manifest = MANIFEST_HEADER.to_vec();
         manifest.extend_from_slice(MANIFEST_CONTENTS);
-        let sig = ring::Rsa::sign_with_pkcs8(
-            testdata::RSA_2048_PRIV_PKCS8,
-            &manifest,
-        );
+
+        let mut sig = vec![0; signer.pub_len().byte_len()];
+        signer.sign(&manifest, &mut sig).unwrap();
+
         manifest.extend_from_slice(&sig);
         assert_eq!(manifest.len(), 0x11e);
-
-        let pub_key =
-            ring::RsaPubKey::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8);
-        let mut rsa = ring::Rsa.new_engine(pub_key).unwrap();
 
         let manifest = Manifest::parse_and_verify(&manifest, &mut rsa).unwrap();
         assert_eq!(manifest.manifest_type(), ManifestType::Fpm);
@@ -279,39 +285,44 @@ mod test {
 
     #[test]
     fn parse_manifest_too_short() {
+        let keypair =
+            ring::RsaKeypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
+                .unwrap();
+        let pub_key = keypair.public();
+        let mut signer = ring::Rsa.new_signer(keypair).unwrap();
+        let mut rsa = ring::Rsa.new_engine(pub_key).unwrap();
+
         let mut manifest = MANIFEST_HEADER.to_vec();
         manifest.extend_from_slice(&MANIFEST_CONTENTS[1..]);
-        let sig = ring::Rsa::sign_with_pkcs8(
-            testdata::RSA_2048_PRIV_PKCS8,
-            &manifest,
-        );
+
+        let mut sig = vec![0; signer.pub_len().byte_len()];
+        signer.sign(&manifest, &mut sig).unwrap();
+
         manifest.extend_from_slice(&sig);
         assert_eq!(manifest.len(), 0x11d);
-
-        let pub_key =
-            ring::RsaPubKey::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8);
-        let mut rsa = ring::Rsa.new_engine(pub_key).unwrap();
 
         assert!(Manifest::parse_and_verify(&manifest, &mut rsa).is_err());
     }
 
     #[test]
     fn parse_manifest_bad_sig() {
+        let keypair =
+            ring::RsaKeypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
+                .unwrap();
+        let pub_key = keypair.public();
+        let mut signer = ring::Rsa.new_signer(keypair).unwrap();
+        let mut rsa = ring::Rsa.new_engine(pub_key).unwrap();
+
         let mut manifest = MANIFEST_HEADER.to_vec();
         manifest.extend_from_slice(MANIFEST_CONTENTS);
-        let mut sig = ring::Rsa::sign_with_pkcs8(
-            testdata::RSA_2048_PRIV_PKCS8,
-            &manifest,
-        );
 
-        // Flip a byte in the signature.
-        sig[0] = !sig[0];
+        let mut sig = vec![0; signer.pub_len().byte_len()];
+        signer.sign(&manifest, &mut sig).unwrap();
+        // Flip a bit in the signature.
+        sig[0] ^= 1;
+
         manifest.extend_from_slice(&sig);
         assert_eq!(manifest.len(), 0x11e);
-
-        let pub_key =
-            ring::RsaPubKey::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8);
-        let mut rsa = ring::Rsa.new_engine(pub_key).unwrap();
 
         assert!(matches!(
             Manifest::parse_and_verify(&manifest, &mut rsa),
