@@ -172,9 +172,15 @@ impl<'m> Manifest<'m> {
         let _ = r.read_le::<u16>()?;
         let header_len = buf_len - r.remaining_data();
 
-        let rest = r.read_bytes(len - header_len)?;
-        let sig_offset = len - sig_len;
-        let (body, signature) = rest.split_at(sig_offset - header_len);
+        let rest_len =
+            len.checked_sub(header_len).ok_or(ParseError::OutOfRange)?;
+        let rest = r.read_bytes(rest_len)?;
+        let sig_offset =
+            len.checked_sub(sig_len).ok_or(ParseError::OutOfRange)?;
+        let sig_offset_past_header = sig_offset
+            .checked_sub(header_len)
+            .ok_or(ParseError::OutOfRange)?;
+        let (body, signature) = rest.split_at(sig_offset_past_header);
 
         // We need to include the header in the "signed portion". This code
         // cannot panic, because we have already completely consumed the buffer
