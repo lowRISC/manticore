@@ -11,12 +11,12 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::Deserialize;
-use crate::protocol::DeserializeError;
+use crate::protocol::FromWire;
+use crate::protocol::FromWireError;
 use crate::protocol::Request;
 use crate::protocol::Response;
-use crate::protocol::Serialize;
-use crate::protocol::SerializeError;
+use crate::protocol::ToWire;
+use crate::protocol::ToWireError;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
@@ -49,14 +49,14 @@ impl Request<'_> for DeviceIdRequest {
     const TYPE: CommandType = CommandType::DeviceId;
 }
 
-impl<'a> Deserialize<'a> for DeviceIdRequest {
-    fn deserialize<R: Read<'a>>(_: &mut R) -> Result<Self, DeserializeError> {
+impl<'a> FromWire<'a> for DeviceIdRequest {
+    fn from_wire<R: Read<'a>>(_: &mut R) -> Result<Self, FromWireError> {
         Ok(DeviceIdRequest)
     }
 }
 
-impl Serialize for DeviceIdRequest {
-    fn serialize<W: Write>(&self, _: &mut W) -> Result<(), SerializeError> {
+impl ToWire for DeviceIdRequest {
+    fn to_wire<W: Write>(&self, _: &mut W) -> Result<(), ToWireError> {
         Ok(())
     }
 }
@@ -75,16 +75,16 @@ impl Response<'_> for DeviceIdResponse {
     const TYPE: CommandType = CommandType::DeviceId;
 }
 
-impl<'a> Deserialize<'a> for DeviceIdResponse {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
-        let id = DeviceIdentifier::deserialize(r)?;
+impl<'a> FromWire<'a> for DeviceIdResponse {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+        let id = DeviceIdentifier::from_wire(r)?;
         Ok(Self { id })
     }
 }
 
-impl Serialize for DeviceIdResponse {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
-        self.id.serialize(w)?;
+impl ToWire for DeviceIdResponse {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+        self.id.to_wire(w)?;
         Ok(())
     }
 }
@@ -108,8 +108,8 @@ pub struct DeviceIdentifier {
     pub subsys_id: u16,
 }
 
-impl<'a> Deserialize<'a> for DeviceIdentifier {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
+impl<'a> FromWire<'a> for DeviceIdentifier {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
         let vendor_id = r.read_le::<u16>()?;
         let device_id = r.read_le::<u16>()?;
         let subsys_vendor_id = r.read_le::<u16>()?;
@@ -123,8 +123,8 @@ impl<'a> Deserialize<'a> for DeviceIdentifier {
     }
 }
 
-impl Serialize for DeviceIdentifier {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
+impl ToWire for DeviceIdentifier {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
         w.write_le(self.vendor_id)?;
         w.write_le(self.device_id)?;
         w.write_le(self.subsys_vendor_id)?;

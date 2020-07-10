@@ -59,7 +59,7 @@ path = "fuzz_targets/{target}.rs"
 def main():
   argparser = argparse.ArgumentParser(
     description=
-    'Generates Deserialize/Serialize fuzz targets for a `manticore::protocol` '\
+    'Generates FromWire/ToWire fuzz targets for a `manticore::protocol` '\
     'message.\n The type name of the message should be provided relative to '\
     '`manticore::protocol`.'
   )
@@ -69,9 +69,9 @@ def main():
                               'firmware_version::FirmwareVersionRequest')
   argparser.add_argument('--target-templates',
                          type=str,
-                         choices=['serialize', 'deserialize', 'serialize_fuzz_safe'],
+                         choices=['to_wire', 'from_wire', 'to_wire_fuzz_safe'],
                          nargs='*',
-                         default=['serialize', 'deserialize'],
+                         default=['to_wire', 'from_wire'],
                          help='which target templates to use; defaults to all')
   argparser.add_argument('--fuzz-dir',
                          type=str,
@@ -87,7 +87,7 @@ def main():
   snake_case_name = camel_to_snake(typeid)
   command = ' '.join(sys.argv)
 
-  renames = {'serialize_fuzz_safe': 'serialize'}
+  renames = {'to_wire_fuzz_safe': 'to_wire'}
   for template_name in args.target_templates:
     template = read_file(os.path.join(
         util_dir, '{}.rs.template'.format(template_name)))

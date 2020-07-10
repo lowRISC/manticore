@@ -9,10 +9,10 @@
 
 use libfuzzer_sys::fuzz_target;
 
-use manticore::protocol::Deserialize;
+use manticore::protocol::FromWire;
 use manticore::protocol::firmware_version::FirmwareVersionRequest;
 
 fuzz_target!(|data: &[u8]| {
     let mut data = data;
-    let _ = FirmwareVersionRequest::deserialize(&mut data);
+    let _ = FirmwareVersionRequest::from_wire(&mut data);
 });

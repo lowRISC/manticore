@@ -9,11 +9,11 @@
 
 use libfuzzer_sys::fuzz_target;
 
-use manticore::protocol::Deserialize;
+use manticore::protocol::ToWire;
 use manticore::protocol::device_id::DeviceIdRequest;
 
-fuzz_target!(|data: &[u8]| {
-    let mut data = data;
-    let _ = DeviceIdRequest::deserialize(&mut data);
+fuzz_target!(|data: DeviceIdRequest| {
+    let mut out = [0u8; 1024];
+    let _ = data.to_wire(&mut &mut out[..]);
 });
 

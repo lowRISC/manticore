@@ -13,12 +13,12 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::Deserialize;
-use crate::protocol::DeserializeError;
+use crate::protocol::FromWire;
+use crate::protocol::FromWireError;
 use crate::protocol::Request;
 use crate::protocol::Response;
-use crate::protocol::Serialize;
-use crate::protocol::SerializeError;
+use crate::protocol::ToWire;
+use crate::protocol::ToWireError;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
@@ -47,14 +47,14 @@ impl Request<'_> for RequestCounterRequest {
     const TYPE: CommandType = CommandType::RequestCounter;
 }
 
-impl<'a> Deserialize<'a> for RequestCounterRequest {
-    fn deserialize<R: Read<'a>>(_: &mut R) -> Result<Self, DeserializeError> {
+impl<'a> FromWire<'a> for RequestCounterRequest {
+    fn from_wire<R: Read<'a>>(_: &mut R) -> Result<Self, FromWireError> {
         Ok(RequestCounterRequest)
     }
 }
 
-impl<'a> Serialize for RequestCounterRequest {
-    fn serialize<W: Write>(&self, _: &mut W) -> Result<(), SerializeError> {
+impl<'a> ToWire for RequestCounterRequest {
+    fn to_wire<W: Write>(&self, _: &mut W) -> Result<(), ToWireError> {
         Ok(())
     }
 }
@@ -75,8 +75,8 @@ impl Response<'_> for RequestCounterResponse {
     const TYPE: CommandType = CommandType::RequestCounter;
 }
 
-impl<'a> Deserialize<'a> for RequestCounterResponse {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
+impl<'a> FromWire<'a> for RequestCounterResponse {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
         let ok_count = r.read_le::<u16>()?;
         let err_count = r.read_le::<u16>()?;
         Ok(Self {
@@ -86,8 +86,8 @@ impl<'a> Deserialize<'a> for RequestCounterResponse {
     }
 }
 
-impl Serialize for RequestCounterResponse {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
+impl ToWire for RequestCounterResponse {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
         w.write_le(self.ok_count)?;
         w.write_le(self.err_count)?;
         Ok(())

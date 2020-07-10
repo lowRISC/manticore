@@ -36,10 +36,10 @@ macro_rules! wire_enum {
 
         impl $crate::protocol::WireEnum for $name {
             type Wire = $wire;
-            fn to_wire(self) -> Self::Wire {
+            fn to_wire_value(self) -> Self::Wire {
                 self as $wire
             }
-            fn from_wire(wire: Self::Wire) -> Option<Self> {
+            fn from_wire_value(wire: Self::Wire) -> Option<Self> {
                 match wire {
                     $(
                         $value => Some(Self::$variant),
@@ -80,7 +80,7 @@ macro_rules! round_trip_test {
             let value: $ty = $ty $({ $($field: $field_val,)* })?;
 
             let mut bytes_reader = bytes;
-            let deserialized = $ty::deserialize(&mut bytes_reader)
+            let deserialized = $ty::from_wire(&mut bytes_reader)
                 .expect("deserialization failed");
             assert_eq!(bytes_reader.len(), 0,
                 "expected bytes to be fully read");
@@ -89,7 +89,7 @@ macro_rules! round_trip_test {
             const BUF_LEN: usize = 1 << 10;
             let mut buf = [0u8; BUF_LEN];
             let mut buf_ref = &mut buf[..];
-            value.serialize(&mut buf_ref).expect("serialization failed");
+            value.to_wire(&mut buf_ref).expect("serialization failed");
             let len = BUF_LEN - buf_ref.len();
             let serialized = &buf[..len];
             assert_eq!(serialized, bytes);

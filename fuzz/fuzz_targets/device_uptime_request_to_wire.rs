@@ -9,11 +9,11 @@
 
 use libfuzzer_sys::fuzz_target;
 
-use manticore::protocol::Serialize;
+use manticore::protocol::ToWire;
 use manticore::protocol::device_uptime::DeviceUptimeRequest;
 
 fuzz_target!(|data: DeviceUptimeRequest| {
     let mut out = [0u8; 1024];
-    let _ = data.serialize(&mut &mut out[..]);
+    let _ = data.to_wire(&mut &mut out[..]);
 });
 

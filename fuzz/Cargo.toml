@@ -31,116 +31,116 @@ members = ["."]
 # See `$REPO_TOP/util/new_protocol_target.py`
 
 [[bin]]
-name = "firmware_version_request_deserialize"
-path = "fuzz_targets/firmware_version_request_deserialize.rs"
+name = "firmware_version_request_from_wire"
+path = "fuzz_targets/firmware_version_request_from_wire.rs"
 
 [[bin]]
-name = "firmware_version_request_serialize"
-path = "fuzz_targets/firmware_version_request_serialize.rs"
+name = "firmware_version_request_to_wire"
+path = "fuzz_targets/firmware_version_request_to_wire.rs"
 
 [[bin]]
-name = "firmware_version_response_deserialize"
-path = "fuzz_targets/firmware_version_response_deserialize.rs"
+name = "firmware_version_response_from_wire"
+path = "fuzz_targets/firmware_version_response_from_wire.rs"
 
 [[bin]]
-name = "firmware_version_response_serialize"
-path = "fuzz_targets/firmware_version_response_serialize.rs"
+name = "firmware_version_response_to_wire"
+path = "fuzz_targets/firmware_version_response_to_wire.rs"
 
 [[bin]]
-name = "device_capabilities_request_serialize"
-path = "fuzz_targets/device_capabilities_request_serialize.rs"
+name = "device_capabilities_request_to_wire"
+path = "fuzz_targets/device_capabilities_request_to_wire.rs"
 
 [[bin]]
-name = "device_capabilities_request_deserialize"
-path = "fuzz_targets/device_capabilities_request_deserialize.rs"
+name = "device_capabilities_request_from_wire"
+path = "fuzz_targets/device_capabilities_request_from_wire.rs"
 
 [[bin]]
-name = "device_capabilities_response_serialize"
-path = "fuzz_targets/device_capabilities_response_serialize.rs"
+name = "device_capabilities_response_to_wire"
+path = "fuzz_targets/device_capabilities_response_to_wire.rs"
 
 [[bin]]
-name = "device_capabilities_response_deserialize"
-path = "fuzz_targets/device_capabilities_response_deserialize.rs"
+name = "device_capabilities_response_from_wire"
+path = "fuzz_targets/device_capabilities_response_from_wire.rs"
 
 [[bin]]
-name = "device_id_request_serialize"
-path = "fuzz_targets/device_id_request_serialize.rs"
+name = "device_id_request_to_wire"
+path = "fuzz_targets/device_id_request_to_wire.rs"
 
 [[bin]]
-name = "device_id_request_deserialize"
-path = "fuzz_targets/device_id_request_deserialize.rs"
+name = "device_id_request_from_wire"
+path = "fuzz_targets/device_id_request_from_wire.rs"
 
 [[bin]]
-name = "device_id_response_serialize"
-path = "fuzz_targets/device_id_response_serialize.rs"
+name = "device_id_response_to_wire"
+path = "fuzz_targets/device_id_response_to_wire.rs"
 
 [[bin]]
-name = "device_id_response_deserialize"
-path = "fuzz_targets/device_id_response_deserialize.rs"
+name = "device_id_response_from_wire"
+path = "fuzz_targets/device_id_response_from_wire.rs"
 
 [[bin]]
-name = "device_info_request_serialize"
-path = "fuzz_targets/device_info_request_serialize.rs"
+name = "device_info_request_to_wire"
+path = "fuzz_targets/device_info_request_to_wire.rs"
 
 [[bin]]
-name = "device_info_request_deserialize"
-path = "fuzz_targets/device_info_request_deserialize.rs"
+name = "device_info_request_from_wire"
+path = "fuzz_targets/device_info_request_from_wire.rs"
 
 [[bin]]
-name = "device_info_response_deserialize"
-path = "fuzz_targets/device_info_response_deserialize.rs"
+name = "device_info_response_from_wire"
+path = "fuzz_targets/device_info_response_from_wire.rs"
 
 [[bin]]
-name = "device_info_response_serialize"
-path = "fuzz_targets/device_info_response_serialize.rs"
+name = "device_info_response_to_wire"
+path = "fuzz_targets/device_info_response_to_wire.rs"
 
 [[bin]]
-name = "device_uptime_request_serialize"
-path = "fuzz_targets/device_uptime_request_serialize.rs"
+name = "device_uptime_request_to_wire"
+path = "fuzz_targets/device_uptime_request_to_wire.rs"
 
 [[bin]]
-name = "device_uptime_request_deserialize"
-path = "fuzz_targets/device_uptime_request_deserialize.rs"
+name = "device_uptime_request_from_wire"
+path = "fuzz_targets/device_uptime_request_from_wire.rs"
 
 [[bin]]
-name = "device_uptime_response_serialize"
-path = "fuzz_targets/device_uptime_response_serialize.rs"
+name = "device_uptime_response_to_wire"
+path = "fuzz_targets/device_uptime_response_to_wire.rs"
 
 [[bin]]
-name = "device_uptime_response_deserialize"
-path = "fuzz_targets/device_uptime_response_deserialize.rs"
+name = "device_uptime_response_from_wire"
+path = "fuzz_targets/device_uptime_response_from_wire.rs"
 
 [[bin]]
-name = "reset_counter_request_serialize"
-path = "fuzz_targets/reset_counter_request_serialize.rs"
+name = "reset_counter_request_to_wire"
+path = "fuzz_targets/reset_counter_request_to_wire.rs"
 
 [[bin]]
-name = "reset_counter_request_deserialize"
-path = "fuzz_targets/reset_counter_request_deserialize.rs"
+name = "reset_counter_request_from_wire"
+path = "fuzz_targets/reset_counter_request_from_wire.rs"
 
 [[bin]]
-name = "reset_counter_response_serialize"
-path = "fuzz_targets/reset_counter_response_serialize.rs"
+name = "reset_counter_response_to_wire"
+path = "fuzz_targets/reset_counter_response_to_wire.rs"
 
 [[bin]]
-name = "reset_counter_response_deserialize"
-path = "fuzz_targets/reset_counter_response_deserialize.rs"
+name = "reset_counter_response_from_wire"
+path = "fuzz_targets/reset_counter_response_from_wire.rs"
 
 [[bin]]
-name = "request_counter_request_serialize"
-path = "fuzz_targets/request_counter_request_serialize.rs"
+name = "request_counter_request_to_wire"
+path = "fuzz_targets/request_counter_request_to_wire.rs"
 
 [[bin]]
-name = "request_counter_request_deserialize"
-path = "fuzz_targets/request_counter_request_deserialize.rs"
+name = "request_counter_request_from_wire"
+path = "fuzz_targets/request_counter_request_from_wire.rs"
 
 [[bin]]
-name = "request_counter_response_serialize"
-path = "fuzz_targets/request_counter_response_serialize.rs"
+name = "request_counter_response_to_wire"
+path = "fuzz_targets/request_counter_response_to_wire.rs"
 
 [[bin]]
-name = "request_counter_response_deserialize"
-path = "fuzz_targets/request_counter_response_deserialize.rs"
+name = "request_counter_response_from_wire"
+path = "fuzz_targets/request_counter_response_from_wire.rs"
 
 [[bin]]
 name = "manifest_parse"

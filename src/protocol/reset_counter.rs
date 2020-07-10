@@ -12,12 +12,12 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::Deserialize;
-use crate::protocol::DeserializeError;
+use crate::protocol::FromWire;
+use crate::protocol::FromWireError;
 use crate::protocol::Request;
 use crate::protocol::Response;
-use crate::protocol::Serialize;
-use crate::protocol::SerializeError;
+use crate::protocol::ToWire;
+use crate::protocol::ToWireError;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
@@ -69,9 +69,9 @@ impl Request<'_> for ResetCounterRequest {
     const TYPE: CommandType = CommandType::ResetCounter;
 }
 
-impl<'a> Deserialize<'a> for ResetCounterRequest {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
-        let reset_type = ResetType::deserialize(r)?;
+impl<'a> FromWire<'a> for ResetCounterRequest {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+        let reset_type = ResetType::from_wire(r)?;
         let port_id = r.read_le::<u8>()?;
         Ok(Self {
             reset_type,
@@ -80,9 +80,9 @@ impl<'a> Deserialize<'a> for ResetCounterRequest {
     }
 }
 
-impl<'a> Serialize for ResetCounterRequest {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
-        self.reset_type.serialize(w)?;
+impl<'a> ToWire for ResetCounterRequest {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+        self.reset_type.to_wire(w)?;
         w.write_le(self.port_id)?;
         Ok(())
     }
@@ -102,15 +102,15 @@ impl Response<'_> for ResetCounterResponse {
     const TYPE: CommandType = CommandType::ResetCounter;
 }
 
-impl<'a> Deserialize<'a> for ResetCounterResponse {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
+impl<'a> FromWire<'a> for ResetCounterResponse {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
         let count = r.read_le::<u16>()?;
         Ok(Self { count })
     }
 }
 
-impl Serialize for ResetCounterResponse {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
+impl ToWire for ResetCounterResponse {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
         w.write_le(self.count)?;
         Ok(())
     }

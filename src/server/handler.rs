@@ -71,13 +71,13 @@ use core::marker::PhantomData;
 use crate::io;
 use crate::protocol;
 use crate::protocol::CommandType;
-use crate::protocol::Deserialize;
-use crate::protocol::DeserializeError;
+use crate::protocol::FromWire;
+use crate::protocol::FromWireError;
 use crate::protocol::Header;
 use crate::protocol::Request as _;
 use crate::protocol::Response as _;
-use crate::protocol::Serialize;
-use crate::protocol::SerializeError;
+use crate::protocol::ToWire;
+use crate::protocol::ToWireError;
 
 /// A `*`-importable prelude that pulls in only the names that are necessary
 /// to make `Handler` work.
@@ -90,9 +90,9 @@ pub mod prelude {
 #[derive(Copy, Clone, Debug)]
 pub enum Error {
     /// Represents a failure during deserialization.
-    DeserializeError(DeserializeError),
+    FromWireError(FromWireError),
     /// Represents a failure during serialization.
-    SerializeError(SerializeError),
+    ToWireError(ToWireError),
 
     /// Indicates that a request message was too long: after successful parse
     /// of a header and a body, we still had unread bytes remaining, indicating
@@ -106,15 +106,15 @@ pub enum Error {
     UnhandledCommand(CommandType),
 }
 
-impl From<DeserializeError> for Error {
-    fn from(e: DeserializeError) -> Error {
-        Error::DeserializeError(e)
+impl From<FromWireError> for Error {
+    fn from(e: FromWireError) -> Error {
+        Error::FromWireError(e)
     }
 }
 
-impl From<SerializeError> for Error {
-    fn from(e: SerializeError) -> Error {
-        Error::SerializeError(e)
+impl From<ToWireError> for Error {
+    fn from(e: ToWireError) -> Error {
+        Error::ToWireError(e)
     }
 }
 
@@ -157,7 +157,7 @@ mod sealed {
 ///
 /// The lifetime `'req` represents the lifetime of the request. This lifetime
 /// must be placed here to ensure that all inputs into a request handling
-/// operation (including the `Deserialize` and `Command` traits, which have
+/// operation (including the `FromWire` and `Command` traits, which have
 /// lifetimes in them) have a single, coherent lifetime.
 pub trait HandlerMethods<'req, Server>: Sized + sealed::Sealed {
     /// Attaches a new handler function to a `Handler`.
@@ -204,9 +204,9 @@ pub trait HandlerMethods<'req, Server>: Sized + sealed::Sealed {
         Read: io::Read<'req>,
         Write: io::Write,
     {
-        let req_header = Header::deserialize(req)?;
+        let req_header = Header::from_wire(req)?;
         if !req_header.is_request {
-            return Err(DeserializeError::OutOfRange.into());
+            return Err(FromWireError::OutOfRange.into());
         }
         self.run_with_header(req_header, server, req, resp)
     }
@@ -240,7 +240,7 @@ where
             return self.prev.run_with_header(req_header, server, req, resp);
         }
 
-        let msg = Deserialize::deserialize(req)?;
+        let msg = FromWire::from_wire(req)?;
         // Ensure that we used up the whole buffer!
         let remains = req.remaining_data();
         if remains != 0 {
@@ -254,8 +254,8 @@ where
                     command: Command::Resp::TYPE,
                 };
 
-                Serialize::serialize(&header, resp)?;
-                Serialize::serialize(&msg, resp)?;
+                ToWire::to_wire(&header, resp)?;
+                ToWire::to_wire(&msg, resp)?;
                 Ok(())
             }
             Err(err) => {
@@ -264,8 +264,8 @@ where
                     command: CommandType::Error,
                 };
 
-                Serialize::serialize(&header, resp)?;
-                Serialize::serialize(&err, resp)?;
+                ToWire::to_wire(&header, resp)?;
+                ToWire::to_wire(&err, resp)?;
                 Ok(())
             }
         }

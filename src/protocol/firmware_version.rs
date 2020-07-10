@@ -13,12 +13,12 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::Deserialize;
-use crate::protocol::DeserializeError;
+use crate::protocol::FromWire;
+use crate::protocol::FromWireError;
 use crate::protocol::Request;
 use crate::protocol::Response;
-use crate::protocol::Serialize;
-use crate::protocol::SerializeError;
+use crate::protocol::ToWire;
+use crate::protocol::ToWireError;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
@@ -56,15 +56,15 @@ impl Request<'_> for FirmwareVersionRequest {
     const TYPE: CommandType = CommandType::FirmwareVersion;
 }
 
-impl<'a> Deserialize<'a> for FirmwareVersionRequest {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
+impl<'a> FromWire<'a> for FirmwareVersionRequest {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
         let index = r.read_le()?;
         Ok(Self { index })
     }
 }
 
-impl<'a> Serialize for FirmwareVersionRequest {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
+impl<'a> ToWire for FirmwareVersionRequest {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
         w.write_le(self.index)?;
         Ok(())
     }
@@ -85,18 +85,18 @@ impl<'a> Response<'a> for FirmwareVersionResponse<'a> {
     const TYPE: CommandType = CommandType::FirmwareVersion;
 }
 
-impl<'a> Deserialize<'a> for FirmwareVersionResponse<'a> {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
+impl<'a> FromWire<'a> for FirmwareVersionResponse<'a> {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
         let version_bytes = r.read_bytes(32)?;
         let version = version_bytes
             .try_into()
-            .map_err(|_| DeserializeError::OutOfRange)?;
+            .map_err(|_| FromWireError::OutOfRange)?;
         Ok(Self { version })
     }
 }
 
-impl Serialize for FirmwareVersionResponse<'_> {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
+impl ToWire for FirmwareVersionResponse<'_> {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
         w.write_bytes(self.version)?;
         Ok(())
     }

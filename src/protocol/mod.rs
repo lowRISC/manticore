@@ -97,7 +97,7 @@ pub trait Command<'req> {
 /// A Cerberus request.
 ///
 /// See [`Command`](trait.Command.html).
-pub trait Request<'req>: Deserialize<'req> + Serialize {
+pub trait Request<'req>: FromWire<'req> + ToWire {
     /// The unique [`CommandType`] for this `Request`.
     ///
     /// [`CommandType`]: enum.CommandType.html
@@ -107,7 +107,7 @@ pub trait Request<'req>: Deserialize<'req> + Serialize {
 /// A Cerberus response.
 ///
 /// See [`Command`](trait.Command.html).
-pub trait Response<'req>: Deserialize<'req> + Serialize {
+pub trait Response<'req>: FromWire<'req> + ToWire {
     /// The unique [`CommandType`] for this `Response`.
     ///
     /// [`CommandType`]: enum.CommandType.html
@@ -193,18 +193,18 @@ impl CommandType {
     }
 }
 
-/// A type which can be deserialized.
+/// A type which can be deserialized from the Cerberus wire format.
 ///
 /// The lifetime `'a` indicates that the type can be deserialized from a
 /// buffer of lifetime `'a`.
-pub trait Deserialize<'a>: Sized {
+pub trait FromWire<'a>: Sized {
     /// Deserializes a `Self` w of `r`.
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError>;
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError>;
 }
 
 /// An deserialization error.
 #[derive(Clone, Copy, Debug)]
-pub enum DeserializeError {
+pub enum FromWireError {
     /// Indicates that something went wrong in an `io` operation.
     ///
     /// [`io`]: ../io/index.html
@@ -215,28 +215,28 @@ pub enum DeserializeError {
     OutOfRange,
 }
 
-impl From<io::Error> for DeserializeError {
+impl From<io::Error> for FromWireError {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
     }
 }
 
-/// A type which can be serialized.
-pub trait Serialize: Sized {
+/// A type which can be serialized into the Cerberus wire format.
+pub trait ToWire: Sized {
     /// Serializes `self` into `w`.
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError>;
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError>;
 }
 
 /// A serializerion error.
 #[derive(Clone, Copy, Debug)]
-pub enum SerializeError {
+pub enum ToWireError {
     /// Indicates that something went wrong in an [`io`] operation.
     ///
     /// [`io`]: ../io/index.html
     Io(io::Error),
 }
 
-impl From<io::Error> for SerializeError {
+impl From<io::Error> for ToWireError {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
     }
@@ -254,7 +254,7 @@ impl From<io::Error> for SerializeError {
 /// ```
 /// # use manticore::protocol::WireEnum;
 /// # fn test<T: WireEnum + Copy + PartialEq + std::fmt::Debug>(x: T) {
-/// assert_eq!(T::from_wire(T::to_wire(x)), Some(x));
+/// assert_eq!(T::from_wire_value(T::to_wire_value(x)), Some(x));
 /// # }
 /// ```
 pub trait WireEnum: Sized + Copy {
@@ -263,29 +263,29 @@ pub trait WireEnum: Sized + Copy {
     type Wire: LeInt;
 
     /// Converts `self` into its underlying wire representation.
-    fn to_wire(self) -> Self::Wire;
+    fn to_wire_value(self) -> Self::Wire;
 
     /// Attemts to parse a value of `Self` from the underlying wire
     /// representation.
-    fn from_wire(wire: Self::Wire) -> Option<Self>;
+    fn from_wire_value(wire: Self::Wire) -> Option<Self>;
 }
 
-impl<'a, E> Deserialize<'a> for E
+impl<'a, E> FromWire<'a> for E
 where
     E: WireEnum,
 {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
         let wire = <Self as WireEnum>::Wire::read_from(r)?;
-        Self::from_wire(wire).ok_or(DeserializeError::OutOfRange)
+        Self::from_wire_value(wire).ok_or(FromWireError::OutOfRange)
     }
 }
 
-impl<E> Serialize for E
+impl<E> ToWire for E
 where
     E: WireEnum,
 {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
-        self.to_wire().write_to(w)?;
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+        self.to_wire_value().write_to(w)?;
         Ok(())
     }
 }
@@ -312,20 +312,20 @@ pub const HEADER_LEN: usize = 5;
 /// A magic number required at the start of each `manticore` header.
 const HEADER_MAGIC: &[u8] = &[0b01111110, 0x14, 0x14];
 
-impl<'a> Deserialize<'a> for Header {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
+impl<'a> FromWire<'a> for Header {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
         if r.read_bytes(3)? != HEADER_MAGIC {
-            return Err(DeserializeError::OutOfRange);
+            return Err(FromWireError::OutOfRange);
         }
 
         let request_byte = r.read_le::<u8>()?;
         let is_request = match request_byte {
             0b0000_0000 => false,
             0b1000_0000 => true,
-            _ => return Err(DeserializeError::OutOfRange),
+            _ => return Err(FromWireError::OutOfRange),
         };
 
-        let command = CommandType::deserialize(r)?;
+        let command = CommandType::from_wire(r)?;
         Ok(Self {
             is_request,
             command,
@@ -333,11 +333,11 @@ impl<'a> Deserialize<'a> for Header {
     }
 }
 
-impl Serialize for Header {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
+impl ToWire for Header {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
         w.write_bytes(HEADER_MAGIC)?;
         w.write_le((self.is_request as u8) << 7)?;
-        self.command.serialize(w)?;
+        self.command.to_wire(w)?;
         Ok(())
     }
 }
@@ -399,21 +399,21 @@ impl Response<'_> for Error {
     const TYPE: CommandType = CommandType::Error;
 }
 
-impl<'a> Deserialize<'a> for Error {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
-        let code = ErrorCode::deserialize(r)?;
+impl<'a> FromWire<'a> for Error {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+        let code = ErrorCode::from_wire(r)?;
         let data: [u8; 4] = r
             .read_bytes(4)?
             .try_into()
-            .map_err(|_| DeserializeError::OutOfRange)?;
+            .map_err(|_| FromWireError::OutOfRange)?;
 
         Ok(Self { code, data })
     }
 }
 
-impl Serialize for Error {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
-        self.code.serialize(w)?;
+impl ToWire for Error {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+        self.code.to_wire(w)?;
         w.write_bytes(&self.data[..])?;
         Ok(())
     }
