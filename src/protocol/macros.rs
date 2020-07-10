@@ -76,7 +76,6 @@ macro_rules! make_fuzz_safe {
         )*}
     ) => {
         $(#[$meta])*
-        #[allow(unused_parens)]
         $vis struct $name $(<$lt>)? {$(
             $(#[$field_meta])*
             $field_vis $field: $field_ty,
