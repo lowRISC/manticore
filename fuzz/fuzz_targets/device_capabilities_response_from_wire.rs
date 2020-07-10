@@ -9,11 +9,11 @@
 
 use libfuzzer_sys::fuzz_target;
 
-use manticore::protocol::Serialize;
+use manticore::protocol::FromWire;
 use manticore::protocol::capabilities::DeviceCapabilitiesResponse;
 
-fuzz_target!(|data: DeviceCapabilitiesResponse| {
-    let mut out = [0u8; 1024];
-    let _ = data.serialize(&mut &mut out[..]);
+fuzz_target!(|data: &[u8]| {
+    let mut data = data;
+    let _ = DeviceCapabilitiesResponse::from_wire(&mut data);
 });
 

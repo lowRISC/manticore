@@ -19,12 +19,12 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::Deserialize;
-use crate::protocol::DeserializeError;
+use crate::protocol::FromWire;
+use crate::protocol::FromWireError;
 use crate::protocol::Request;
 use crate::protocol::Response;
-use crate::protocol::Serialize;
-use crate::protocol::SerializeError;
+use crate::protocol::ToWire;
+use crate::protocol::ToWireError;
 use crate::protocol::WireEnum;
 
 #[cfg(feature = "arbitrary-derive")]
@@ -57,16 +57,16 @@ impl Request<'_> for DeviceCapabilitiesRequest {
     const TYPE: CommandType = CommandType::DeviceCapabilities;
 }
 
-impl<'a> Deserialize<'a> for DeviceCapabilitiesRequest {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
-        let capabilities = Capabilities::deserialize(r)?;
+impl<'a> FromWire<'a> for DeviceCapabilitiesRequest {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+        let capabilities = Capabilities::from_wire(r)?;
         Ok(Self { capabilities })
     }
 }
 
-impl Serialize for DeviceCapabilitiesRequest {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
-        self.capabilities.serialize(w)
+impl ToWire for DeviceCapabilitiesRequest {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+        self.capabilities.to_wire(w)
     }
 }
 
@@ -86,9 +86,9 @@ impl Response<'_> for DeviceCapabilitiesResponse {
     const TYPE: CommandType = CommandType::DeviceCapabilities;
 }
 
-impl<'a> Deserialize<'a> for DeviceCapabilitiesResponse {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
-        let capabilities = Capabilities::deserialize(r)?;
+impl<'a> FromWire<'a> for DeviceCapabilitiesResponse {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+        let capabilities = Capabilities::from_wire(r)?;
         let response_timeout =
             Duration::from_millis((10 * (r.read_le::<u8>()? as u32)) as _);
         let crypto_timeout =
@@ -103,9 +103,9 @@ impl<'a> Deserialize<'a> for DeviceCapabilitiesResponse {
     }
 }
 
-impl Serialize for DeviceCapabilitiesResponse {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
-        self.capabilities.serialize(w)?;
+impl ToWire for DeviceCapabilitiesResponse {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+        self.capabilities.to_wire(w)?;
         // Carefully compress the millisecond cound (which is a u128!) down
         // to a byte, saturating when possible, and avoiding expensive
         // division operations.
@@ -308,10 +308,10 @@ mod consts {
     pub const AES_SIZE: usize = 3;
 }
 
-impl<'a> Deserialize<'a> for Capabilities {
-    fn deserialize<R: Read<'a>>(
+impl<'a> FromWire<'a> for Capabilities {
+    fn from_wire<R: Read<'a>>(
         r: &mut R,
-    ) -> Result<Capabilities, DeserializeError> {
+    ) -> Result<Capabilities, FromWireError> {
         use consts::*;
         let max_message_size = r.read_le::<u16>()?;
         let max_packet_size = r.read_le::<u16>()?;
@@ -324,10 +324,10 @@ impl<'a> Deserialize<'a> for Capabilities {
         let _ = byte_five.read_bits(1)?;
         let security_bits = byte_five.read_bits(SEC_SIZE)?;
 
-        let mode = RotMode::from_wire(mode_bits)
-            .ok_or(DeserializeError::OutOfRange)?;
+        let mode = RotMode::from_wire_value(mode_bits)
+            .ok_or(FromWireError::OutOfRange)?;
         let roles =
-            BusRole::from_bits(bus_bits).ok_or(DeserializeError::OutOfRange)?;
+            BusRole::from_bits(bus_bits).ok_or(FromWireError::OutOfRange)?;
         let networking = Networking {
             max_message_size,
             max_packet_size,
@@ -336,7 +336,7 @@ impl<'a> Deserialize<'a> for Capabilities {
         };
 
         let security = Security::from_bits(security_bits)
-            .ok_or(DeserializeError::OutOfRange)?;
+            .ok_or(FromWireError::OutOfRange)?;
 
         // The sixth byte consists of five reserved bits, and the PFM, policy,
         // and firmware protection bits.
@@ -355,9 +355,9 @@ impl<'a> Deserialize<'a> for Capabilities {
         let rsa_bits = byte_seven.read_bits(RSA_SIZE)?;
 
         let rsa_strength = RsaKeyStrength::from_bits(rsa_bits)
-            .ok_or(DeserializeError::OutOfRange)?;
+            .ok_or(FromWireError::OutOfRange)?;
         let ecc_strength = EccKeyStrength::from_bits(ecc_bits)
-            .ok_or(DeserializeError::OutOfRange)?;
+            .ok_or(FromWireError::OutOfRange)?;
 
         // The eighth byte consists of the aes strength, four reserved bits,
         // and the ecc bit.
@@ -367,7 +367,7 @@ impl<'a> Deserialize<'a> for Capabilities {
         let aes_bits = byte_eight.read_bits(AES_SIZE)?;
 
         let aes_strength = AesKeyStrength::from_bits(aes_bits)
-            .ok_or(DeserializeError::OutOfRange)?;
+            .ok_or(FromWireError::OutOfRange)?;
 
         Ok(Capabilities {
             networking,
@@ -389,15 +389,16 @@ impl<'a> Deserialize<'a> for Capabilities {
     }
 }
 
-impl Serialize for Capabilities {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
+impl ToWire for Capabilities {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
         use consts::*;
         w.write_le(self.networking.max_message_size)?;
         w.write_le(self.networking.max_packet_size)?;
 
         // See `deserialize_capabilities` for the description of each byte.
         let mut fifth_byte = BitBuf::new();
-        fifth_byte.write_bits(MODE_SIZE, self.networking.mode.to_wire())?;
+        fifth_byte
+            .write_bits(MODE_SIZE, self.networking.mode.to_wire_value())?;
         fifth_byte.write_bits(BUS_SIZE, self.networking.roles.bits())?;
         fifth_byte.write_zero_bits(1)?;
         fifth_byte.write_bits(SEC_SIZE, self.security.bits())?;

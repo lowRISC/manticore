@@ -15,12 +15,12 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::Deserialize;
-use crate::protocol::DeserializeError;
+use crate::protocol::FromWire;
+use crate::protocol::FromWireError;
 use crate::protocol::Request;
 use crate::protocol::Response;
-use crate::protocol::Serialize;
-use crate::protocol::SerializeError;
+use crate::protocol::ToWire;
+use crate::protocol::ToWireError;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
@@ -56,15 +56,15 @@ impl Request<'_> for DeviceUptimeRequest {
     const TYPE: CommandType = CommandType::DeviceUptime;
 }
 
-impl<'a> Deserialize<'a> for DeviceUptimeRequest {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
+impl<'a> FromWire<'a> for DeviceUptimeRequest {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
         let port_id = r.read_le::<u8>()?;
         Ok(Self { port_id })
     }
 }
 
-impl<'a> Serialize for DeviceUptimeRequest {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
+impl<'a> ToWire for DeviceUptimeRequest {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
         w.write_le(self.port_id)?;
         Ok(())
     }
@@ -87,16 +87,16 @@ impl Response<'_> for DeviceUptimeResponse {
     const TYPE: CommandType = CommandType::DeviceUptime;
 }
 
-impl<'a> Deserialize<'a> for DeviceUptimeResponse {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
+impl<'a> FromWire<'a> for DeviceUptimeResponse {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
         let micros = r.read_le::<u32>()?;
         let uptime = Duration::from_micros(micros as u64);
         Ok(Self { uptime })
     }
 }
 
-impl Serialize for DeviceUptimeResponse {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
+impl ToWire for DeviceUptimeResponse {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
         let micros = self.uptime.as_micros() as u32;
         w.write_le(micros)?;
         Ok(())

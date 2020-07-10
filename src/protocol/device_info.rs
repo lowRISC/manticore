@@ -11,12 +11,12 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::Deserialize;
-use crate::protocol::DeserializeError;
+use crate::protocol::FromWire;
+use crate::protocol::FromWireError;
 use crate::protocol::Request;
 use crate::protocol::Response;
-use crate::protocol::Serialize;
-use crate::protocol::SerializeError;
+use crate::protocol::ToWire;
+use crate::protocol::ToWireError;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
@@ -57,16 +57,16 @@ impl Request<'_> for DeviceInfoRequest {
     const TYPE: CommandType = CommandType::DeviceInfo;
 }
 
-impl<'a> Deserialize<'a> for DeviceInfoRequest {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
-        let index = InfoIndex::deserialize(r)?;
+impl<'a> FromWire<'a> for DeviceInfoRequest {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+        let index = InfoIndex::from_wire(r)?;
         Ok(Self { index })
     }
 }
 
-impl<'a> Serialize for DeviceInfoRequest {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
-        self.index.serialize(w)?;
+impl<'a> ToWire for DeviceInfoRequest {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+        self.index.to_wire(w)?;
         Ok(())
     }
 }
@@ -90,16 +90,16 @@ impl<'a> Response<'a> for DeviceInfoResponse<'a> {
     const TYPE: CommandType = CommandType::DeviceInfo;
 }
 
-impl<'a> Deserialize<'a> for DeviceInfoResponse<'a> {
-    fn deserialize<R: Read<'a>>(r: &mut R) -> Result<Self, DeserializeError> {
+impl<'a> FromWire<'a> for DeviceInfoResponse<'a> {
+    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
         let len = r.remaining_data();
         let info = r.read_bytes(len)?;
         Ok(Self { info })
     }
 }
 
-impl Serialize for DeviceInfoResponse<'_> {
-    fn serialize<W: Write>(&self, w: &mut W) -> Result<(), SerializeError> {
+impl ToWire for DeviceInfoResponse<'_> {
+    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
         w.write_bytes(self.info)?;
         Ok(())
     }

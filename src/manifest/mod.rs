@@ -190,7 +190,7 @@ impl<'m> Manifest<'m> {
             .map_err(ParseOrVerifyError::Crypto)?;
 
         Ok(Manifest {
-            manifest_type: ManifestType::from_wire(magic)
+            manifest_type: ManifestType::from_wire_value(magic)
                 .ok_or(ParseError::OutOfRange)?,
             id,
             body,

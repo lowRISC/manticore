@@ -4,13 +4,13 @@
 
 //! Test-only utilities for (de)serializing `manticore` messages.
 
-use crate::protocol::Deserialize;
+use crate::protocol::FromWire;
 use crate::protocol::Header;
 use crate::protocol::Request;
 use crate::protocol::Response;
-use crate::protocol::Serialize;
+use crate::protocol::ToWire;
 
-/// Serialize a header + request onto a buffer.
+/// ToWire a header + request onto a buffer.
 ///
 /// Returns the portion of `out` written to.
 ///
@@ -26,13 +26,13 @@ pub fn write_req<'a, 'req, Req: Request<'req>>(
             is_request: true,
             command: Req::TYPE,
         }
-        .serialize(buf)
+        .to_wire(buf)
         .expect("failed to write header");
-        req.serialize(buf).expect("failed to write request");
+        req.to_wire(buf).expect("failed to write request");
     })
 }
 
-/// Deserialize a header + response from a buffer.
+/// FromWire a header + response from a buffer.
 ///
 /// Returns the parsed response.
 ///
@@ -47,9 +47,9 @@ pub fn read_resp<'req, Resp: Response<'req>>(mut buf: &'req [u8]) -> Resp {
     };
     let buf = &mut buf;
 
-    let header = Header::deserialize(buf).expect("failed to parse header");
+    let header = Header::from_wire(buf).expect("failed to parse header");
     assert_eq!(header, expected_header);
-    Resp::deserialize(buf).expect("failed to parse response")
+    Resp::from_wire(buf).expect("failed to parse response")
 }
 
 /// Perform the operation `f` on `buf`, returning whatever portion of `buf`
