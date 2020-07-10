@@ -9,7 +9,7 @@
 
 use libfuzzer_sys::fuzz_target;
 
-use manticore::protocol::ToWire;
+use manticore::protocol::wire::ToWire;
 use manticore::protocol::request_counter::RequestCounterRequest;
 
 fuzz_target!(|data: RequestCounterRequest| {

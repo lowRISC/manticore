@@ -9,7 +9,7 @@
 
 use libfuzzer_sys::fuzz_target;
 
-use manticore::protocol::ToWire;
+use manticore::protocol::wire::ToWire;
 use manticore::protocol::reset_counter::ResetCounterResponse;
 
 fuzz_target!(|data: ResetCounterResponse| {

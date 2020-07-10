@@ -10,7 +10,7 @@
 use libfuzzer_sys::fuzz_target;
 
 use manticore::protocol::FuzzSafe;
-use manticore::protocol::ToWire;
+use manticore::protocol::wire::ToWire;
 use manticore::protocol::device_info::DeviceInfoResponse;
 
 fuzz_target!(|data: <DeviceInfoResponse<'static> as FuzzSafe>::Safe| {

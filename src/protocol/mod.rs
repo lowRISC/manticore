@@ -37,15 +37,20 @@
 
 use core::convert::TryInto;
 
-use crate::io;
-use crate::io::LeInt;
 use crate::io::Read;
 use crate::io::Write;
+use crate::protocol::wire::FromWire;
+use crate::protocol::wire::FromWireError;
+use crate::protocol::wire::ToWire;
+use crate::protocol::wire::ToWireError;
 
 #[macro_use]
 mod macros;
 #[cfg(feature = "arbitrary-derive")]
 pub use macros::FuzzSafe;
+
+#[macro_use]
+pub mod wire;
 
 pub mod device_id;
 pub use device_id::DeviceId;
@@ -190,103 +195,6 @@ impl CommandType {
             Self::DeviceUptime => true,
             _ => false,
         }
-    }
-}
-
-/// A type which can be deserialized from the Cerberus wire format.
-///
-/// The lifetime `'a` indicates that the type can be deserialized from a
-/// buffer of lifetime `'a`.
-pub trait FromWire<'a>: Sized {
-    /// Deserializes a `Self` w of `r`.
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError>;
-}
-
-/// An deserialization error.
-#[derive(Clone, Copy, Debug)]
-pub enum FromWireError {
-    /// Indicates that something went wrong in an `io` operation.
-    ///
-    /// [`io`]: ../io/index.html
-    Io(io::Error),
-
-    /// Indicates that some field within the request was outside of its
-    /// valid range.
-    OutOfRange,
-}
-
-impl From<io::Error> for FromWireError {
-    fn from(e: io::Error) -> Self {
-        Self::Io(e)
-    }
-}
-
-/// A type which can be serialized into the Cerberus wire format.
-pub trait ToWire: Sized {
-    /// Serializes `self` into `w`.
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError>;
-}
-
-/// A serializerion error.
-#[derive(Clone, Copy, Debug)]
-pub enum ToWireError {
-    /// Indicates that something went wrong in an [`io`] operation.
-    ///
-    /// [`io`]: ../io/index.html
-    Io(io::Error),
-}
-
-impl From<io::Error> for ToWireError {
-    fn from(e: io::Error) -> Self {
-        Self::Io(e)
-    }
-}
-
-/// Represents a C-like enum that can be converted to and from a wire
-/// representation.
-///
-/// An implementation of this trait can be thought of as an unsigned
-/// integer with a limited range: every enum variant can be converted
-/// to the wire format and back, though not every value of the wire
-/// representation can be converted into an enum variant.
-///
-/// In particular the following identity must hold for all types T:
-/// ```
-/// # use manticore::protocol::WireEnum;
-/// # fn test<T: WireEnum + Copy + PartialEq + std::fmt::Debug>(x: T) {
-/// assert_eq!(T::from_wire_value(T::to_wire_value(x)), Some(x));
-/// # }
-/// ```
-pub trait WireEnum: Sized + Copy {
-    /// The unrelying "wire type". This is almost always some kind of
-    /// unsigned integer.
-    type Wire: LeInt;
-
-    /// Converts `self` into its underlying wire representation.
-    fn to_wire_value(self) -> Self::Wire;
-
-    /// Attemts to parse a value of `Self` from the underlying wire
-    /// representation.
-    fn from_wire_value(wire: Self::Wire) -> Option<Self>;
-}
-
-impl<'a, E> FromWire<'a> for E
-where
-    E: WireEnum,
-{
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
-        let wire = <Self as WireEnum>::Wire::read_from(r)?;
-        Self::from_wire_value(wire).ok_or(FromWireError::OutOfRange)
-    }
-}
-
-impl<E> ToWire for E
-where
-    E: WireEnum,
-{
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
-        self.to_wire_value().write_to(w)?;
-        Ok(())
     }
 }
 

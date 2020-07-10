@@ -13,7 +13,7 @@ use core::fmt;
 use crate::crypto::rsa;
 use crate::io;
 use crate::io::Read;
-use crate::protocol::WireEnum;
+use crate::protocol::wire::WireEnum;
 
 pub mod fpm;
 pub use fpm::Fpm;
