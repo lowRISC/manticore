@@ -23,6 +23,11 @@
 //! If a message type contains a large buffer, the message type will have an
 //! appropriate lifetime attached to it.
 //!
+//! In addition to providing (de)serialization to and from the Cerberus wire
+//! format (via the [`wire` module]), the `serde` feature will provide relevant
+//! implementations of [`serde`] traits, for (de)serialization to and from
+//! human-readable formats, like JSON.
+//!
 //! ---
 //!
 //! This module provides a subset of required and optional commands specified
@@ -34,6 +39,9 @@
 //!
 //! Also, unlike Cerberus, `manticore` does not require that a session be
 //! spoken over MCTP, and, as such, does not use the same header as Cerberus.
+//!
+//! [`wire` module]: wire/index.html
+//! [`serde`]: https://serde.rs
 
 // This is required due to the make_fuzz_safe! macro.
 #![allow(unused_parens)]
@@ -46,6 +54,9 @@ use crate::protocol::wire::FromWire;
 use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
 use crate::protocol::wire::ToWireError;
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 #[macro_use]
 mod macros;
@@ -127,6 +138,7 @@ wire_enum! {
     ///
     /// This enum represents all command types implemented by `manticore`,
     /// including any `manticore`-specific messages not defined by Cerberus.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub enum CommandType: u8 {
         /// An error message (or a trivial command ACK).
         ///
@@ -207,6 +219,7 @@ impl CommandType {
 /// header; the actual format of the header is left up to an integration of
 /// this library.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Header {
     /// The [`CommandType`] for a request.
     ///
@@ -259,6 +272,7 @@ wire_enum! {
     /// This enum represents all error types implemented by `manticore`.
     /// Because `manticore` does not mandate running the connection over MCTP,
     /// the MCTP-specific error codes are omited.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub enum ErrorCode: u8 {
         /// Represents a successful operation; this "error" code is used to
         /// turn an [`Error`] into an ACK.
@@ -286,6 +300,7 @@ wire_enum! {
 ///
 /// [`CommandType::Error`]: enum.CommandType.html#variant.Error
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Error {
     /// What kind of error this is (or, it's merely an ACK).
     pub code: ErrorCode,

@@ -24,6 +24,8 @@ use crate::protocol::Response;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// A command for requesting a firmware version.
 ///
@@ -47,6 +49,7 @@ impl<'a> Command<'a> for DeviceUptime {
 /// [`DeviceUptime`]: enum.DeviceUptime.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceUptimeRequest {
     /// The port that the device whose uptime is being looked up.
     pub port_id: u8,
@@ -75,6 +78,7 @@ impl<'a> ToWire for DeviceUptimeRequest {
 /// [`DeviceUptime`]: enum.DeviceUptime.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceUptimeResponse {
     /// The requested device uptime.
     ///
