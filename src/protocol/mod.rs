@@ -35,6 +35,9 @@
 //! Also, unlike Cerberus, `manticore` does not require that a session be
 //! spoken over MCTP, and, as such, does not use the same header as Cerberus.
 
+// This is required due to the make_fuzz_safe! macro.
+#![allow(unused_parens)]
+
 use core::convert::TryInto;
 
 use crate::io::Read;
