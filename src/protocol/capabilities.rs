@@ -17,15 +17,15 @@ use crate::crypto::rsa;
 use crate::io::BitBuf;
 use crate::io::Read;
 use crate::io::Write;
+use crate::protocol::wire::FromWire;
+use crate::protocol::wire::FromWireError;
+use crate::protocol::wire::ToWire;
+use crate::protocol::wire::ToWireError;
+use crate::protocol::wire::WireEnum;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::FromWire;
-use crate::protocol::FromWireError;
 use crate::protocol::Request;
 use crate::protocol::Response;
-use crate::protocol::ToWire;
-use crate::protocol::ToWireError;
-use crate::protocol::WireEnum;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};

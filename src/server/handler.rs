@@ -70,14 +70,14 @@ use core::marker::PhantomData;
 
 use crate::io;
 use crate::protocol;
+use crate::protocol::wire::FromWire;
+use crate::protocol::wire::FromWireError;
+use crate::protocol::wire::ToWire;
+use crate::protocol::wire::ToWireError;
 use crate::protocol::CommandType;
-use crate::protocol::FromWire;
-use crate::protocol::FromWireError;
 use crate::protocol::Header;
 use crate::protocol::Request as _;
 use crate::protocol::Response as _;
-use crate::protocol::ToWire;
-use crate::protocol::ToWireError;
 
 /// A `*`-importable prelude that pulls in only the names that are necessary
 /// to make `Handler` work.

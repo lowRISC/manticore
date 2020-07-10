@@ -4,11 +4,11 @@
 
 //! Test-only utilities for (de)serializing `manticore` messages.
 
-use crate::protocol::FromWire;
+use crate::protocol::wire::FromWire;
+use crate::protocol::wire::ToWire;
 use crate::protocol::Header;
 use crate::protocol::Request;
 use crate::protocol::Response;
-use crate::protocol::ToWire;
 
 /// ToWire a header + request onto a buffer.
 ///

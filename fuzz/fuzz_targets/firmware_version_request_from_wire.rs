@@ -9,7 +9,7 @@
 
 use libfuzzer_sys::fuzz_target;
 
-use manticore::protocol::FromWire;
+use manticore::protocol::wire::FromWire;
 use manticore::protocol::firmware_version::FirmwareVersionRequest;
 
 fuzz_target!(|data: &[u8]| {
