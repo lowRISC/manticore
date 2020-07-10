@@ -20,6 +20,8 @@ use crate::protocol::Response;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// A command for requesting device information.
 ///
@@ -37,6 +39,7 @@ impl<'a> Command<'a> for DeviceInfo {
 wire_enum! {
     /// A type of "device information" that can be requested.
     #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub enum InfoIndex: u8 {
         /// Represents getting the Unique Chip Identifier for the device.
         UniqueChipIndex = 0x00,
@@ -48,6 +51,7 @@ wire_enum! {
 /// [`DeviceInfo`]: enum.DeviceInfo.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceInfoRequest {
     /// Which device information to look up.
     pub index: InfoIndex,
@@ -76,12 +80,14 @@ make_fuzz_safe! {
     ///
     /// [`DeviceInfo`]: enum.DeviceInfo.html
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct DeviceInfoResponse<'a> as DIRWrap {
         /// The requested information, in some binary format.
         ///
         /// The format of the response depends on which information index was sent.
         /// Only `0x00` is specified by Cerberus, which is reqired to produce the
         /// "Unique Chip Identifier".
+        #[cfg_attr(feature = "serde", serde(borrow))]
         pub info: (&'a [u8]),
     }
 }

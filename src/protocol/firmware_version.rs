@@ -22,6 +22,8 @@ use crate::protocol::Response;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// A command for requesting a firmware version.
 ///
@@ -45,6 +47,7 @@ impl<'a> Command<'a> for FirmwareVersion {
 /// [`FirmwareVersion`]: enum.FirmwareVersion.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FirmwareVersionRequest {
     /// Which portion of the RoT firmware to look up. `0` means the overall
     /// firmware image version. All other values are reserved for use by the
@@ -75,10 +78,27 @@ make_fuzz_safe! {
     ///
     /// [`FirmwareVersion`]: enum.FirmwareVersion.html
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct FirmwareVersionResponse<'a> as FVRWrap {
         /// The firmware version. In practice, this is usually an ASCII string.
+        #[cfg_attr(feature = "serde",
+                   serde(deserialize_with = "deserialize_u8x32"))]
+        #[cfg_attr(feature = "serde", serde(borrow))]
         pub version: (&'a [u8; 32]),
     }
+}
+
+// NOTE: This function exists to work around the fact that serde does not
+// provide Deserialize implementations for reference-to-array, even though it
+// totally could.
+#[cfg(feature = "serde")]
+fn deserialize_u8x32<'de: 'a, 'a, D: Deserializer<'de>>(
+    d: D,
+) -> Result<&'a [u8; 32], D::Error> {
+    let slice: &'a [u8] = Deserialize::deserialize(d)?;
+    slice.try_into().map_err(|_| {
+        <D::Error as serde::de::Error>::invalid_length(slice.len(), &"32")
+    })
 }
 
 impl<'a> Response<'a> for FirmwareVersionResponse<'a> {

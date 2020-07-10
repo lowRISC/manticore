@@ -22,6 +22,8 @@ use crate::protocol::Response;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// A command for querying the reqest counters.
 ///
@@ -41,6 +43,7 @@ impl<'a> Command<'a> for RequestCounter {
 /// [`RequestCounter`]: enum.RequestCounter.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RequestCounterRequest;
 
 impl Request<'_> for RequestCounterRequest {
@@ -64,6 +67,7 @@ impl<'a> ToWire for RequestCounterRequest {
 /// [`RequestCounter`]: enum.RequestCounter.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RequestCounterResponse {
     /// The number of successful requests since reset.
     pub ok_count: u16,

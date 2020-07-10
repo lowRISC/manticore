@@ -29,6 +29,8 @@ use crate::protocol::Response;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// A command for negotiating shared device capabilities.
 ///
@@ -48,6 +50,7 @@ impl Command<'_> for DeviceCapabilities {
 /// [`DeviceCapabilities`]: enum.DeviceCapabilities.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceCapabilitiesRequest {
     /// The advertised capabilities of the client.
     pub capabilities: Capabilities,
@@ -75,6 +78,7 @@ impl ToWire for DeviceCapabilitiesRequest {
 /// [`DeviceCapabilities`]: enum.DeviceCapabilities.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceCapabilitiesResponse {
     /// Capabilities negotiated based on the request.
     pub capabilities: Capabilities,
@@ -126,6 +130,7 @@ impl ToWire for DeviceCapabilitiesResponse {
 wire_enum! {
     /// A "mode" for a Cerberus RoT: "active" or "platform".
     #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub enum RotMode: u8 {
         /// Represents an "AC-RoT" or "Active Root of Trust", an RoT chip which
         /// protects some kind of peripheral hardware.
@@ -142,6 +147,7 @@ bitflags! {
     ///
     /// (Cerberus refers to these capabilities as master/slave.)
     #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct BusRole: u8 {
         /// This device can act as a "host".
         const HOST = 0b01;
@@ -156,6 +162,7 @@ bitflags! {
     /// I.e, this enum describes different security primitives the device might
     /// support.
     #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Security: u8 {
         /// This device has hash and key derivation capabilities.
         const HASH_AND_KDF = 0b001;
@@ -171,6 +178,7 @@ bitflags! {
 bitflags! {
     /// Represents a supported elliptic curve cryptography key strength.
     #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct EccKeyStrength: u8 {
         /// A key strength of 160 bits.
         const BITS_160 = 0b001;
@@ -182,6 +190,7 @@ bitflags! {
 bitflags! {
     /// Represents a supported RSA key strength.
     #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct RsaKeyStrength: u8 {
         /// A key strength of 2048 bits.
         const BITS_2048 = 0b001;
@@ -213,6 +222,7 @@ impl RsaKeyStrength {
 bitflags! {
     /// Represents a supported AES key strength.
     #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct AesKeyStrength: u8 {
         /// A key strength of 128 bits.
         const BITS_128 = 0b001;
@@ -227,6 +237,7 @@ bitflags! {
 /// so that it can faithfully report it during capabilities negotiation.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Networking {
     /// The maximum message size this device can buffer, in bytes.
     ///
@@ -260,6 +271,7 @@ pub struct Networking {
 /// meant to be a strict reflection of the wire format specified by Cerberus.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Capabilities {
     /// Integration-provided information on the device's networking
     /// capabilities.
@@ -433,6 +445,7 @@ impl ToWire for Capabilities {
 /// unreachable.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Timeouts {
     /// The timeout for a "regular" request, that is, one which does not
     /// perform expensive cryptography.

@@ -20,6 +20,8 @@ use crate::protocol::Response;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// A command for requesting a unique "device ID".
 ///
@@ -43,6 +45,7 @@ impl Command<'_> for DeviceId {
 /// [`DeviceId`]: enum.DeviceId.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceIdRequest;
 
 impl Request<'_> for DeviceIdRequest {
@@ -66,6 +69,7 @@ impl ToWire for DeviceIdRequest {
 /// [`DeviceId`]: enum.DeviceId.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceIdResponse {
     /// A device identifier that uniquely identifies this device's silicon.
     pub id: DeviceIdentifier,
@@ -98,6 +102,7 @@ impl ToWire for DeviceIdResponse {
 /// beyond their names.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 // TODO: Remove this once we have a better idea of what Cerberus expects of
 // these fields.
 #[allow(missing_docs)]
