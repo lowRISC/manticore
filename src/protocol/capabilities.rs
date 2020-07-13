@@ -61,15 +61,15 @@ impl Request<'_> for DeviceCapabilitiesRequest {
 }
 
 impl<'a> FromWire<'a> for DeviceCapabilitiesRequest {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
-        let capabilities = Capabilities::from_wire(r)?;
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
+        let capabilities = Capabilities::from_wire(&mut r)?;
         Ok(Self { capabilities })
     }
 }
 
 impl ToWire for DeviceCapabilitiesRequest {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
-        self.capabilities.to_wire(w)
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+        self.capabilities.to_wire(&mut w)
     }
 }
 
@@ -91,8 +91,8 @@ impl Response<'_> for DeviceCapabilitiesResponse {
 }
 
 impl<'a> FromWire<'a> for DeviceCapabilitiesResponse {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
-        let capabilities = Capabilities::from_wire(r)?;
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
+        let capabilities = Capabilities::from_wire(&mut r)?;
         let response_timeout =
             Duration::from_millis((10 * (r.read_le::<u8>()? as u32)) as _);
         let crypto_timeout =
@@ -108,8 +108,8 @@ impl<'a> FromWire<'a> for DeviceCapabilitiesResponse {
 }
 
 impl ToWire for DeviceCapabilitiesResponse {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
-        self.capabilities.to_wire(w)?;
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+        self.capabilities.to_wire(&mut w)?;
         // Carefully compress the millisecond cound (which is a u128!) down
         // to a byte, saturating when possible, and avoiding expensive
         // division operations.
@@ -321,9 +321,7 @@ mod consts {
 }
 
 impl<'a> FromWire<'a> for Capabilities {
-    fn from_wire<R: Read<'a>>(
-        r: &mut R,
-    ) -> Result<Capabilities, FromWireError> {
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Capabilities, FromWireError> {
         use consts::*;
         let max_message_size = r.read_le::<u16>()?;
         let max_packet_size = r.read_le::<u16>()?;
@@ -402,7 +400,7 @@ impl<'a> FromWire<'a> for Capabilities {
 }
 
 impl ToWire for Capabilities {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
         use consts::*;
         w.write_le(self.networking.max_message_size)?;
         w.write_le(self.networking.max_packet_size)?;

@@ -53,13 +53,13 @@ impl Request<'_> for DeviceIdRequest {
 }
 
 impl<'a> FromWire<'a> for DeviceIdRequest {
-    fn from_wire<R: Read<'a>>(_: &mut R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read<'a>>(_: R) -> Result<Self, FromWireError> {
         Ok(DeviceIdRequest)
     }
 }
 
 impl ToWire for DeviceIdRequest {
-    fn to_wire<W: Write>(&self, _: &mut W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, _: W) -> Result<(), ToWireError> {
         Ok(())
     }
 }
@@ -80,15 +80,15 @@ impl Response<'_> for DeviceIdResponse {
 }
 
 impl<'a> FromWire<'a> for DeviceIdResponse {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
-        let id = DeviceIdentifier::from_wire(r)?;
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
+        let id = DeviceIdentifier::from_wire(&mut r)?;
         Ok(Self { id })
     }
 }
 
 impl ToWire for DeviceIdResponse {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
-        self.id.to_wire(w)?;
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+        self.id.to_wire(&mut w)?;
         Ok(())
     }
 }
@@ -114,7 +114,7 @@ pub struct DeviceIdentifier {
 }
 
 impl<'a> FromWire<'a> for DeviceIdentifier {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
         let vendor_id = r.read_le::<u16>()?;
         let device_id = r.read_le::<u16>()?;
         let subsys_vendor_id = r.read_le::<u16>()?;
@@ -129,7 +129,7 @@ impl<'a> FromWire<'a> for DeviceIdentifier {
 }
 
 impl ToWire for DeviceIdentifier {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
         w.write_le(self.vendor_id)?;
         w.write_le(self.device_id)?;
         w.write_le(self.subsys_vendor_id)?;

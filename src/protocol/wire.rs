@@ -24,7 +24,7 @@ use crate::io::Write;
 /// buffer of lifetime `'wire`.
 pub trait FromWire<'wire>: Sized {
     /// Deserializes a `Self` w of `r`.
-    fn from_wire<R: Read<'wire>>(r: &mut R) -> Result<Self, FromWireError>;
+    fn from_wire<R: Read<'wire>>(r: R) -> Result<Self, FromWireError>;
 }
 
 /// An deserialization error.
@@ -49,7 +49,7 @@ impl From<io::Error> for FromWireError {
 /// A type which can be serialized into the Cerberus wire format.
 pub trait ToWire: Sized {
     /// Serializes `self` into `w`.
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError>;
+    fn to_wire<W: Write>(&self, w: W) -> Result<(), ToWireError>;
 }
 
 /// A serializerion error.
@@ -99,8 +99,8 @@ impl<'wire, E> FromWire<'wire> for E
 where
     E: WireEnum,
 {
-    fn from_wire<R: Read<'wire>>(r: &mut R) -> Result<Self, FromWireError> {
-        let wire = <Self as WireEnum>::Wire::read_from(r)?;
+    fn from_wire<R: Read<'wire>>(mut r: R) -> Result<Self, FromWireError> {
+        let wire = <Self as WireEnum>::Wire::read_from(&mut r)?;
         Self::from_wire_value(wire).ok_or(FromWireError::OutOfRange)
     }
 }
@@ -109,8 +109,8 @@ impl<E> ToWire for E
 where
     E: WireEnum,
 {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
-        self.to_wire_value().write_to(w)?;
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+        self.to_wire_value().write_to(&mut w)?;
         Ok(())
     }
 }
