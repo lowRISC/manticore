@@ -60,14 +60,14 @@ impl Request<'_> for DeviceUptimeRequest {
 }
 
 impl<'a> FromWire<'a> for DeviceUptimeRequest {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
         let port_id = r.read_le::<u8>()?;
         Ok(Self { port_id })
     }
 }
 
 impl<'a> ToWire for DeviceUptimeRequest {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
         w.write_le(self.port_id)?;
         Ok(())
     }
@@ -92,7 +92,7 @@ impl Response<'_> for DeviceUptimeResponse {
 }
 
 impl<'a> FromWire<'a> for DeviceUptimeResponse {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
         let micros = r.read_le::<u32>()?;
         let uptime = Duration::from_micros(micros as u64);
         Ok(Self { uptime })
@@ -100,7 +100,7 @@ impl<'a> FromWire<'a> for DeviceUptimeResponse {
 }
 
 impl ToWire for DeviceUptimeResponse {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
         let micros = self.uptime.as_micros() as u32;
         w.write_le(micros)?;
         Ok(())

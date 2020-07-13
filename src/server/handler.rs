@@ -72,7 +72,7 @@ use crate::io;
 use crate::protocol;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::FromWireError;
-use crate::protocol::wire::ToWire;
+use crate::protocol::wire::ToWire as _;
 use crate::protocol::wire::ToWireError;
 use crate::protocol::CommandType;
 use crate::protocol::Header;
@@ -179,32 +179,25 @@ pub trait HandlerMethods<'req, Server>: Sized + sealed::Sealed {
 
     /// The "real" run function.
     #[doc(hidden)]
-    fn run_with_header<Read, Write>(
+    fn run_with_header<R: io::Read<'req>, W: io::Write>(
         self,
         req_header: Header,
         server: &mut Server,
-        req: &mut Read,
-        resp: &mut Write,
-    ) -> Result<(), Error>
-    where
-        Read: io::Read<'req>,
-        Write: io::Write;
+        req: R,
+        resp: W,
+    ) -> Result<(), Error>;
 
     /// Executes a `Handler` with the given context.
     ///
     /// See the module-level documentation for more information.
     #[inline]
-    fn run<Read, Write>(
+    fn run<R: io::Read<'req>, W: io::Write>(
         self,
         server: &mut Server,
-        req: &mut Read,
-        resp: &mut Write,
-    ) -> Result<(), Error>
-    where
-        Read: io::Read<'req>,
-        Write: io::Write,
-    {
-        let req_header = Header::from_wire(req)?;
+        mut req: R,
+        resp: W,
+    ) -> Result<(), Error> {
+        let req_header = Header::from_wire(&mut req)?;
         if !req_header.is_request {
             return Err(FromWireError::OutOfRange.into());
         }
@@ -223,24 +216,20 @@ where
     ) -> Result<Command::Resp, protocol::Error>,
 {
     #[inline]
-    fn run_with_header<Read, Write>(
+    fn run_with_header<R: io::Read<'req>, W: io::Write>(
         self,
         req_header: Header,
         server: &mut Server,
-        req: &mut Read,
-        resp: &mut Write,
-    ) -> Result<(), Error>
-    where
-        Read: io::Read<'req>,
-        Write: io::Write,
-    {
+        mut req: R,
+        mut resp: W,
+    ) -> Result<(), Error> {
         if req_header.command != Command::Req::TYPE {
             // Recurse into the next handler case. Note that this cannot be
             // `run`, since that would re-parse the header incorrectly.
             return self.prev.run_with_header(req_header, server, req, resp);
         }
 
-        let msg = FromWire::from_wire(req)?;
+        let msg = FromWire::from_wire(&mut req)?;
         // Ensure that we used up the whole buffer!
         let remains = req.remaining_data();
         if remains != 0 {
@@ -254,8 +243,8 @@ where
                     command: Command::Resp::TYPE,
                 };
 
-                ToWire::to_wire(&header, resp)?;
-                ToWire::to_wire(&msg, resp)?;
+                header.to_wire(&mut resp)?;
+                msg.to_wire(&mut resp)?;
                 Ok(())
             }
             Err(err) => {
@@ -264,8 +253,8 @@ where
                     command: CommandType::Error,
                 };
 
-                ToWire::to_wire(&header, resp)?;
-                ToWire::to_wire(&err, resp)?;
+                header.to_wire(&mut resp)?;
+                err.to_wire(&mut resp)?;
                 Ok(())
             }
         }
@@ -274,17 +263,13 @@ where
 
 impl<'req, Server> HandlerMethods<'req, Server> for Handler<Server> {
     #[inline]
-    fn run_with_header<Read, Write>(
+    fn run_with_header<R: io::Read<'req>, W: io::Write>(
         self,
         header: Header,
         _: &mut Server,
-        _: &mut Read,
-        _: &mut Write,
-    ) -> Result<(), Error>
-    where
-        Read: io::Read<'req>,
-        Write: io::Write,
-    {
+        _: R,
+        _: W,
+    ) -> Result<(), Error> {
         Err(Error::UnhandledCommand(header.command))
     }
 }

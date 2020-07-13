@@ -74,8 +74,8 @@ impl Request<'_> for ResetCounterRequest {
 }
 
 impl<'a> FromWire<'a> for ResetCounterRequest {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
-        let reset_type = ResetType::from_wire(r)?;
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
+        let reset_type = ResetType::from_wire(&mut r)?;
         let port_id = r.read_le::<u8>()?;
         Ok(Self {
             reset_type,
@@ -85,8 +85,8 @@ impl<'a> FromWire<'a> for ResetCounterRequest {
 }
 
 impl<'a> ToWire for ResetCounterRequest {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
-        self.reset_type.to_wire(w)?;
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+        self.reset_type.to_wire(&mut w)?;
         w.write_le(self.port_id)?;
         Ok(())
     }
@@ -108,14 +108,14 @@ impl Response<'_> for ResetCounterResponse {
 }
 
 impl<'a> FromWire<'a> for ResetCounterResponse {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
         let count = r.read_le::<u16>()?;
         Ok(Self { count })
     }
 }
 
 impl ToWire for ResetCounterResponse {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
         w.write_le(self.count)?;
         Ok(())
     }

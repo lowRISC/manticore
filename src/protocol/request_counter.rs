@@ -51,13 +51,13 @@ impl Request<'_> for RequestCounterRequest {
 }
 
 impl<'a> FromWire<'a> for RequestCounterRequest {
-    fn from_wire<R: Read<'a>>(_: &mut R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read<'a>>(_: R) -> Result<Self, FromWireError> {
         Ok(RequestCounterRequest)
     }
 }
 
 impl<'a> ToWire for RequestCounterRequest {
-    fn to_wire<W: Write>(&self, _: &mut W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, _: W) -> Result<(), ToWireError> {
         Ok(())
     }
 }
@@ -80,7 +80,7 @@ impl Response<'_> for RequestCounterResponse {
 }
 
 impl<'a> FromWire<'a> for RequestCounterResponse {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
         let ok_count = r.read_le::<u16>()?;
         let err_count = r.read_le::<u16>()?;
         Ok(Self {
@@ -91,7 +91,7 @@ impl<'a> FromWire<'a> for RequestCounterResponse {
 }
 
 impl ToWire for RequestCounterResponse {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
         w.write_le(self.ok_count)?;
         w.write_le(self.err_count)?;
         Ok(())
