@@ -76,8 +76,8 @@ where
     #[cfg_attr(test, inline(never))]
     pub fn process_request<'req>(
         &'req mut self,
-        req: &mut impl Read<'req>,
-        resp: &mut impl Write,
+        req: impl Read<'req>,
+        resp: impl Write,
     ) -> Result<(), Error> {
         let result = Handler::<Self>::new()
             .handle::<protocol::FirmwareVersion, _>(|zelf, req| {

@@ -62,15 +62,15 @@ impl Request<'_> for DeviceInfoRequest {
 }
 
 impl<'a> FromWire<'a> for DeviceInfoRequest {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
-        let index = InfoIndex::from_wire(r)?;
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
+        let index = InfoIndex::from_wire(&mut r)?;
         Ok(Self { index })
     }
 }
 
 impl<'a> ToWire for DeviceInfoRequest {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
-        self.index.to_wire(w)?;
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+        self.index.to_wire(&mut w)?;
         Ok(())
     }
 }
@@ -97,7 +97,7 @@ impl<'a> Response<'a> for DeviceInfoResponse<'a> {
 }
 
 impl<'a> FromWire<'a> for DeviceInfoResponse<'a> {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
         let len = r.remaining_data();
         let info = r.read_bytes(len)?;
         Ok(Self { info })
@@ -105,7 +105,7 @@ impl<'a> FromWire<'a> for DeviceInfoResponse<'a> {
 }
 
 impl ToWire for DeviceInfoResponse<'_> {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
         w.write_bytes(self.info)?;
         Ok(())
     }

@@ -26,9 +26,9 @@ pub fn write_req<'a, 'req, Req: Request<'req>>(
             is_request: true,
             command: Req::TYPE,
         }
-        .to_wire(buf)
+        .to_wire(&mut *buf)
         .expect("failed to write header");
-        req.to_wire(buf).expect("failed to write request");
+        req.to_wire(&mut *buf).expect("failed to write request");
     })
 }
 
@@ -45,11 +45,9 @@ pub fn read_resp<'req, Resp: Response<'req>>(mut buf: &'req [u8]) -> Resp {
         is_request: false,
         command: Resp::TYPE,
     };
-    let buf = &mut buf;
-
-    let header = Header::from_wire(buf).expect("failed to parse header");
+    let header = Header::from_wire(&mut buf).expect("failed to parse header");
     assert_eq!(header, expected_header);
-    Resp::from_wire(buf).expect("failed to parse response")
+    Resp::from_wire(&mut buf).expect("failed to parse response")
 }
 
 /// Perform the operation `f` on `buf`, returning whatever portion of `buf`

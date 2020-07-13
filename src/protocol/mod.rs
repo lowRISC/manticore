@@ -237,7 +237,7 @@ pub const HEADER_LEN: usize = 5;
 const HEADER_MAGIC: &[u8] = &[0b01111110, 0x14, 0x14];
 
 impl<'a> FromWire<'a> for Header {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
         if r.read_bytes(3)? != HEADER_MAGIC {
             return Err(FromWireError::OutOfRange);
         }
@@ -258,7 +258,7 @@ impl<'a> FromWire<'a> for Header {
 }
 
 impl ToWire for Header {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
         w.write_bytes(HEADER_MAGIC)?;
         w.write_le((self.is_request as u8) << 7)?;
         self.command.to_wire(w)?;
@@ -326,8 +326,8 @@ impl Response<'_> for Error {
 }
 
 impl<'a> FromWire<'a> for Error {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
-        let code = ErrorCode::from_wire(r)?;
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
+        let code = ErrorCode::from_wire(&mut r)?;
         let data: [u8; 4] = r
             .read_bytes(4)?
             .try_into()
@@ -338,8 +338,8 @@ impl<'a> FromWire<'a> for Error {
 }
 
 impl ToWire for Error {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
-        self.code.to_wire(w)?;
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+        self.code.to_wire(&mut w)?;
         w.write_bytes(&self.data[..])?;
         Ok(())
     }

@@ -12,6 +12,8 @@
 
 use core::mem;
 
+use static_assertions::assert_obj_safe;
+
 /// Represents a byte as a queue of bits, for simplifying parsing bit fields
 /// out of a byte.
 ///
@@ -136,24 +138,27 @@ pub enum Error {
 /// I/O.
 pub trait LeInt: Sized + Copy {
     /// Reads a value of type `Self`, in little-endian order.
-    fn read_from<'a, R: Read<'a> + ?Sized>(r: &mut R) -> Result<Self, Error>;
+    fn read_from<'a, R: Read<'a>>(r: R) -> Result<Self, Error>;
 
     /// Writes a value of type `Self`, in little-endian order.
-    fn write_to<W: Write + ?Sized>(self, w: &mut W) -> Result<(), Error>;
+    fn write_to<W: Write>(self, w: W) -> Result<(), Error>;
 }
 
 impl LeInt for u8 {
-    fn read_from<'a, R: Read<'a> + ?Sized>(r: &mut R) -> Result<Self, Error> {
+    #[inline]
+    fn read_from<'a, R: Read<'a>>(mut r: R) -> Result<Self, Error> {
         Ok(r.read_bytes(mem::size_of::<Self>())?[0])
     }
 
-    fn write_to<W: Write + ?Sized>(self, w: &mut W) -> Result<(), Error> {
+    #[inline]
+    fn write_to<W: Write>(self, mut w: W) -> Result<(), Error> {
         w.write_bytes(&[self])
     }
 }
 
 impl LeInt for u16 {
-    fn read_from<'a, R: Read<'a> + ?Sized>(r: &mut R) -> Result<Self, Error> {
+    #[inline]
+    fn read_from<'a, R: Read<'a>>(mut r: R) -> Result<Self, Error> {
         use byteorder::ByteOrder as _;
 
         Ok(byteorder::LE::read_u16(
@@ -161,7 +166,8 @@ impl LeInt for u16 {
         ))
     }
 
-    fn write_to<W: Write + ?Sized>(self, w: &mut W) -> Result<(), Error> {
+    #[inline]
+    fn write_to<W: Write>(self, mut w: W) -> Result<(), Error> {
         use byteorder::ByteOrder as _;
 
         let mut bytes = [0; mem::size_of::<Self>()];
@@ -171,7 +177,8 @@ impl LeInt for u16 {
 }
 
 impl LeInt for u32 {
-    fn read_from<'a, R: Read<'a> + ?Sized>(r: &mut R) -> Result<Self, Error> {
+    #[inline]
+    fn read_from<'a, R: Read<'a>>(mut r: R) -> Result<Self, Error> {
         use byteorder::ByteOrder as _;
 
         Ok(byteorder::LE::read_u32(
@@ -179,7 +186,8 @@ impl LeInt for u32 {
         ))
     }
 
-    fn write_to<W: Write + ?Sized>(self, w: &mut W) -> Result<(), Error> {
+    #[inline]
+    fn write_to<W: Write>(self, mut w: W) -> Result<(), Error> {
         use byteorder::ByteOrder as _;
 
         let mut bytes = [0; mem::size_of::<Self>()];
@@ -189,7 +197,8 @@ impl LeInt for u32 {
 }
 
 impl LeInt for u64 {
-    fn read_from<'a, R: Read<'a> + ?Sized>(r: &mut R) -> Result<Self, Error> {
+    #[inline]
+    fn read_from<'a, R: Read<'a>>(mut r: R) -> Result<Self, Error> {
         use byteorder::ByteOrder as _;
 
         Ok(byteorder::LE::read_u64(
@@ -197,7 +206,8 @@ impl LeInt for u64 {
         ))
     }
 
-    fn write_to<W: Write + ?Sized>(self, w: &mut W) -> Result<(), Error> {
+    #[inline]
+    fn write_to<W: Write>(self, mut w: W) -> Result<(), Error> {
         use byteorder::ByteOrder as _;
 
         let mut bytes = [0; mem::size_of::<Self>()];
@@ -225,8 +235,25 @@ pub trait Read<'a> {
     fn remaining_data(&self) -> usize;
 
     /// Reads a little-endian integer.
-    fn read_le<I: LeInt>(&mut self) -> Result<I, Error> {
+    fn read_le<I: LeInt>(&mut self) -> Result<I, Error>
+    where
+        Self: Sized,
+    {
         I::read_from(self)
+    }
+}
+
+assert_obj_safe!(Read<'static>);
+
+impl<'a, R: Read<'a> + ?Sized> Read<'a> for &'_ mut R {
+    #[inline]
+    fn read_bytes(&mut self, n: usize) -> Result<&'a [u8], Error> {
+        R::read_bytes(*self, n)
+    }
+
+    #[inline]
+    fn remaining_data(&self) -> usize {
+        R::remaining_data(*self)
     }
 }
 
@@ -242,7 +269,7 @@ impl<'a> Read<'a> for &'a [u8] {
     }
 
     fn remaining_data(&self) -> usize {
-        return self.len();
+        self.len()
     }
 }
 
@@ -258,7 +285,7 @@ impl<'a> Read<'a> for &'a mut [u8] {
     }
 
     fn remaining_data(&self) -> usize {
-        return self.len();
+        self.len()
     }
 }
 
@@ -274,8 +301,25 @@ pub trait Write {
     fn remaining_space(&self) -> usize;
 
     /// Writes a little-endian integer.
-    fn write_le<I: LeInt>(&mut self, val: I) -> Result<(), Error> {
+    fn write_le<I: LeInt>(&mut self, val: I) -> Result<(), Error>
+    where
+        Self: Sized,
+    {
         val.write_to(self)
+    }
+}
+
+assert_obj_safe!(Write);
+
+impl<W: Write + ?Sized> Write for &'_ mut W {
+    #[inline]
+    fn write_bytes(&mut self, buf: &[u8]) -> Result<(), Error> {
+        W::write_bytes(*self, buf)
+    }
+
+    #[inline]
+    fn remaining_space(&self) -> usize {
+        W::remaining_space(*self)
     }
 }
 
@@ -293,7 +337,7 @@ impl Write for &'_ mut [u8] {
     }
 
     fn remaining_space(&self) -> usize {
-        return self.len();
+        self.len()
     }
 }
 

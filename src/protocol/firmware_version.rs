@@ -60,14 +60,14 @@ impl Request<'_> for FirmwareVersionRequest {
 }
 
 impl<'a> FromWire<'a> for FirmwareVersionRequest {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
         let index = r.read_le()?;
         Ok(Self { index })
     }
 }
 
 impl<'a> ToWire for FirmwareVersionRequest {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
         w.write_le(self.index)?;
         Ok(())
     }
@@ -106,7 +106,7 @@ impl<'a> Response<'a> for FirmwareVersionResponse<'a> {
 }
 
 impl<'a> FromWire<'a> for FirmwareVersionResponse<'a> {
-    fn from_wire<R: Read<'a>>(r: &mut R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
         let version_bytes = r.read_bytes(32)?;
         let version = version_bytes
             .try_into()
@@ -116,7 +116,7 @@ impl<'a> FromWire<'a> for FirmwareVersionResponse<'a> {
 }
 
 impl ToWire for FirmwareVersionResponse<'_> {
-    fn to_wire<W: Write>(&self, w: &mut W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
         w.write_bytes(self.version)?;
         Ok(())
     }
