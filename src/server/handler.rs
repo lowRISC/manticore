@@ -153,22 +153,68 @@ mod sealed {
     pub trait Sealed {}
 }
 
+// Helpers for working with `for<'a> Command<'a>`.
+//
+// See the comment on the `where` clause of `HandlerMethods::handle`.
+#[doc(hidden)]
+pub type ReqOf<'a, C> = <C as protocol::Command<'a>>::Req;
+#[doc(hidden)]
+pub type RespOf<'a, C> = <C as protocol::Command<'a>>::Resp;
+
 /// The core trait that makes handler building possible.
 ///
 /// The lifetime `'req` represents the lifetime of the request. This lifetime
 /// must be placed here to ensure that all inputs into a request handling
 /// operation (including the `FromWire` and `Command` traits, which have
 /// lifetimes in them) have a single, coherent lifetime.
-pub trait HandlerMethods<'req, Server>: Sized + sealed::Sealed {
+pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
+    Sized + sealed::Sealed
+{
     /// Attaches a new handler function to a `Handler`.
     ///
     /// This function should be called as `.handle::<Command, _>(...)` to make
     /// type inference work; the second type paramter can't be named, since
     /// it will be a closure type.
-    fn handle<C, F>(self, handler: F) -> Cons<Self, C, F>
+    fn handle<'out, C, F>(self, handler: F) -> Cons<Self, C, F>
     where
-        C: protocol::Command<'req>,
-        F: FnOnce(&mut Server, C::Req) -> Result<C::Resp, protocol::Error>,
+        // The following line is a workaround the fact that Rust does not allow
+        // the syntax `type Assoc<'a>;` in traits (this feature is sometimes
+        // called "Generalized Associated Types"). This feature is likely to
+        // make it into the langauge at some point.
+        //
+        // What we would *like* to have is for `Command` to have no parameters,
+        // and for the `Req` and `Resp` associated types to have lifetime
+        // parameters, e.g., `type Req<'a>: Request<'a>;`. We would then write
+        // `FnOnce(Server, C::Req<'req>) -> Result<C::Resp<'out>, Error>`.
+        //
+        // Since this is not possible today, we have the following workaround:
+        // - `Command` has a lifetime parameter, and has associated types like
+        //   `type Req: Request<'a>;`.
+        // - We require that a `Command`-implementing type blanket-implement it
+        //   for *all* lifetimes. Since `Command` implementations are just
+        //   marker types, this is fine; they have no lifetimes in them, either.
+        // - Given this, we can write `C: for<'c> Command<'c>` (i.e., `C`
+        //   implements *every* Command<'c>), and, in lieu of `C::Req<'req>`,
+        //   we can write `<C as Command<'c>>::Req` to access a particular
+        //   implementation. `ReqOf<>` and `RespOf<>` are type-alias shortcuts
+        //   for this syntax.
+        //
+        // The reason to want to do this in the first place is because we want
+        // the output of the handler function to be potentially shorter than
+        // the request lifetime: in particular, we want to allow for
+        // `'req: 'srv`. The resulting response value doesn't need to live very
+        // long at all, since it gets immediately serialized into the response
+        // buffer.
+        //
+        // Once we have GATs, we can make a breaking change to eliminate this
+        // kludge.
+        C: for<'c> protocol::Command<'c>,
+        F: FnOnce(
+            Server,
+            ReqOf<'req, C>,
+        ) -> Result<RespOf<'out, C>, protocol::Error>,
+        'srv: 'out,
+        'req: 'out,
     {
         Cons {
             prev: self,
@@ -182,7 +228,7 @@ pub trait HandlerMethods<'req, Server>: Sized + sealed::Sealed {
     fn run_with_header<R: io::Read<'req>, W: io::Write>(
         self,
         req_header: Header,
-        server: &mut Server,
+        server: Server,
         req: R,
         resp: W,
     ) -> Result<(), Error>;
@@ -193,7 +239,7 @@ pub trait HandlerMethods<'req, Server>: Sized + sealed::Sealed {
     #[inline]
     fn run<R: io::Read<'req>, W: io::Write>(
         self,
-        server: &mut Server,
+        server: Server,
         mut req: R,
         resp: W,
     ) -> Result<(), Error> {
@@ -205,25 +251,28 @@ pub trait HandlerMethods<'req, Server>: Sized + sealed::Sealed {
     }
 }
 
-impl<'req, Server, Prev, Command, F> HandlerMethods<'req, Server>
-    for Cons<Prev, Command, F>
+impl<'req, 'srv, 'out, Server, Prev, Command, F>
+    HandlerMethods<'req, 'srv, Server> for Cons<Prev, Command, F>
 where
-    Prev: HandlerMethods<'req, Server>,
-    Command: protocol::Command<'req>,
+    // See `HandlerMethods::handle` for an explanation of these
+    // where-clauses.
+    Server: 'srv,
+    Prev: HandlerMethods<'req, 'srv, Server>,
+    Command: for<'c> protocol::Command<'c>,
     F: FnOnce(
-        &mut Server,
-        Command::Req,
-    ) -> Result<Command::Resp, protocol::Error>,
+        Server,
+        ReqOf<'req, Command>,
+    ) -> Result<RespOf<'out, Command>, protocol::Error>,
 {
     #[inline]
     fn run_with_header<R: io::Read<'req>, W: io::Write>(
         self,
         req_header: Header,
-        server: &mut Server,
+        server: Server,
         mut req: R,
         mut resp: W,
     ) -> Result<(), Error> {
-        if req_header.command != Command::Req::TYPE {
+        if req_header.command != ReqOf::<'req, Command>::TYPE {
             // Recurse into the next handler case. Note that this cannot be
             // `run`, since that would re-parse the header incorrectly.
             return self.prev.run_with_header(req_header, server, req, resp);
@@ -240,7 +289,7 @@ where
             Ok(msg) => {
                 let header = Header {
                     is_request: false,
-                    command: Command::Resp::TYPE,
+                    command: RespOf::<'out, Command>::TYPE,
                 };
 
                 header.to_wire(&mut resp)?;
@@ -261,12 +310,14 @@ where
     }
 }
 
-impl<'req, Server> HandlerMethods<'req, Server> for Handler<Server> {
+impl<'req, 'srv, Server: 'srv> HandlerMethods<'req, 'srv, Server>
+    for Handler<Server>
+{
     #[inline]
     fn run_with_header<R: io::Read<'req>, W: io::Write>(
         self,
         header: Header,
-        _: &mut Server,
+        _: Server,
         _: R,
         _: W,
     ) -> Result<(), Error> {
@@ -287,7 +338,7 @@ mod test {
 
     #[test]
     fn empty_handler() {
-        let handler = Handler::new();
+        let handler = Handler::<()>::new();
 
         let mut read_buf = [0; 1024];
         let mut write_buf = [0; 1024];
@@ -298,7 +349,7 @@ mod test {
         );
 
         assert!(matches!(
-            handler.run(&mut (), &mut req, &mut &mut write_buf[..]),
+            handler.run((), &mut req, &mut &mut write_buf[..]),
             Err(Error::UnhandledCommand(CommandType::FirmwareVersion))
         ));
     }
@@ -306,17 +357,16 @@ mod test {
     #[test]
     fn single_handler() {
         let mut handler_called = false;
-        let handler = Handler::new().handle::<protocol::FirmwareVersion, _>(
-            |zelf, req| {
+        let handler = Handler::<&str>::new()
+            .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
                 handler_called = true;
-                assert_eq!(*zelf, "server state");
+                assert_eq!(zelf, "server state");
                 assert_eq!(req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
                     version: VERSION1,
                 })
-            },
-        );
+            });
 
         let mut read_buf = [0; 1024];
         let mut write_buf = [0; 1024];
@@ -327,7 +377,7 @@ mod test {
         );
 
         let resp = test_util::with_buf(&mut write_buf, |resp| {
-            handler.run(&mut "server state", &mut req, resp).unwrap();
+            handler.run("server state", &mut req, resp).unwrap();
         });
         assert!(handler_called);
         let resp = test_util::read_resp::<
@@ -339,17 +389,16 @@ mod test {
     #[test]
     fn single_handler_wrong() {
         let mut handler_called = false;
-        let handler = Handler::new().handle::<protocol::FirmwareVersion, _>(
-            |zelf, req| {
+        let handler = Handler::<&str>::new()
+            .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
                 handler_called = true;
-                assert_eq!(*zelf, "server state");
+                assert_eq!(zelf, "server state");
                 assert_eq!(req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
                     version: VERSION1,
                 })
-            },
-        );
+            });
 
         let mut read_buf = [0; 1024];
         let mut write_buf = [0; 1024];
@@ -360,7 +409,7 @@ mod test {
         );
 
         assert!(matches!(
-            handler.run(&mut "server state", &mut req, &mut &mut write_buf[..]),
+            handler.run("server state", &mut req, &mut &mut write_buf[..]),
             Err(Error::UnhandledCommand(CommandType::DeviceId))
         ));
         assert!(!handler_called);
@@ -369,17 +418,16 @@ mod test {
     #[test]
     fn single_handler_too_long() {
         let mut handler_called = false;
-        let handler = Handler::new().handle::<protocol::FirmwareVersion, _>(
-            |zelf, req| {
+        let handler = Handler::<&str>::new()
+            .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
                 handler_called = true;
-                assert_eq!(*zelf, "server state");
+                assert_eq!(zelf, "server state");
                 assert_eq!(req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
                     version: VERSION1,
                 })
-            },
-        );
+            });
 
         let mut read_buf = [0; 1024];
         let mut write_buf = [0; 1024];
@@ -392,7 +440,7 @@ mod test {
         let mut req = &read_buf[..correct_len + 5];
 
         assert!(matches!(
-            handler.run(&mut "server state", &mut req, &mut &mut write_buf[..]),
+            handler.run("server state", &mut req, &mut &mut write_buf[..]),
             Err(Error::ReqTooLong(5))
         ));
         assert!(!handler_called);
@@ -401,10 +449,10 @@ mod test {
     #[test]
     fn double_handler() {
         let mut handler_called = false;
-        let handler = Handler::new()
+        let handler = Handler::<&str>::new()
             .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
                 handler_called = true;
-                assert_eq!(*zelf, "server state");
+                assert_eq!(zelf, "server state");
                 assert_eq!(req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
@@ -424,7 +472,7 @@ mod test {
         );
 
         let resp = test_util::with_buf(&mut write_buf, |resp| {
-            handler.run(&mut "server state", &mut req, resp).unwrap();
+            handler.run("server state", &mut req, resp).unwrap();
         });
         assert!(handler_called);
         let resp = test_util::read_resp::<
@@ -436,13 +484,13 @@ mod test {
     #[test]
     fn double_swapped() {
         let mut handler_called = false;
-        let handler = Handler::new()
+        let handler = Handler::<&str>::new()
             .handle::<protocol::DeviceId, _>(|_, _| {
                 panic!("called the wrong handler")
             })
             .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
                 handler_called = true;
-                assert_eq!(*zelf, "server state");
+                assert_eq!(zelf, "server state");
                 assert_eq!(req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
@@ -472,7 +520,7 @@ mod test {
     fn duplicate_handler() {
         let mut handler1_called = false;
         let mut handler2_called = false;
-        let handler = Handler::new()
+        let handler = Handler::<&str>::new()
             .handle::<protocol::FirmwareVersion, _>(|_, _| {
                 handler1_called = true;
 
@@ -500,7 +548,7 @@ mod test {
         );
 
         let resp = test_util::with_buf(&mut write_buf, |resp| {
-            handler.run(&mut "server state", &mut req, resp).unwrap();
+            handler.run("server state", &mut req, resp).unwrap();
         });
         assert!(handler1_called || handler2_called);
         let resp = test_util::read_resp::<

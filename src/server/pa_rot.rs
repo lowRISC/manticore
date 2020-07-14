@@ -70,16 +70,13 @@ where
     ///
     /// The request message will be read from `req`, while the response
     /// message will be written to `resp`.
-    ///
-    /// The `'req` lifetime represents the lifetime of the request being
-    /// processed.
     #[cfg_attr(test, inline(never))]
     pub fn process_request<'req>(
-        &'req mut self,
+        &mut self,
         req: impl Read<'req>,
         resp: impl Write,
     ) -> Result<(), Error> {
-        let result = Handler::<Self>::new()
+        let result = Handler::<&mut Self>::new()
             .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
                 if req.index != 0 {
                     return Err(protocol::Error {
