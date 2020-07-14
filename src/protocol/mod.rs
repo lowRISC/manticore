@@ -299,7 +299,7 @@ wire_enum! {
 /// request counterpart.
 ///
 /// [`CommandType::Error`]: enum.CommandType.html#variant.Error
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Error {
     /// What kind of error this is (or, it's merely an ACK).
