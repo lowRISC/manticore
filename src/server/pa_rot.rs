@@ -183,8 +183,12 @@ mod test {
     use core::time::Duration;
 
     use crate::crypto::ring;
+    use crate::hardware::Identity as _;
+    use crate::io::Cursor;
     use crate::protocol::capabilities::*;
-    use crate::protocol::test_util;
+    use crate::protocol::wire::FromWire;
+    use crate::protocol::wire::ToWire;
+    use crate::protocol::Header;
 
     const NETWORKING: Networking = Networking {
         max_message_size: 1024,
@@ -229,6 +233,35 @@ mod test {
         }
     }
 
+    fn simulate_request<'a, C: protocol::Command<'a>>(
+        scratch_space: &'a mut [u8],
+        server: &mut PaRot<Identity, Reset, ring::Rsa>,
+        request: C::Req,
+    ) -> Result<C::Resp, Error> {
+        let mut cursor = Cursor::new(scratch_space);
+
+        let header = Header {
+            is_request: true,
+            command: <C::Req as protocol::Request<'a>>::TYPE,
+        };
+        header.to_wire(&mut cursor).expect("failed to write header");
+        request
+            .to_wire(&mut cursor)
+            .expect("failed to write request");
+
+        let req = cursor.take_consumed_bytes();
+        server.process_request(req, &mut cursor)?;
+        let mut resp = cursor.take_consumed_bytes();
+
+        let header =
+            Header::from_wire(&mut resp).expect("failed to read header");
+        assert!(!header.is_request);
+        let resp_val =
+            FromWire::from_wire(&mut resp).expect("failed to read response");
+        assert_eq!(resp.len(), 0);
+        Ok(resp_val)
+    }
+
     #[test]
     fn sanity() {
         let identity = Identity {
@@ -250,34 +283,26 @@ mod test {
             networking: NETWORKING,
             timeouts: TIMEOUTS,
         });
-        let mut read_buf = [0; 1024];
-        let mut write_buf = [0; 1024];
 
-        let mut req = test_util::write_req(
-            protocol::firmware_version::FirmwareVersionRequest { index: 0 },
-            &mut read_buf,
-        );
-        let resp = test_util::with_buf(&mut write_buf, |resp| {
-            eprintln!("{:?}", req);
-            server.process_request(&mut req, resp).unwrap();
-        });
+        let mut scratch = [0; 1024];
 
-        let resp = test_util::read_resp::<
-            protocol::firmware_version::FirmwareVersionResponse,
-        >(resp);
-        assert_eq!(&resp.version[..], &identity.version[..]);
+        let req =
+            protocol::firmware_version::FirmwareVersionRequest { index: 0 };
+        let resp = simulate_request::<protocol::FirmwareVersion>(
+            &mut scratch,
+            &mut server,
+            req,
+        )
+        .expect("got error from server");
+        assert_eq!(resp.version, identity.firmware_version());
 
-        let mut req = test_util::write_req(
-            protocol::device_id::DeviceIdRequest,
-            &mut read_buf,
-        );
-        let resp = test_util::with_buf(&mut write_buf, |resp| {
-            eprintln!("{:?}", req);
-            server.process_request(&mut req, resp).unwrap();
-        });
-
-        let resp =
-            test_util::read_resp::<protocol::device_id::DeviceIdResponse>(resp);
+        let req = protocol::device_id::DeviceIdRequest;
+        let resp = simulate_request::<protocol::DeviceId>(
+            &mut scratch,
+            &mut server,
+            req,
+        )
+        .expect("got error from server");
         assert_eq!(resp.id, DEVICE_ID);
     }
 }

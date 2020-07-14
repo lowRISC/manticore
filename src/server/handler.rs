@@ -331,25 +331,60 @@ impl<Server> sealed::Sealed for Handler<Server> {}
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::protocol::test_util;
+    use crate::io::Cursor;
 
     const VERSION1: &[u8; 32] = &[2; 32];
     const VERSION2: &[u8; 32] = &[5; 32];
+
+    fn simulate_request<
+        'a,
+        C: protocol::Command<'a>,
+        T: 'a,
+        H: HandlerMethods<'a, 'a, T>,
+    >(
+        scratch_space: &'a mut [u8],
+        server: (H, T),
+        request: C::Req,
+    ) -> Result<C::Resp, Error> {
+        let mut cursor = Cursor::new(scratch_space);
+
+        let header = Header {
+            is_request: true,
+            command: <C::Req as protocol::Request<'a>>::TYPE,
+        };
+        header.to_wire(&mut cursor).expect("failed to write header");
+        request
+            .to_wire(&mut cursor)
+            .expect("failed to write request");
+
+        let req = cursor.take_consumed_bytes();
+        server.0.run(server.1, req, &mut cursor)?;
+        let mut resp = cursor.take_consumed_bytes();
+
+        let header =
+            Header::from_wire(&mut resp).expect("failed to read header");
+        assert!(!header.is_request);
+        let resp_val =
+            FromWire::from_wire(&mut resp).expect("failed to read response");
+        assert_eq!(resp.len(), 0);
+        Ok(resp_val)
+    }
 
     #[test]
     fn empty_handler() {
         let handler = Handler::<()>::new();
 
-        let mut read_buf = [0; 1024];
-        let mut write_buf = [0; 1024];
-
-        let mut req = test_util::write_req(
-            protocol::firmware_version::FirmwareVersionRequest { index: 0 },
-            &mut read_buf,
+        let mut scratch = [0; 1024];
+        let req =
+            protocol::firmware_version::FirmwareVersionRequest { index: 0 };
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+            &mut scratch,
+            (handler, ()),
+            req,
         );
 
         assert!(matches!(
-            handler.run((), &mut req, &mut &mut write_buf[..]),
+            resp,
             Err(Error::UnhandledCommand(CommandType::FirmwareVersion))
         ));
     }
@@ -368,22 +403,17 @@ mod test {
                 })
             });
 
-        let mut read_buf = [0; 1024];
-        let mut write_buf = [0; 1024];
-
-        let mut req = test_util::write_req(
-            protocol::firmware_version::FirmwareVersionRequest { index: 42 },
-            &mut read_buf,
+        let mut scratch = [0; 1024];
+        let req =
+            protocol::firmware_version::FirmwareVersionRequest { index: 42 };
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+            &mut scratch,
+            (handler, "server state"),
+            req,
         );
 
-        let resp = test_util::with_buf(&mut write_buf, |resp| {
-            handler.run("server state", &mut req, resp).unwrap();
-        });
         assert!(handler_called);
-        let resp = test_util::read_resp::<
-            protocol::firmware_version::FirmwareVersionResponse,
-        >(resp);
-        assert!(resp.version.starts_with(VERSION1));
+        assert!(resp.unwrap().version.starts_with(VERSION1));
     }
 
     #[test]
@@ -400,16 +430,16 @@ mod test {
                 })
             });
 
-        let mut read_buf = [0; 1024];
-        let mut write_buf = [0; 1024];
-
-        let mut req = test_util::write_req(
-            protocol::device_id::DeviceIdRequest,
-            &mut read_buf,
+        let mut scratch = [0; 1024];
+        let req = protocol::device_id::DeviceIdRequest;
+        let resp = simulate_request::<protocol::DeviceId, _, _>(
+            &mut scratch,
+            (handler, "server state"),
+            req,
         );
 
         assert!(matches!(
-            handler.run("server state", &mut req, &mut &mut write_buf[..]),
+            resp,
             Err(Error::UnhandledCommand(CommandType::DeviceId))
         ));
         assert!(!handler_called);
@@ -429,18 +459,22 @@ mod test {
                 })
             });
 
-        let mut read_buf = [0; 1024];
-        let mut write_buf = [0; 1024];
+        let mut scratch = [0; 1024];
+        let mut cursor = Cursor::new(&mut scratch);
 
-        let correct_len = test_util::write_req(
-            protocol::firmware_version::FirmwareVersionRequest { index: 42 },
-            &mut read_buf,
-        )
-        .len();
-        let mut req = &read_buf[..correct_len + 5];
+        let header = Header {
+            is_request: true,
+            command: CommandType::FirmwareVersion,
+        };
+        let req =
+            protocol::firmware_version::FirmwareVersionRequest { index: 42 };
+        header.to_wire(&mut cursor).unwrap();
+        req.to_wire(&mut cursor).unwrap();
+        cursor.consume(5);
 
+        let req = cursor.take_consumed_bytes();
         assert!(matches!(
-            handler.run("server state", &mut req, &mut &mut write_buf[..]),
+            handler.run("server state", req, cursor),
             Err(Error::ReqTooLong(5))
         ));
         assert!(!handler_called);
@@ -463,22 +497,17 @@ mod test {
                 panic!("called the wrong handler")
             });
 
-        let mut read_buf = [0; 1024];
-        let mut write_buf = [0; 1024];
-
-        let mut req = test_util::write_req(
-            protocol::firmware_version::FirmwareVersionRequest { index: 42 },
-            &mut read_buf,
+        let mut scratch = [0; 1024];
+        let req =
+            protocol::firmware_version::FirmwareVersionRequest { index: 42 };
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+            &mut scratch,
+            (handler, "server state"),
+            req,
         );
 
-        let resp = test_util::with_buf(&mut write_buf, |resp| {
-            handler.run("server state", &mut req, resp).unwrap();
-        });
         assert!(handler_called);
-        let resp = test_util::read_resp::<
-            protocol::firmware_version::FirmwareVersionResponse,
-        >(resp);
-        assert!(resp.version.starts_with(VERSION1));
+        assert!(resp.unwrap().version.starts_with(VERSION1));
     }
 
     #[test]
@@ -498,22 +527,17 @@ mod test {
                 })
             });
 
-        let mut read_buf = [0; 1024];
-        let mut write_buf = [0; 1024];
-
-        let mut req = test_util::write_req(
-            protocol::firmware_version::FirmwareVersionRequest { index: 42 },
-            &mut read_buf,
+        let mut scratch = [0; 1024];
+        let req =
+            protocol::firmware_version::FirmwareVersionRequest { index: 42 };
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+            &mut scratch,
+            (handler, "server state"),
+            req,
         );
 
-        let resp = test_util::with_buf(&mut write_buf, |resp| {
-            handler.run(&mut "server state", &mut req, resp).unwrap();
-        });
         assert!(handler_called);
-        let resp = test_util::read_resp::<
-            protocol::firmware_version::FirmwareVersionResponse,
-        >(resp);
-        assert!(resp.version.starts_with(VERSION1));
+        assert!(resp.unwrap().version.starts_with(VERSION1));
     }
 
     #[test]
@@ -539,21 +563,17 @@ mod test {
                 })
             });
 
-        let mut read_buf = [0; 1024];
-        let mut write_buf = [0; 1024];
-
-        let mut req = test_util::write_req(
-            protocol::firmware_version::FirmwareVersionRequest { index: 42 },
-            &mut read_buf,
+        let mut scratch = [0; 1024];
+        let req =
+            protocol::firmware_version::FirmwareVersionRequest { index: 42 };
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+            &mut scratch,
+            (handler, "server state"),
+            req,
         );
 
-        let resp = test_util::with_buf(&mut write_buf, |resp| {
-            handler.run("server state", &mut req, resp).unwrap();
-        });
         assert!(handler1_called || handler2_called);
-        let resp = test_util::read_resp::<
-            protocol::firmware_version::FirmwareVersionResponse,
-        >(resp);
-        assert!(resp.version == VERSION1 || resp.version == VERSION2);
+        let version = resp.unwrap().version;
+        assert!(version == VERSION1 || version == VERSION2);
     }
 }

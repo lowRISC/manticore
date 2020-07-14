@@ -28,7 +28,8 @@ macro_rules! round_trip_test {
     },)+) => {$(
         #[test]
         fn $name() {
-            use $crate::protocol::*;
+            use $crate::protocol::wire::*;
+            use $crate::io::*;
             let bytes: &[u8] = $bytes;
             let value: $ty = $ty $({ $($field: $field_val,)* })?;
 
@@ -41,11 +42,9 @@ macro_rules! round_trip_test {
 
             const BUF_LEN: usize = 1 << 10;
             let mut buf = [0u8; BUF_LEN];
-            let mut buf_ref = &mut buf[..];
-            value.to_wire(&mut buf_ref).expect("serialization failed");
-            let len = BUF_LEN - buf_ref.len();
-            let serialized = &buf[..len];
-            assert_eq!(serialized, bytes);
+            let mut cursor = Cursor::new(&mut buf);
+            value.to_wire(&mut cursor).expect("serialization failed");
+            assert_eq!(cursor.consumed_bytes(), bytes);
         }
     )+}
 }
