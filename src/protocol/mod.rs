@@ -87,9 +87,6 @@ pub use reset_counter::ResetCounter;
 pub mod request_counter;
 pub use request_counter::RequestCounter;
 
-#[cfg(test)]
-pub(crate) mod test_util;
-
 /// A Cerberus command.
 ///
 /// A Cerberus command is identified by two types, each of which has a
