@@ -122,3 +122,63 @@ impl Flash for [u8] {
         Ok(())
     }
 }
+
+#[cfg(test)]
+pub(crate) mod fake {
+    use core::convert::TryInto;
+    use core::time::Duration;
+
+    /// A fake `Identity` that returns fixed values.
+    pub struct Identity {
+        firmware_version: Vec<u8>,
+        unique_id: Vec<u8>,
+    }
+
+    impl Identity {
+        /// Creates a new `fake::Identity`.
+        pub fn new(firmware_version: &[u8], unique_id: &[u8]) -> Self {
+            let mut firmware_version = firmware_version.to_vec();
+            while firmware_version.len() < 32 {
+                firmware_version.push(0);
+            }
+            firmware_version.truncate(32);
+
+            Self {
+                firmware_version,
+                unique_id: unique_id.to_vec(),
+            }
+        }
+    }
+
+    impl super::Identity for Identity {
+        fn firmware_version(&self) -> &[u8; 32] {
+            self.firmware_version[..32].try_into().unwrap()
+        }
+        fn unique_device_identity(&self) -> &[u8] {
+            &self.unique_id[..]
+        }
+    }
+
+    /// A fake `Reset` that returns fixed values.
+    pub struct Reset {
+        resets: u32,
+        uptime: Duration,
+    }
+
+    impl Reset {
+        /// Creates a new `fake::Reset`.
+        pub fn new(resets: u32, uptime: Duration) -> Self {
+            Self { resets, uptime }
+        }
+    }
+
+    impl super::Reset for Reset {
+        fn resets_since_power_on(&self) -> u32 {
+            self.resets
+        }
+
+        fn uptime(&self) -> Duration {
+            self.uptime
+        }
+    }
+}

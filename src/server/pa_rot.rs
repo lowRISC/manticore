@@ -179,10 +179,10 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use core::convert::TryInto as _;
     use core::time::Duration;
 
     use crate::crypto::ring;
+    use crate::hardware::fake;
     use crate::hardware::Identity as _;
     use crate::io::Cursor;
     use crate::protocol::capabilities::*;
@@ -210,32 +210,9 @@ mod test {
             subsys_id: 4,
         };
 
-    struct Identity {
-        version: Vec<u8>,
-        device_id: Vec<u8>,
-    }
-    impl hardware::Identity for Identity {
-        fn firmware_version(&self) -> &[u8; 32] {
-            self.version[..].try_into().unwrap()
-        }
-        fn unique_device_identity(&self) -> &[u8] {
-            &self.device_id
-        }
-    }
-
-    struct Reset;
-    impl hardware::Reset for Reset {
-        fn resets_since_power_on(&self) -> u32 {
-            0
-        }
-        fn uptime(&self) -> Duration {
-            Duration::from_millis(1)
-        }
-    }
-
     fn simulate_request<'a, C: protocol::Command<'a>>(
         scratch_space: &'a mut [u8],
-        server: &mut PaRot<Identity, Reset, ring::Rsa>,
+        server: &mut PaRot<fake::Identity, fake::Reset, ring::Rsa>,
         request: C::Req,
     ) -> Result<C::Resp, Error> {
         let mut cursor = Cursor::new(scratch_space);
@@ -264,21 +241,13 @@ mod test {
 
     #[test]
     fn sanity() {
-        let identity = Identity {
-            version: {
-                let mut vec = b"test version".to_vec();
-                while vec.len() < 32 {
-                    vec.push(0);
-                }
-                vec
-            },
-            device_id: b"totally random bits".to_vec(),
-        };
-
+        let identity = fake::Identity::new(b"test version", b"random bits");
+        let reset = fake::Reset::new(0, Duration::from_millis(1));
+        let rsa = ring::Rsa;
         let mut server = PaRot::new(Options {
             identity: &identity,
-            reset: &Reset,
-            rsa: &ring::Rsa,
+            reset: &reset,
+            rsa: &rsa,
             device_id: DEVICE_ID,
             networking: NETWORKING,
             timeouts: TIMEOUTS,
