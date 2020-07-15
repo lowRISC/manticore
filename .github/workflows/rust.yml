@@ -10,11 +10,27 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build_and_test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: Build
+    - name: Install Toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        target: riscv32imc-unknown-none-elf
+        components: rustfmt
+
+    - name: Check format
+      run: cargo fmt -- --check --files-with-diff
+
+    - name: Build with default settings
       run: cargo build --verbose
+    - name: Build with features
+      run: cargo build --verbose --all-features
+    - name: Build for baremetal RISC-V
+      run: cargo build --verbose --target riscv32imc-unknown-none-elf
+
     - name: Run tests
       run: cargo test --verbose
