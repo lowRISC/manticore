@@ -4,7 +4,7 @@
 
 [package]
 name = "manticore"
-version = "0.0.0"
+version = "0.0.1"
 edition = "2018"
 
 authors = ["lowRISC Contributors"]
@@ -13,5 +13,5 @@ homepage = "https://opentitan.org/"
 repository = "https://github.com/lowRISC/manticore"
 description = "A WIP implementation of the Cerberus attestation protocol"
 
-readme = "README.md.crates-io"
-include = ["Cargo.toml", "src/lib.rs", "README.md.cargo-io"]
+readme = "README.crates-io.md"
+include = ["Cargo.toml", "src/lib.rs", "README.cargo-io.md"]
