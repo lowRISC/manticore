@@ -1,0 +1,17 @@
+# Copyright lowRISC contributors.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "manticore"
+version = "0.0.0"
+edition = "2018"
+
+authors = ["lowRISC Contributors"]
+license = "Apache-2.0"
+homepage = "https://opentitan.org/"
+repository = "https://github.com/lowRISC/manticore"
+description = "A WIP implementation of the Cerberus attestation protocol"
+
+readme = "README.md.crates-io"
+include = ["Cargo.toml", "src/lib.rs", "README.md.cargo-io"]
