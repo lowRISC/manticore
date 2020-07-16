@@ -303,9 +303,6 @@ pub trait Write {
     /// until completion or return an error.
     fn write_bytes(&mut self, buf: &[u8]) -> Result<(), Error>;
 
-    /// Returns the number of bytes still available to read.
-    fn remaining_space(&self) -> usize;
-
     /// Writes a little-endian integer.
     ///
     /// # Note
@@ -328,11 +325,6 @@ impl<W: Write + ?Sized> Write for &'_ mut W {
     fn write_bytes(&mut self, buf: &[u8]) -> Result<(), Error> {
         W::write_bytes(*self, buf)
     }
-
-    #[inline]
-    fn remaining_space(&self) -> usize {
-        W::remaining_space(*self)
-    }
 }
 
 impl Write for &'_ mut [u8] {
@@ -346,10 +338,6 @@ impl Write for &'_ mut [u8] {
         dest.copy_from_slice(buf);
         *self = rest;
         Ok(())
-    }
-
-    fn remaining_space(&self) -> usize {
-        self.len()
     }
 }
 
@@ -446,10 +434,6 @@ impl Write for Cursor<'_> {
         let dest = self.consume(buf.len()).ok_or(Error::BufferExhausted)?;
         dest.copy_from_slice(buf);
         Ok(())
-    }
-
-    fn remaining_space(&self) -> usize {
-        self.buf.len() - self.cursor
     }
 }
 
