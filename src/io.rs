@@ -128,8 +128,11 @@ pub enum Error {
     /// either for reading from or writing to.
     ///
     /// This is typically a fatal error, since it is probably not possible
-    /// to re-allocate that unrelying buffer.
+    /// to re-allocate that underlying buffer.
     BufferExhausted,
+
+    /// Indicates that an unspecified, internal failure occurred.
+    Internal,
 }
 
 /// A little-endian integer, which can be read and written.
@@ -218,10 +221,19 @@ impl LeInt for u64 {
 
 /// Represents a place that bytes can be read from, such as a `&[u8]`.
 ///
-/// Unlike [`std::io::Read`], this trait is intended for performing exact reads
-/// out of a buffer with a fixed lifetime; hence, the additional lifetime
-/// argument. In other words, a `manticore::io::Read` owns all of the data it
-/// returns.
+/// Types which implement this trait enable *zero copy reads*, that is,
+/// a read opertion does not need to allocate memory to perform a read, since
+/// all of that memory has already been allocated ahead-of-time. The lifetime
+/// of that memory if represented by the lifetime `'a`.
+///
+/// # Relation with [`std::io::Read`]
+/// [`std::io::Read`] is distinct from `Read`; it copies data onto a buffer
+/// provided by the caller. Such an API is unworkable in `manticore`, since
+/// `manticore` cannot usually allocate.
+///
+/// The recommended way to use a [`std::io::Read`] with a `manticore` API is to
+/// use `read_to_end(&mut buf)` and to then pass `&mut buf[..]` into
+/// `manticore`.
 ///
 /// [`std::io::Read`]: https://doc.rust-lang.org/std/io/trait.Read.html
 pub trait Read<'a> {
@@ -296,6 +308,14 @@ impl<'a> Read<'a> for &'a mut [u8] {
 }
 
 /// Represents a place that bytes can be written to, such as a `&[u8]`.
+///
+/// # Relation with [`std::io::Write`]
+/// [`std::io::Write`] provides approximately a superset of `Write`, with
+/// more detailed errors. [`StdWrite`] provides an implementation of
+/// `Write` in terms of [`std::io::Write`].
+///
+/// [`std::io::Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
+/// [`write_bytes()`]: trait.Write.html#tymethod.write_bytes
 pub trait Write {
     /// Attempt to write `buf` exactly to `self`.
     ///
@@ -338,6 +358,41 @@ impl Write for &'_ mut [u8] {
         dest.copy_from_slice(buf);
         *self = rest;
         Ok(())
+    }
+}
+
+/// Converts a [`std::io::Write`] into a [`manticore::io::Write`].
+///
+/// [`write_bytes()`] is implemented by simply calling [`write()`] repeatedly
+/// until every byte is written; [`manticore::io::Write`] should be implemented
+/// directly if possible.
+///
+/// This type is provided instead of implementing [`manticore::io::Write`]
+/// directly for every [`std::io::Write`] due to trait coherence issues
+/// involving the blanket impl on `&mut _`.
+///
+/// [`std::io::Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
+/// [`manticore::io::Write`]: trait.Write.html
+/// [`write_bytes()`]: trait.Write.html#tymethod.write_bytes
+/// [`write()`]: https://doc.rust-lang.org/std/io/trait.Write.html#tymethod.write
+#[cfg(feature = "std")]
+pub struct StdWrite<W>(pub W);
+
+#[cfg(feature = "std")]
+impl<W: std::io::Write> Write for StdWrite<W> {
+    fn write_bytes(&mut self, mut buf: &[u8]) -> Result<(), Error> {
+        use std::io::ErrorKind;
+        loop {
+            if buf.is_empty() {
+                return Ok(());
+            }
+            match self.0.write(buf).map_err(|e| e.kind()) {
+                Ok(len) => buf = &buf[len..],
+                Err(ErrorKind::Interrupted) => continue,
+                // No good way to propagate this. =/
+                Err(_) => return Err(Error::Internal),
+            }
+        }
     }
 }
 
@@ -512,6 +567,14 @@ mod test {
 
         let mut bytes = &mut buf[..];
         assert_eq!(bytes.read_le::<u32>().unwrap(), 0x6c726f57);
+    }
+
+    #[test]
+    fn std_write() {
+        let mut buf = [0; 4];
+        let mut std_write = StdWrite(&mut buf[..]);
+        std_write.write_le::<u32>(0x04030201).unwrap();
+        assert_eq!(buf, [1, 2, 3, 4]);
     }
 
     #[test]
