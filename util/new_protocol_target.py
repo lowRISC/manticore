@@ -58,47 +58,81 @@ path = "fuzz_targets/{target}.rs"
 
 def main():
   argparser = argparse.ArgumentParser(
-    description=
-    'Generates FromWire/ToWire fuzz targets for a `manticore::protocol` '\
-    'message.\n The type name of the message should be provided relative to '\
-    '`manticore::protocol`.'
-  )
-  argparser.add_argument('typename',
-                         type=str,
-                         help='the name of the type to fuzz, such as '\
-                              'firmware_version::FirmwareVersionRequest')
-  argparser.add_argument('--target-templates',
-                         type=str,
-                         choices=['to_wire', 'from_wire', 'to_wire_fuzz_safe'],
-                         nargs='*',
-                         default=['to_wire', 'from_wire'],
-                         help='which target templates to use; defaults to all')
-  argparser.add_argument('--fuzz-dir',
-                         type=str,
-                         default='fuzz',
-                         help='the fuzzing directory, relative to the project'\
-                              'root')
+    description=('Generates FromWire/ToWire fuzz targets for a '
+                 '`manticore::protocol` message.'))
+  subcommands = argparser.add_subparsers(
+    required=True,
+    dest='subcommand',
+    help='subcommands')
+
+  argparser_generate = subcommands.add_parser(
+    'generate',
+    help='generate new fuzz targets')
+  argparser_generate.add_argument(
+    'typename',
+    type=str,
+    help=('the name of the type to fuzz, such as '
+          'firmware_version::FirmwareVersionRequest'))
+  argparser_generate.add_argument(
+    '--fuzz-dir',
+    type=str,
+    default='fuzz',
+    help='the fuzzing directory, relative to the project root')
+  argparser_generate.add_argument(
+    '--target-templates',
+    type=str,
+    nargs='*',
+    choices=['to_wire', 'from_wire', 'to_wire_fuzz_safe'],
+    default=['to_wire', 'from_wire'],
+    metavar='TEMPLATE',
+    help=('which targets to generate. choices: %(choices)s (default: %(default)s)'))
+
+  argparser_ci = subcommands.add_parser(
+      'ci',
+      help='generate CI jobs for a set of fuzz targets for one command type')
+  argparser_ci.add_argument(
+      'message_type',
+      type=str,
+      help=('prefix for the four fuzz targets to generate a job for, such as '
+            'firmware_version'))
+  argparser_ci.add_argument(
+      '--workflow-file',
+      type=str,
+      default='.github/workflows/fuzz.yml',
+      help='the workflow file, relative to the project root')
+
   args = argparser.parse_args()
 
   util_dir = os.path.dirname(__file__)
-  fuzz_dir = os.path.join(os.path.dirname(util_dir), args.fuzz_dir)
-  (module, typename) = tuple(args.typename.split('::'))
-  typeid = re.search('^\w+', typename)[0]  # Remove a trailing <'static>
-  snake_case_name = camel_to_snake(typeid)
+  repo_top = os.path.dirname(util_dir)
   command = ' '.join(sys.argv)
 
-  renames = {'to_wire_fuzz_safe': 'to_wire'}
-  for template_name in args.target_templates:
-    template = read_file(os.path.join(
-        util_dir, '{}.rs.template'.format(template_name)))
+  if args.subcommand == 'generate':
+    fuzz_dir = os.path.join(repo_top, args.fuzz_dir)
+    (module, typename) = tuple(args.typename.split('::'))
+    typeid = re.match('\w+', typename)[0]  # Remove a trailing <'static>
+    snake_case_name = camel_to_snake(typeid)
 
-    if template_name in renames:
-      template_name = renames[template_name]
-    name = "{}_{}".format(snake_case_name, template_name)
-    src = template.format(module=module, typename=typename,
-                          typeid=typeid, command=command)
+    renames = {'to_wire_fuzz_safe': 'to_wire'}
+    for template_name in args.target_templates:
+      template = read_file(os.path.join(
+          util_dir, '{}.rs.template'.format(template_name)))
 
-    add_target(fuzz_dir, name, src)
+      if template_name in renames:
+        template_name = renames[template_name]
+      name = "{}_{}".format(snake_case_name, template_name)
+      src = template.format(module=module, typename=typename,
+                            typeid=typeid, command=command)
+
+      add_target(fuzz_dir, name, src)
+  elif args.subcommand == 'ci':
+    template_path = os.path.join(util_dir, 'fuzz_job.yml.template')
+    template = read_file(template_path)
+    job = template.format(message_type=args.message_type, command=command)
+
+    workflow_file = os.path.join(repo_top, args.workflow_file)
+    append_to_file(workflow_file, job)
+
 
 if __name__ == '__main__':
   main()
