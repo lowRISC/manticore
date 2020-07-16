@@ -35,5 +35,13 @@ features = ["derive"]
 ring = "0.16.11"
 
 [features]
+default = ["std"]
+
 # Enables deriving `arbitrary::Arbitrary` for various manticore types.
-arbitrary-derive = ["libfuzzer-sys"]
+arbitrary-derive = ["libfuzzer-sys", "std"]
+
+# Enables features that requires the full standard library.
+std = [
+  "arrayvec/std",
+  "byteorder/std",
+]
