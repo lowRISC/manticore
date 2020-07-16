@@ -24,7 +24,7 @@
 //!   https://github.com/opencomputeproject/Project_Olympus/tree/master/Project_Cerberus
 //! [`protocol` module]: protocol/index.html
 
-#![cfg_attr(not(any(test, feature = "arbitrary-derive")), no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(missing_docs)]
 #![deny(warnings)]
 #![deny(unused)]

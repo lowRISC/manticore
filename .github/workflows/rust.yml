@@ -27,10 +27,12 @@ jobs:
 
     - name: Build with default settings
       run: cargo build --verbose
-    - name: Build with features
+    - name: Build with no features
+      run: cargo build --verbose --no-default-features
+    - name: Build with all features
       run: cargo build --verbose --all-features
     - name: Build for baremetal RISC-V
-      run: cargo build --verbose --target riscv32imc-unknown-none-elf
+      run: cargo build --verbose --no-default-features --target riscv32imc-unknown-none-elf
 
     - name: Run tests
       run: cargo test --verbose
