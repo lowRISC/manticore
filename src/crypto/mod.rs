@@ -30,11 +30,19 @@
 //! a lot of them have the same name. Instead, use imports like
 //! `use manticore::crypto::sha256;` and partially-qualified names like
 //! `sha256::Hasher`.
+//!
+//! Software implementations of thes traits are provided under the
+//! [`ring` module], based on the [`ring`] crate. Their presence is controlled
+//! by the `ring` feature flag; some opeartions require `std` as well.
+//!
+//! [`ring` module]: ring/index.html
+//! [`ring`]: https://github.com/briansmith/ring
 
 pub mod rsa;
 pub mod sha256;
 
-#[cfg(test)]
+#[cfg(feature = "ring")]
 pub mod ring;
+
 #[cfg(test)]
 pub(crate) mod testdata;

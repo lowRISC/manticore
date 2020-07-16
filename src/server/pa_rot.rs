@@ -212,7 +212,7 @@ mod test {
 
     fn simulate_request<'a, C: protocol::Command<'a>>(
         scratch_space: &'a mut [u8],
-        server: &mut PaRot<fake::Identity, fake::Reset, ring::Rsa>,
+        server: &mut PaRot<fake::Identity, fake::Reset, ring::rsa::Builder>,
         request: C::Req,
     ) -> Result<C::Resp, Error> {
         let mut cursor = Cursor::new(scratch_space);
@@ -243,7 +243,7 @@ mod test {
     fn sanity() {
         let identity = fake::Identity::new(b"test version", b"random bits");
         let reset = fake::Reset::new(0, Duration::from_millis(1));
-        let rsa = ring::Rsa;
+        let rsa = ring::rsa::Builder::new();
         let mut server = PaRot::new(Options {
             identity: &identity,
             reset: &reset,
