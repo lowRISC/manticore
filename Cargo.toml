@@ -25,6 +25,11 @@ version = "0.3"
 optional = true
 features = ["arbitrary-derive"]
 
+[dependencies.ring]
+version = "0.16.11"
+optional = true
+default-features = false
+
 [dependencies.serde]
 version = "1.0"
 optional = true
@@ -35,7 +40,7 @@ features = ["derive"]
 ring = "0.16.11"
 
 [features]
-default = ["std"]
+default = ["std", "ring"]
 
 # Enables deriving `arbitrary::Arbitrary` for various manticore types.
 arbitrary-derive = ["libfuzzer-sys", "std"]
@@ -44,4 +49,5 @@ arbitrary-derive = ["libfuzzer-sys", "std"]
 std = [
   "arrayvec/std",
   "byteorder/std",
+  "ring/std",
 ]

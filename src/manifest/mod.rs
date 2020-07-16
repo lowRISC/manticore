@@ -263,11 +263,12 @@ mod test {
     #[test]
     fn parse_manifest() {
         let keypair =
-            ring::RsaKeypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
+            ring::rsa::Keypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
                 .unwrap();
         let pub_key = keypair.public();
-        let mut signer = ring::Rsa.new_signer(keypair).unwrap();
-        let mut rsa = ring::Rsa.new_engine(pub_key).unwrap();
+        let rsa_builder = ring::rsa::Builder::new();
+        let mut signer = rsa_builder.new_signer(keypair).unwrap();
+        let mut rsa = rsa_builder.new_engine(pub_key).unwrap();
 
         let mut manifest = MANIFEST_HEADER.to_vec();
         manifest.extend_from_slice(MANIFEST_CONTENTS);
@@ -286,11 +287,12 @@ mod test {
     #[test]
     fn parse_manifest_too_short() {
         let keypair =
-            ring::RsaKeypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
+            ring::rsa::Keypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
                 .unwrap();
         let pub_key = keypair.public();
-        let mut signer = ring::Rsa.new_signer(keypair).unwrap();
-        let mut rsa = ring::Rsa.new_engine(pub_key).unwrap();
+        let rsa_builder = ring::rsa::Builder::new();
+        let mut signer = rsa_builder.new_signer(keypair).unwrap();
+        let mut rsa = rsa_builder.new_engine(pub_key).unwrap();
 
         let mut manifest = MANIFEST_HEADER.to_vec();
         manifest.extend_from_slice(&MANIFEST_CONTENTS[1..]);
@@ -307,11 +309,12 @@ mod test {
     #[test]
     fn parse_manifest_bad_sig() {
         let keypair =
-            ring::RsaKeypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
+            ring::rsa::Keypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
                 .unwrap();
         let pub_key = keypair.public();
-        let mut signer = ring::Rsa.new_signer(keypair).unwrap();
-        let mut rsa = ring::Rsa.new_engine(pub_key).unwrap();
+        let rsa_builder = ring::rsa::Builder::new();
+        let mut signer = rsa_builder.new_signer(keypair).unwrap();
+        let mut rsa = rsa_builder.new_engine(pub_key).unwrap();
 
         let mut manifest = MANIFEST_HEADER.to_vec();
         manifest.extend_from_slice(MANIFEST_CONTENTS);
