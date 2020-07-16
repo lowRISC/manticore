@@ -20,9 +20,24 @@
 //! be used with any packet layer, such as MCTP, TCP, or ring-buffer IPC. See
 //! the [`protocol` module] for more details.
 //!
+//! # Feature flags
+//!
+//! `manticore` provides a number of optional features that can be controlled
+//! through feature flags:
+//! - `std` (default) pulls in the full Rust standard library. This is
+//!   not necessary for any on-device use-cases, but is available for using
+//!   `manticore` as a library for talking to Cerberus devices.
+//! - `ring` (default) enables the [`crypto::ring` module], which provides
+//!   software implementations for cryptography traits used by `manticore`.
+//!   This feature is not intended for on-device use-cases either.
+//! - `serde` enables implementations of `serde`'s (de)serialization traits.
+//! - `arbitrary-derive` enables implementations of fuzz-testing-related
+//!   traits.
+//!
 //! [Cerberus]:
 //!   https://github.com/opencomputeproject/Project_Olympus/tree/master/Project_Cerberus
 //! [`protocol` module]: protocol/index.html
+//! [`crypto::ring` module]: crypto/ring/index.html
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(missing_docs)]
