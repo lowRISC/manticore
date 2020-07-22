@@ -129,6 +129,10 @@ where
     }
 }
 
+/// A deserialization-from-string error.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct WireEnumFromStrError;
+
 /// A conveinence macro for generating `WireEnum`-implementing enums.
 ///
 ///
@@ -201,14 +205,14 @@ macro_rules! wire_enum {
         }
 
         impl core::str::FromStr for $name {
-            type Err = ();
+            type Err = $crate::protocol::wire::WireEnumFromStrError;
 
-            fn from_str(s: &str) -> Result<Self, ()> {
+            fn from_str(s: &str) -> Result<Self, $crate::protocol::wire::WireEnumFromStrError> {
                 use $crate::protocol::wire::WireEnum;
 
                 match $name::from_name(s) {
                     Some(val) => Ok(val),
-                    None => Err(()),
+                    None => Err($crate::protocol::wire::WireEnumFromStrError),
                 }
             }
         }
