@@ -68,7 +68,7 @@ impl From<io::Error> for ToWireError {
 }
 
 /// Represents a C-like enum that can be converted to and from a wire
-/// representation.
+/// representation as well as to and from a string representation.
 ///
 /// An implementation of this trait can be thought of as an unsigned
 /// integer with a limited range: every enum variant can be converted
@@ -82,6 +82,14 @@ impl From<io::Error> for ToWireError {
 /// assert_eq!(T::from_wire_value(T::to_wire_value(x)), Some(x));
 /// # }
 /// ```
+///
+/// Also, the following identity must hold for all types T:
+/// ```
+/// # use manticore::protocol::wire::WireEnum;
+/// # fn test<T: WireEnum + Copy + PartialEq + std::fmt::Debug>(x: T) {
+/// assert_eq!(T::from_name(T::name(x)), Some(x));
+/// # }
+/// ```
 pub trait WireEnum: Sized + Copy {
     /// The unrelying "wire type". This is almost always some kind of
     /// unsigned integer.
@@ -90,9 +98,15 @@ pub trait WireEnum: Sized + Copy {
     /// Converts `self` into its underlying wire representation.
     fn to_wire_value(self) -> Self::Wire;
 
-    /// Attemts to parse a value of `Self` from the underlying wire
+    /// Attempts to parse a value of `Self` from the underlying wire
     /// representation.
     fn from_wire_value(wire: Self::Wire) -> Option<Self>;
+
+    /// Converts `self` into a string representation.
+    fn name(self) -> &'static str;
+
+    /// Attempts to convert a value of `Self` from a string representation.
+    fn from_name(str: &str) -> Option<Self>;
 }
 
 impl<'wire, E> FromWire<'wire> for E
@@ -159,6 +173,84 @@ macro_rules! wire_enum {
                     _ => None,
                 }
             }
+
+            fn name(self) -> &'static str {
+                match self {
+                    $(
+                        Self::$variant => stringify!($variant),
+                    )*
+                }
+            }
+
+            fn from_name(name: &str) -> Option<Self> {
+                match name {
+                    $(
+                        stringify!($variant) => Some(Self::$variant),
+                    )*
+                    _ => None,
+                }
+            }
         }
+
+        impl core::fmt::Display for $name {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                use $crate::protocol::wire::WireEnum;
+
+                write!(f, "{}", self.name())
+            }
+        }
+
+        impl core::str::FromStr for $name {
+            type Err = ();
+
+            fn from_str(s: &str) -> Result<Self, ()> {
+                use $crate::protocol::wire::WireEnum;
+
+                match $name::from_name(s) {
+                    Some(val) => Ok(val),
+                    None => Err(()),
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    wire_enum! {
+        /// An enum for testing.
+        #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+        pub enum DemoEnum: u8 {
+            /// Unknown value
+            Unknown = 0x00,
+
+            /// First enum value
+            First = 0x01,
+
+            /// Second enum value
+            Second = 0x02,
+        }
+    }
+
+    #[test]
+    fn from_name() {
+        use crate::protocol::wire::*;
+
+        let value = DemoEnum::from_name("Second").expect("from_name failed");
+        assert_eq!(value, DemoEnum::Second);
+
+        let value = DemoEnum::from_name("First").expect("from_name failed");
+        assert_eq!(value, DemoEnum::First);
+
+        assert_eq!(None, DemoEnum::from_name("does not exist"));
+    }
+
+    #[test]
+    fn name() {
+        use crate::protocol::wire::*;
+
+        assert_eq!(DemoEnum::First.name(), "First");
+        assert_eq!(DemoEnum::Second.name(), "Second");
     }
 }
