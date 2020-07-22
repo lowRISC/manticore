@@ -33,6 +33,8 @@ jobs:
       run: cargo build --verbose --all-features
     - name: Build for baremetal RISC-V
       run: cargo build --verbose --no-default-features --target riscv32imc-unknown-none-elf
+    - name: Build CLI tool
+      run: cargo build --features=tool --bin manticore-tool
 
     - name: Run tests
       run: cargo test --verbose
