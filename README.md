@@ -22,6 +22,9 @@ have fuzz tests for all code that handles untrusted input. These tests, and
 instructions for executing them, can be found under the `fuzz` directory.
 Fuzz tests require nightly Rust, though the library itself builds under stable.
 
+In order to build the Manticore command line tool, run
+`cargo build --features=tool --bin manticore-tool`.
+
 ## How to contribute
 
 Have a look at [CONTRIBUTING](./CONTRIBUTING.md) for guidelines on how to
