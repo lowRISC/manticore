@@ -9,6 +9,7 @@ use clap::Arg;
 use clap::SubCommand;
 
 use manticore::io::StdWrite;
+use manticore::mem::BumpArena;
 use manticore::protocol;
 use manticore::protocol::firmware_version;
 use manticore::protocol::wire::FromWire;
@@ -104,20 +105,22 @@ macro_rules! read_wire_and_operate {
             .read_to_end(&mut read_buf)
             .expect("couldn't read from file");
 
+        let mut arena = vec![0u8; 1024];
+        let arena = BumpArena::new(&mut arena);
         let mut read_buf_slice = read_buf.as_slice();
-        let header = Header::from_wire(&mut read_buf_slice)
+        let header = Header::from_wire(&mut read_buf_slice, &arena)
             .expect("failed to read header");
         match (header.is_request, header.command) {
             (true, CommandType::FirmwareVersion) => {
                 let $msg: protocol::firmware_version::FirmwareVersionRequest =
-                    FromWire::from_wire(&mut read_buf_slice)
+                    FromWire::from_wire(&mut read_buf_slice, &arena)
                         .expect("failed to read request");
 
                 $op
             }
             (false, CommandType::FirmwareVersion) => {
                 let $msg: protocol::firmware_version::FirmwareVersionResponse =
-                    FromWire::from_wire(&mut read_buf_slice)
+                    FromWire::from_wire(&mut read_buf_slice, &arena)
                         .expect("failed to read response");
 
                 $op

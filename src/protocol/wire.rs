@@ -17,6 +17,8 @@ use crate::io;
 use crate::io::LeInt;
 use crate::io::Read;
 use crate::io::Write;
+use crate::mem::Arena;
+use crate::mem::OutOfMemory;
 
 /// A type which can be deserialized from the Cerberus wire format.
 ///
@@ -24,7 +26,10 @@ use crate::io::Write;
 /// buffer of lifetime `'wire`.
 pub trait FromWire<'wire>: Sized {
     /// Deserializes a `Self` w of `r`.
-    fn from_wire<R: Read<'wire>>(r: R) -> Result<Self, FromWireError>;
+    fn from_wire<R: Read, A: Arena>(
+        r: R,
+        arena: &'wire A,
+    ) -> Result<Self, FromWireError>;
 }
 
 /// An deserialization error.
@@ -35,6 +40,10 @@ pub enum FromWireError {
     /// [`io`]: ../../io/index.html
     Io(io::Error),
 
+    /// Indicates that the arena used to allocate dynamic portions of the
+    /// deserialization ran out of memory.
+    OutOfMemory,
+
     /// Indicates that some field within the request was outside of its
     /// valid range.
     OutOfRange,
@@ -43,6 +52,12 @@ pub enum FromWireError {
 impl From<io::Error> for FromWireError {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
+    }
+}
+
+impl From<OutOfMemory> for FromWireError {
+    fn from(_: OutOfMemory) -> Self {
+        Self::OutOfMemory
     }
 }
 
@@ -113,7 +128,10 @@ impl<'wire, E> FromWire<'wire> for E
 where
     E: WireEnum,
 {
-    fn from_wire<R: Read<'wire>>(mut r: R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read, A: Arena>(
+        mut r: R,
+        _: &'wire A,
+    ) -> Result<Self, FromWireError> {
         let wire = <Self as WireEnum>::Wire::read_from(&mut r)?;
         Self::from_wire_value(wire).ok_or(FromWireError::OutOfRange)
     }

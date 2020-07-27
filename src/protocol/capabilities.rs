@@ -17,6 +17,7 @@ use crate::crypto::rsa;
 use crate::io::BitBuf;
 use crate::io::Read;
 use crate::io::Write;
+use crate::mem::Arena;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
@@ -61,8 +62,11 @@ impl Request<'_> for DeviceCapabilitiesRequest {
 }
 
 impl<'a> FromWire<'a> for DeviceCapabilitiesRequest {
-    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
-        let capabilities = Capabilities::from_wire(&mut r)?;
+    fn from_wire<R: Read, A: Arena>(
+        mut r: R,
+        a: &'a A,
+    ) -> Result<Self, FromWireError> {
+        let capabilities = Capabilities::from_wire(&mut r, a)?;
         Ok(Self { capabilities })
     }
 }
@@ -91,8 +95,11 @@ impl Response<'_> for DeviceCapabilitiesResponse {
 }
 
 impl<'a> FromWire<'a> for DeviceCapabilitiesResponse {
-    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
-        let capabilities = Capabilities::from_wire(&mut r)?;
+    fn from_wire<R: Read, A: Arena>(
+        mut r: R,
+        a: &'a A,
+    ) -> Result<Self, FromWireError> {
+        let capabilities = Capabilities::from_wire(&mut r, a)?;
         let response_timeout =
             Duration::from_millis((10 * (r.read_le::<u8>()? as u32)) as _);
         let crypto_timeout =
@@ -321,7 +328,10 @@ mod consts {
 }
 
 impl<'a> FromWire<'a> for Capabilities {
-    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Capabilities, FromWireError> {
+    fn from_wire<R: Read, A: Arena>(
+        mut r: R,
+        _: &'a A,
+    ) -> Result<Capabilities, FromWireError> {
         use consts::*;
         let max_message_size = r.read_le::<u16>()?;
         let max_packet_size = r.read_le::<u16>()?;

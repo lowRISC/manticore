@@ -46,10 +46,9 @@
 // This is required due to the make_fuzz_safe! macro.
 #![allow(unused_parens)]
 
-use core::convert::TryInto;
-
 use crate::io::Read;
 use crate::io::Write;
+use crate::mem::Arena;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
@@ -234,8 +233,13 @@ pub const HEADER_LEN: usize = 5;
 const HEADER_MAGIC: &[u8] = &[0b01111110, 0x14, 0x14];
 
 impl<'a> FromWire<'a> for Header {
-    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
-        if r.read_bytes(3)? != HEADER_MAGIC {
+    fn from_wire<R: Read, A: Arena>(
+        mut r: R,
+        a: &'a A,
+    ) -> Result<Self, FromWireError> {
+        let mut magic = [0; 3];
+        r.read_bytes(&mut magic)?;
+        if magic != HEADER_MAGIC {
             return Err(FromWireError::OutOfRange);
         }
 
@@ -246,7 +250,7 @@ impl<'a> FromWire<'a> for Header {
             _ => return Err(FromWireError::OutOfRange),
         };
 
-        let command = CommandType::from_wire(r)?;
+        let command = CommandType::from_wire(r, a)?;
         Ok(Self {
             is_request,
             command,
@@ -323,12 +327,13 @@ impl Response<'_> for Error {
 }
 
 impl<'a> FromWire<'a> for Error {
-    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
-        let code = ErrorCode::from_wire(&mut r)?;
-        let data: [u8; 4] = r
-            .read_bytes(4)?
-            .try_into()
-            .map_err(|_| FromWireError::OutOfRange)?;
+    fn from_wire<R: Read, A: Arena>(
+        mut r: R,
+        a: &'a A,
+    ) -> Result<Self, FromWireError> {
+        let code = ErrorCode::from_wire(&mut r, a)?;
+        let mut data = [0; 4];
+        r.read_bytes(&mut data)?;
 
         Ok(Self { code, data })
     }

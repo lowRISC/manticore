@@ -10,6 +10,7 @@
 
 use crate::io::Read;
 use crate::io::Write;
+use crate::mem::Arena;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
@@ -74,8 +75,11 @@ impl Request<'_> for ResetCounterRequest {
 }
 
 impl<'a> FromWire<'a> for ResetCounterRequest {
-    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
-        let reset_type = ResetType::from_wire(&mut r)?;
+    fn from_wire<R: Read, A: Arena>(
+        mut r: R,
+        a: &'a A,
+    ) -> Result<Self, FromWireError> {
+        let reset_type = ResetType::from_wire(&mut r, a)?;
         let port_id = r.read_le::<u8>()?;
         Ok(Self {
             reset_type,
@@ -108,7 +112,10 @@ impl Response<'_> for ResetCounterResponse {
 }
 
 impl<'a> FromWire<'a> for ResetCounterResponse {
-    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read, A: Arena>(
+        mut r: R,
+        _: &'a A,
+    ) -> Result<Self, FromWireError> {
         let count = r.read_le::<u16>()?;
         Ok(Self { count })
     }

@@ -69,6 +69,7 @@
 use core::marker::PhantomData;
 
 use crate::io;
+use crate::mem::Arena;
 use crate::protocol;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::FromWireError;
@@ -225,29 +226,31 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
 
     /// The "real" run function.
     #[doc(hidden)]
-    fn run_with_header<R: io::Read<'req>, W: io::Write>(
+    fn run_with_header<R: io::Read, W: io::Write, A: Arena>(
         self,
         req_header: Header,
         server: Server,
         req: R,
         resp: W,
+        arena: &'req A,
     ) -> Result<(), Error>;
 
     /// Executes a `Handler` with the given context.
     ///
     /// See the module-level documentation for more information.
     #[inline]
-    fn run<R: io::Read<'req>, W: io::Write>(
+    fn run<R: io::Read, W: io::Write, A: Arena>(
         self,
         server: Server,
         mut req: R,
         resp: W,
+        arena: &'req A,
     ) -> Result<(), Error> {
-        let req_header = Header::from_wire(&mut req)?;
+        let req_header = Header::from_wire(&mut req, arena)?;
         if !req_header.is_request {
             return Err(FromWireError::OutOfRange.into());
         }
-        self.run_with_header(req_header, server, req, resp)
+        self.run_with_header(req_header, server, req, resp, arena)
     }
 }
 
@@ -265,20 +268,23 @@ where
     ) -> Result<RespOf<'out, Command>, protocol::Error>,
 {
     #[inline]
-    fn run_with_header<R: io::Read<'req>, W: io::Write>(
+    fn run_with_header<R: io::Read, W: io::Write, A: Arena>(
         self,
         req_header: Header,
         server: Server,
         mut req: R,
         mut resp: W,
+        arena: &'req A,
     ) -> Result<(), Error> {
         if req_header.command != ReqOf::<'req, Command>::TYPE {
             // Recurse into the next handler case. Note that this cannot be
             // `run`, since that would re-parse the header incorrectly.
-            return self.prev.run_with_header(req_header, server, req, resp);
+            return self
+                .prev
+                .run_with_header(req_header, server, req, resp, arena);
         }
 
-        let msg = FromWire::from_wire(&mut req)?;
+        let msg = FromWire::from_wire(&mut req, arena)?;
         // Ensure that we used up the whole buffer!
         let remains = req.remaining_data();
         if remains != 0 {
@@ -314,12 +320,13 @@ impl<'req, 'srv, Server: 'srv> HandlerMethods<'req, 'srv, Server>
     for Handler<Server>
 {
     #[inline]
-    fn run_with_header<R: io::Read<'req>, W: io::Write>(
+    fn run_with_header<R: io::Read, W: io::Write, A: Arena>(
         self,
         header: Header,
         _: Server,
         _: R,
         _: W,
+        _: &'req A,
     ) -> Result<(), Error> {
         Err(Error::UnhandledCommand(header.command))
     }
@@ -332,6 +339,7 @@ impl<Server> sealed::Sealed for Handler<Server> {}
 mod test {
     use super::*;
     use crate::io::Cursor;
+    use crate::mem::BumpArena;
 
     const VERSION1: &[u8; 32] = &[2; 32];
     const VERSION2: &[u8; 32] = &[5; 32];
@@ -341,8 +349,10 @@ mod test {
         C: protocol::Command<'a>,
         T: 'a,
         H: HandlerMethods<'a, 'a, T>,
+        A: Arena,
     >(
         scratch_space: &'a mut [u8],
+        arena: &'a mut A,
         server: (H, T),
         request: C::Req,
     ) -> Result<C::Resp, Error> {
@@ -358,14 +368,14 @@ mod test {
             .expect("failed to write request");
 
         let req = cursor.take_consumed_bytes();
-        server.0.run(server.1, req, &mut cursor)?;
+        server.0.run(server.1, req, &mut cursor, arena)?;
         let mut resp = cursor.take_consumed_bytes();
 
         let header =
-            Header::from_wire(&mut resp).expect("failed to read header");
+            Header::from_wire(&mut resp, arena).expect("failed to read header");
         assert!(!header.is_request);
-        let resp_val =
-            FromWire::from_wire(&mut resp).expect("failed to read response");
+        let resp_val = FromWire::from_wire(&mut resp, arena)
+            .expect("failed to read response");
         assert_eq!(resp.len(), 0);
         Ok(resp_val)
     }
@@ -375,10 +385,13 @@ mod test {
         let handler = Handler::<()>::new();
 
         let mut scratch = [0; 1024];
+        let mut arena = [0; 64];
+        let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 0 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
             &mut scratch,
+            &mut arena,
             (handler, ()),
             req,
         );
@@ -404,10 +417,13 @@ mod test {
             });
 
         let mut scratch = [0; 1024];
+        let mut arena = [0; 64];
+        let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
             &mut scratch,
+            &mut arena,
             (handler, "server state"),
             req,
         );
@@ -431,9 +447,12 @@ mod test {
             });
 
         let mut scratch = [0; 1024];
+        let mut arena = [0; 64];
+        let mut arena = BumpArena::new(&mut arena);
         let req = protocol::device_id::DeviceIdRequest;
-        let resp = simulate_request::<protocol::DeviceId, _, _>(
+        let resp = simulate_request::<protocol::DeviceId, _, _, _>(
             &mut scratch,
+            &mut arena,
             (handler, "server state"),
             req,
         );
@@ -460,6 +479,8 @@ mod test {
             });
 
         let mut scratch = [0; 1024];
+        let mut arena = [0; 64];
+        let arena = BumpArena::new(&mut arena);
         let mut cursor = Cursor::new(&mut scratch);
 
         let header = Header {
@@ -474,7 +495,7 @@ mod test {
 
         let req = cursor.take_consumed_bytes();
         assert!(matches!(
-            handler.run("server state", req, cursor),
+            handler.run("server state", req, cursor, &arena),
             Err(Error::ReqTooLong(5))
         ));
         assert!(!handler_called);
@@ -498,10 +519,13 @@ mod test {
             });
 
         let mut scratch = [0; 1024];
+        let mut arena = [0; 64];
+        let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
             &mut scratch,
+            &mut arena,
             (handler, "server state"),
             req,
         );
@@ -528,10 +552,13 @@ mod test {
             });
 
         let mut scratch = [0; 1024];
+        let mut arena = [0; 64];
+        let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
             &mut scratch,
+            &mut arena,
             (handler, "server state"),
             req,
         );
@@ -564,10 +591,13 @@ mod test {
             });
 
         let mut scratch = [0; 1024];
+        let mut arena = [0; 64];
+        let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
             &mut scratch,
+            &mut arena,
             (handler, "server state"),
             req,
         );
