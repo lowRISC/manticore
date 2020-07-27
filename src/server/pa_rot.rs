@@ -11,6 +11,7 @@ use crate::crypto::rsa;
 use crate::hardware;
 use crate::io::Read;
 use crate::io::Write;
+use crate::mem::Arena;
 use crate::protocol;
 use crate::protocol::capabilities;
 use crate::protocol::device_id;
@@ -73,8 +74,9 @@ where
     #[cfg_attr(test, inline(never))]
     pub fn process_request<'req>(
         &mut self,
-        req: impl Read<'req>,
+        req: impl Read,
         resp: impl Write,
+        arena: &'req impl Arena,
     ) -> Result<(), Error> {
         let result = Handler::<&mut Self>::new()
             .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
@@ -166,7 +168,7 @@ where
                     err_count: zelf.err_count,
                 })
             })
-            .run(self, req, resp);
+            .run(self, req, resp, arena);
 
         match result {
             Ok(_) => self.ok_count += 1,
@@ -185,6 +187,7 @@ mod test {
     use crate::hardware::fake;
     use crate::hardware::Identity as _;
     use crate::io::Cursor;
+    use crate::mem::BumpArena;
     use crate::protocol::capabilities::*;
     use crate::protocol::wire::FromWire;
     use crate::protocol::wire::ToWire;
@@ -210,8 +213,9 @@ mod test {
             subsys_id: 4,
         };
 
-    fn simulate_request<'a, C: protocol::Command<'a>>(
+    fn simulate_request<'a, C: protocol::Command<'a>, A: Arena>(
         scratch_space: &'a mut [u8],
+        arena: &'a mut A,
         server: &mut PaRot<fake::Identity, fake::Reset, ring::rsa::Builder>,
         request: C::Req,
     ) -> Result<C::Resp, Error> {
@@ -227,14 +231,15 @@ mod test {
             .expect("failed to write request");
 
         let req = cursor.take_consumed_bytes();
-        server.process_request(req, &mut cursor)?;
+        server.process_request(req, &mut cursor, arena)?;
         let mut resp = cursor.take_consumed_bytes();
+        arena.reset();
 
         let header =
-            Header::from_wire(&mut resp).expect("failed to read header");
+            Header::from_wire(&mut resp, arena).expect("failed to read header");
         assert!(!header.is_request);
-        let resp_val =
-            FromWire::from_wire(&mut resp).expect("failed to read response");
+        let resp_val = FromWire::from_wire(&mut resp, arena)
+            .expect("failed to read response");
         assert_eq!(resp.len(), 0);
         Ok(resp_val)
     }
@@ -254,20 +259,26 @@ mod test {
         });
 
         let mut scratch = [0; 1024];
+        let mut arena = [0; 64];
+        let mut arena = BumpArena::new(&mut arena);
 
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 0 };
-        let resp = simulate_request::<protocol::FirmwareVersion>(
+        let resp = simulate_request::<protocol::FirmwareVersion, _>(
             &mut scratch,
+            &mut arena,
             &mut server,
             req,
         )
         .expect("got error from server");
         assert_eq!(resp.version, identity.firmware_version());
 
+        arena.reset();
+
         let req = protocol::device_id::DeviceIdRequest;
-        let resp = simulate_request::<protocol::DeviceId>(
+        let resp = simulate_request::<protocol::DeviceId, _>(
             &mut scratch,
+            &mut arena,
             &mut server,
             req,
         )

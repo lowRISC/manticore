@@ -30,18 +30,21 @@ macro_rules! round_trip_test {
         fn $name() {
             use $crate::protocol::wire::*;
             use $crate::io::*;
+            use $crate::mem::*;
+            const BUF_LEN: usize = 1 << 10;
+            let mut buf = [0u8; BUF_LEN];
+
             let bytes: &[u8] = $bytes;
             let value: $ty = $ty $({ $($field: $field_val,)* })?;
 
             let mut bytes_reader = bytes;
-            let deserialized = $ty::from_wire(&mut bytes_reader)
+            let arena = BumpArena::new(&mut buf);
+            let deserialized = $ty::from_wire(&mut bytes_reader, &arena)
                 .expect("deserialization failed");
             assert_eq!(bytes_reader.len(), 0,
                 "expected bytes to be fully read");
             assert_eq!(deserialized, value);
 
-            const BUF_LEN: usize = 1 << 10;
-            let mut buf = [0u8; BUF_LEN];
             let mut cursor = Cursor::new(&mut buf);
             value.to_wire(&mut cursor).expect("serialization failed");
             assert_eq!(cursor.consumed_bytes(), bytes);

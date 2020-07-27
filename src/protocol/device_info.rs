@@ -9,6 +9,7 @@
 
 use crate::io::Read;
 use crate::io::Write;
+use crate::mem::Arena;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
@@ -62,8 +63,11 @@ impl Request<'_> for DeviceInfoRequest {
 }
 
 impl<'a> FromWire<'a> for DeviceInfoRequest {
-    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
-        let index = InfoIndex::from_wire(&mut r)?;
+    fn from_wire<R: Read, A: Arena>(
+        mut r: R,
+        a: &'a A,
+    ) -> Result<Self, FromWireError> {
+        let index = InfoIndex::from_wire(&mut r, a)?;
         Ok(Self { index })
     }
 }
@@ -97,10 +101,14 @@ impl<'a> Response<'a> for DeviceInfoResponse<'a> {
 }
 
 impl<'a> FromWire<'a> for DeviceInfoResponse<'a> {
-    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read, A: Arena>(
+        mut r: R,
+        arena: &'a A,
+    ) -> Result<Self, FromWireError> {
         let len = r.remaining_data();
-        let info = r.read_bytes(len)?;
-        Ok(Self { info })
+        let buf = arena.alloc(len)?;
+        r.read_bytes(buf)?;
+        Ok(Self { info: buf })
     }
 }
 

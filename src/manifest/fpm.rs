@@ -72,6 +72,7 @@ use crate::hardware::FlashPtr;
 use crate::hardware::FlashSlice;
 use crate::io::Read as _;
 use crate::manifest::read_zerocopy;
+use crate::manifest::take_bytes;
 use crate::manifest::Manifest;
 use crate::manifest::ParseError;
 
@@ -142,10 +143,11 @@ impl<'m> Fpm<'m> {
             let write_region_count = body.read_le::<u16>()?;
             let blank_byte = body.read_le::<u8>()?;
             let version_len = body.read_le::<u8>()?;
-            let version = body.read_bytes(version_len as usize)?;
+            let version = take_bytes(&mut body, version_len as usize)?;
             // Re-align to four bytes, since the following lists are aligned as
             // such.
-            let _ = body.read_bytes(body.as_ptr().align_offset(4))?;
+            let align = body.as_ptr().align_offset(4);
+            let _ = take_bytes(&mut body, align)?;
 
             // TODO: Verify that these slices are sorted!
             let signed_region =
@@ -153,10 +155,10 @@ impl<'m> Fpm<'m> {
             let write_region =
                 read_zerocopy(&mut body, write_region_count as usize)?;
 
-            let signed_region_hash = body
-                .read_bytes(size_of::<sha256::Digest>())?
-                .try_into()
-                .map_err(|_| ParseError::OutOfRange)?;
+            let signed_region_hash =
+                take_bytes(&mut body, size_of::<sha256::Digest>())?
+                    .try_into()
+                    .map_err(|_| ParseError::OutOfRange)?;
 
             fpm.versions
                 .try_push(FwVersion {

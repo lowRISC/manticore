@@ -141,7 +141,7 @@ pub enum Error {
 /// I/O.
 pub trait LeInt: Sized + Copy {
     /// Reads a value of type `Self`, in little-endian order.
-    fn read_from<'a, R: Read<'a>>(r: R) -> Result<Self, Error>;
+    fn read_from<R: Read>(r: R) -> Result<Self, Error>;
 
     /// Writes a value of type `Self`, in little-endian order.
     fn write_to<W: Write>(self, w: W) -> Result<(), Error>;
@@ -149,8 +149,10 @@ pub trait LeInt: Sized + Copy {
 
 impl LeInt for u8 {
     #[inline]
-    fn read_from<'a, R: Read<'a>>(mut r: R) -> Result<Self, Error> {
-        Ok(r.read_bytes(mem::size_of::<Self>())?[0])
+    fn read_from<R: Read>(mut r: R) -> Result<Self, Error> {
+        let mut bytes = [0; mem::size_of::<Self>()];
+        r.read_bytes(&mut bytes)?;
+        Ok(bytes[0])
     }
 
     #[inline]
@@ -161,12 +163,12 @@ impl LeInt for u8 {
 
 impl LeInt for u16 {
     #[inline]
-    fn read_from<'a, R: Read<'a>>(mut r: R) -> Result<Self, Error> {
+    fn read_from<R: Read>(mut r: R) -> Result<Self, Error> {
         use byteorder::ByteOrder as _;
 
-        Ok(byteorder::LE::read_u16(
-            r.read_bytes(mem::size_of::<Self>())?,
-        ))
+        let mut bytes = [0; mem::size_of::<Self>()];
+        r.read_bytes(&mut bytes)?;
+        Ok(byteorder::LE::read_u16(&bytes))
     }
 
     #[inline]
@@ -181,12 +183,12 @@ impl LeInt for u16 {
 
 impl LeInt for u32 {
     #[inline]
-    fn read_from<'a, R: Read<'a>>(mut r: R) -> Result<Self, Error> {
+    fn read_from<R: Read>(mut r: R) -> Result<Self, Error> {
         use byteorder::ByteOrder as _;
 
-        Ok(byteorder::LE::read_u32(
-            r.read_bytes(mem::size_of::<Self>())?,
-        ))
+        let mut bytes = [0; mem::size_of::<Self>()];
+        r.read_bytes(&mut bytes)?;
+        Ok(byteorder::LE::read_u32(&bytes))
     }
 
     #[inline]
@@ -201,12 +203,12 @@ impl LeInt for u32 {
 
 impl LeInt for u64 {
     #[inline]
-    fn read_from<'a, R: Read<'a>>(mut r: R) -> Result<Self, Error> {
+    fn read_from<R: Read>(mut r: R) -> Result<Self, Error> {
         use byteorder::ByteOrder as _;
 
-        Ok(byteorder::LE::read_u64(
-            r.read_bytes(mem::size_of::<Self>())?,
-        ))
+        let mut bytes = [0; mem::size_of::<Self>()];
+        r.read_bytes(&mut bytes)?;
+        Ok(byteorder::LE::read_u64(&bytes))
     }
 
     #[inline]
@@ -221,27 +223,18 @@ impl LeInt for u64 {
 
 /// Represents a place that bytes can be read from, such as a `&[u8]`.
 ///
-/// Types which implement this trait enable *zero copy reads*, that is,
-/// a read opertion does not need to allocate memory to perform a read, since
-/// all of that memory has already been allocated ahead-of-time. The lifetime
-/// of that memory if represented by the lifetime `'a`.
-///
 /// # Relation with [`std::io::Read`]
-/// [`std::io::Read`] is distinct from `Read`; it copies data onto a buffer
-/// provided by the caller. Such an API is unworkable in `manticore`, since
-/// `manticore` cannot usually allocate.
+/// [`std::io::Read`] is distinct from `Read`, since `Read` must know,
+/// a-priori, the total length of the underlying buffer.
 ///
 /// The recommended way to use a [`std::io::Read`] with a `manticore` API is to
 /// use `read_to_end(&mut buf)` and to then pass `&mut buf[..]` into
-/// `manticore`.
+/// `manticore`. We hope to remove this restriction in the future.
 ///
 /// [`std::io::Read`]: https://doc.rust-lang.org/std/io/trait.Read.html
-pub trait Read<'a> {
+pub trait Read {
     /// Reads exactly `n` bytes from `self`.
-    ///
-    /// This function does not perform partial reads: it will either block
-    /// until completion or return an error.
-    fn read_bytes(&mut self, n: usize) -> Result<&'a [u8], Error>;
+    fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), Error>;
 
     /// Returns the number of bytes still available to read.
     fn remaining_data(&self) -> usize;
@@ -261,12 +254,12 @@ pub trait Read<'a> {
     }
 }
 
-assert_obj_safe!(Read<'static>);
+assert_obj_safe!(Read);
 
-impl<'a, R: Read<'a> + ?Sized> Read<'a> for &'_ mut R {
+impl<R: Read + ?Sized> Read for &'_ mut R {
     #[inline]
-    fn read_bytes(&mut self, n: usize) -> Result<&'a [u8], Error> {
-        R::read_bytes(*self, n)
+    fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), Error> {
+        R::read_bytes(*self, out)
     }
 
     #[inline]
@@ -275,15 +268,16 @@ impl<'a, R: Read<'a> + ?Sized> Read<'a> for &'_ mut R {
     }
 }
 
-impl<'a> Read<'a> for &'a [u8] {
-    fn read_bytes(&mut self, n: usize) -> Result<&'a [u8], Error> {
+impl Read for &[u8] {
+    fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), Error> {
+        let n = out.len();
         if self.len() < n {
             return Err(Error::BufferExhausted);
         }
 
-        let result = &self[..n];
+        out.copy_from_slice(&self[..n]);
         *self = &self[n..];
-        Ok(result)
+        Ok(())
     }
 
     fn remaining_data(&self) -> usize {
@@ -291,15 +285,17 @@ impl<'a> Read<'a> for &'a [u8] {
     }
 }
 
-impl<'a> Read<'a> for &'a mut [u8] {
-    fn read_bytes(&mut self, n: usize) -> Result<&'a [u8], Error> {
+impl Read for &mut [u8] {
+    fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), Error> {
+        let n = out.len();
         if self.len() < n {
             return Err(Error::BufferExhausted);
         }
 
-        let (result, rest) = mem::replace(self, &mut []).split_at_mut(n);
-        *self = rest;
-        Ok(result)
+        out.copy_from_slice(&self[..n]);
+        let buf = mem::replace(self, &mut []);
+        *self = &mut buf[n..];
+        Ok(())
     }
 
     fn remaining_data(&self) -> usize {
@@ -544,7 +540,9 @@ mod test {
     #[test]
     fn read_bytes() {
         let mut bytes: &[u8] = b"Hello!";
-        assert_eq!(bytes.read_bytes(3).unwrap(), b"Hel");
+        let mut three_bytes = [0; 3];
+        bytes.read_bytes(&mut three_bytes).unwrap();
+        assert_eq!(&three_bytes[..], b"Hel");
         assert_eq!(bytes.len(), 3);
         assert_eq!(bytes.read_le::<u16>().unwrap(), 0x6f6c);
         assert_eq!(bytes.len(), 1);

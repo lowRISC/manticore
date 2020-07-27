@@ -174,7 +174,7 @@ impl<'m> Manifest<'m> {
 
         let rest_len =
             len.checked_sub(header_len).ok_or(ParseError::OutOfRange)?;
-        let rest = r.read_bytes(rest_len)?;
+        let rest = take_bytes(&mut r, rest_len)?;
         let sig_offset =
             len.checked_sub(sig_len).ok_or(ParseError::OutOfRange)?;
         let sig_offset_past_header = sig_offset
@@ -219,6 +219,15 @@ impl<'m> Manifest<'m> {
     }
 }
 
+fn take_bytes<'m>(r: &mut &'m [u8], n: usize) -> Result<&'m [u8], io::Error> {
+    if r.len() < n {
+        return Err(io::Error::BufferExhausted);
+    }
+    let (bytes, rest) = r.split_at(n);
+    *r = rest;
+    Ok(bytes)
+}
+
 /// Reads exactly `n * size_of::<T>` bytes from `r`, and converts them
 /// into a slice of `T`s.
 ///
@@ -232,7 +241,7 @@ fn read_zerocopy<'m, T: zerocopy::FromBytes>(
     let expected_len = core::mem::size_of::<T>()
         .checked_mul(count)
         .ok_or(io::Error::BufferExhausted)?;
-    let bytes = r.read_bytes(expected_len)?;
+    let bytes = take_bytes(r, expected_len)?;
     let layout = zerocopy::LayoutVerified::new_slice(bytes)
         .ok_or(ParseError::Unaligned)?;
     Ok(layout.into_slice())

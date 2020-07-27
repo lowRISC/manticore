@@ -9,6 +9,7 @@
 
 use crate::io::Read;
 use crate::io::Write;
+use crate::mem::Arena;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
@@ -53,7 +54,10 @@ impl Request<'_> for DeviceIdRequest {
 }
 
 impl<'a> FromWire<'a> for DeviceIdRequest {
-    fn from_wire<R: Read<'a>>(_: R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read, A: Arena>(
+        _: R,
+        _: &'a A,
+    ) -> Result<Self, FromWireError> {
         Ok(DeviceIdRequest)
     }
 }
@@ -80,8 +84,11 @@ impl Response<'_> for DeviceIdResponse {
 }
 
 impl<'a> FromWire<'a> for DeviceIdResponse {
-    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
-        let id = DeviceIdentifier::from_wire(&mut r)?;
+    fn from_wire<R: Read, A: Arena>(
+        mut r: R,
+        a: &'a A,
+    ) -> Result<Self, FromWireError> {
+        let id = DeviceIdentifier::from_wire(&mut r, a)?;
         Ok(Self { id })
     }
 }
@@ -114,7 +121,10 @@ pub struct DeviceIdentifier {
 }
 
 impl<'a> FromWire<'a> for DeviceIdentifier {
-    fn from_wire<R: Read<'a>>(mut r: R) -> Result<Self, FromWireError> {
+    fn from_wire<R: Read, A: Arena>(
+        mut r: R,
+        _: &'a A,
+    ) -> Result<Self, FromWireError> {
         let vendor_id = r.read_le::<u16>()?;
         let device_id = r.read_le::<u16>()?;
         let subsys_vendor_id = r.read_le::<u16>()?;
