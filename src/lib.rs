@@ -53,4 +53,5 @@ pub mod hardware;
 pub mod io;
 pub mod manifest;
 pub mod mem;
+pub mod net;
 pub mod server;
