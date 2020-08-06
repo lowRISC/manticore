@@ -18,13 +18,19 @@
 //! - A "blank byte", which every unused region must be filled with.
 //!
 //! Although the FPM body does not contain a signature, the overall
-//! [`Manifest`] container does. That signature is extended to encompass the
+//! [`Container`] does. That signature is extended to encompass the
 //! signed regions through the signed region hash.
 //!
 //! An FPM can be used to verify that a storage device conforms to the the
 //! partitioning requirements described above.
 //!
-//! On the wire, the FPM is encoded as follows:
+//! The FPM is not specified as part of Cerberus; it is a Manticore-specific
+//! manifest type that plays a role similar to that of a Cerberus PFM.
+//!
+//! [`Container`]: ../container/struct.Container.html
+//!
+//! # Wire Format
+//!
 //! ```text
 //! struct Fpm {
 //!     /// Number of firmware versions included.
@@ -56,11 +62,6 @@
 //!     signed_region_hash: [u8; 256 / 8],
 //! }
 //! ```
-//!
-//! The FPM is not specified as part of Cerberus; it is a `manticore`-specific
-//! manifest type that plays a role similar to that of a Cerberus PFM.
-//!
-//! [`Manifest`]: ../struct.Manifest.html
 
 use core::convert::TryInto;
 use core::mem::size_of;
@@ -71,9 +72,9 @@ use crate::crypto::sha256;
 use crate::hardware::FlashPtr;
 use crate::hardware::FlashSlice;
 use crate::io::Read as _;
+use crate::manifest::container::Container;
 use crate::manifest::read_zerocopy;
 use crate::manifest::take_bytes;
-use crate::manifest::Manifest;
 use crate::manifest::ParseError;
 
 /// A Firmware Platform Manifest (FPM), describing valid states for platform
@@ -130,8 +131,8 @@ pub struct FwVersion<'m> {
 
 impl<'m> Fpm<'m> {
     /// Parse an `Fpm` out of a parsed and verified `Manifest`.
-    pub fn parse(manifest: Manifest<'m>) -> Result<Self, ParseError> {
-        let mut body = manifest.body();
+    pub fn parse(container: Container<'m>) -> Result<Self, ParseError> {
+        let mut body = container.body();
         let mut fpm = Self {
             versions: ArrayVec::new(),
         };
