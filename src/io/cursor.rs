@@ -71,6 +71,20 @@ impl<'a> Cursor<'a> {
     ///
     /// If `n` bytes are unavailable, `BufferExhausted` is returned.
     pub fn consume(&mut self, n: usize) -> Result<&mut [u8], io::Error> {
+        self.consume_with_prior(n).map(|(_, bytes)| bytes)
+    }
+
+    /// Consumes `n` bytes from the underlying buffer, returning the prior
+    /// consumed portion as well.
+    ///
+    /// This function is useful for when it is necessary to incorporate the
+    /// contents of a prior-consumed buffer into the newly consumed buffer.
+    ///
+    /// If `n` bytes are unavailable, `None` is returned.
+    pub fn consume_with_prior(
+        &mut self,
+        n: usize,
+    ) -> Result<(&mut [u8], &mut [u8]), io::Error> {
         let end = self
             .cursor
             .checked_add(n)
@@ -78,7 +92,7 @@ impl<'a> Cursor<'a> {
         if self.buf.len() < end {
             return Err(io::Error::BufferExhausted);
         }
-        let output = &mut self.buf[self.cursor..end];
+        let output = self.buf[..end].split_at_mut(self.cursor);
         self.cursor = end;
 
         Ok(output)
