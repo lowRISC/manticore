@@ -42,7 +42,7 @@
 use crate::crypto::rsa;
 use crate::io::Read as _;
 use crate::manifest::ManifestType;
-use crate::manifest::ParseError;
+use crate::manifest::Error;
 use crate::protocol::wire::WireEnum;
 
 /// Metadata for a [`Container`].
@@ -91,13 +91,13 @@ impl<'m> Container<'m> {
     pub fn parse_and_verify<Rsa: rsa::Engine>(
         buf: &'m [u8],
         rsa: &mut Rsa,
-    ) -> Result<Self, ParseError> {
+    ) -> Result<Self, Error> {
         if buf.as_ptr().align_offset(4) != 0 {
-            return Err(ParseError::Unaligned);
+            return Err(Error::Unaligned);
         }
 
         if HEADER_LEN > buf.len() {
-            return Err(ParseError::OutOfRange);
+            return Err(Error::OutOfRange);
         }
 
         let mut r = buf; // Use io::Read.
@@ -109,7 +109,7 @@ impl<'m> Container<'m> {
         // This length check, combined with the checked arithmetic below,
         // ensures that none of the slice index operations can panic.
         if len > buf.len() {
-            return Err(ParseError::OutOfRange);
+            return Err(Error::OutOfRange);
         }
         // Note that, because `HEADER_LEN` is a multiple of 4, the resulting
         // slice is 4-byte aligned (that is, the two bytes of padding get
@@ -119,19 +119,19 @@ impl<'m> Container<'m> {
         let body_len = rest
             .len()
             .checked_sub(sig_len)
-            .ok_or(ParseError::OutOfRange)?;
+            .ok_or(Error::OutOfRange)?;
         let (body, sig) = rest.split_at(body_len);
 
         let signed_len =
-            len.checked_sub(sig_len).ok_or(ParseError::OutOfRange)?;
+            len.checked_sub(sig_len).ok_or(Error::OutOfRange)?;
         let signed = &buf[..signed_len];
 
         rsa.verify_signature(sig, signed)
-            .map_err(|_| ParseError::SignatureFailure)?;
+            .map_err(|_| Error::SignatureFailure)?;
 
         Ok(Container {
             manifest_type: ManifestType::from_wire_value(magic)
-                .ok_or(ParseError::OutOfRange)?,
+                .ok_or(Error::OutOfRange)?,
             metadata: Metadata { version_id: id },
             body,
         })
@@ -258,7 +258,7 @@ mod test {
 
         assert!(matches!(
             Container::parse_and_verify(&manifest, &mut rsa),
-            Err(ParseError::SignatureFailure)
+            Err(Error::SignatureFailure)
         ));
     }
 }

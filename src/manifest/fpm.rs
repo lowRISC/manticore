@@ -75,7 +75,7 @@ use crate::io::Read as _;
 use crate::manifest::container::Container;
 use crate::manifest::read_zerocopy;
 use crate::manifest::take_bytes;
-use crate::manifest::ParseError;
+use crate::manifest::Error;
 
 /// A Firmware Platform Manifest (FPM), describing valid states for platform
 /// firmware storage.
@@ -131,7 +131,7 @@ pub struct FwVersion<'m> {
 
 impl<'m> Fpm<'m> {
     /// Parse an `Fpm` out of a parsed and verified `Manifest`.
-    pub fn parse(container: Container<'m>) -> Result<Self, ParseError> {
+    pub fn parse(container: Container<'m>) -> Result<Self, Error> {
         let mut body = container.body();
         let mut fpm = Self {
             versions: ArrayVec::new(),
@@ -159,7 +159,7 @@ impl<'m> Fpm<'m> {
             let signed_region_hash =
                 take_bytes(&mut body, size_of::<sha256::Digest>())?
                     .try_into()
-                    .map_err(|_| ParseError::OutOfRange)?;
+                    .map_err(|_| Error::OutOfRange)?;
 
             fpm.versions
                 .try_push(FwVersion {
@@ -175,7 +175,7 @@ impl<'m> Fpm<'m> {
                     blank_byte,
                     signed_region_hash,
                 })
-                .map_err(|_| ParseError::OutOfRange)?;
+                .map_err(|_| Error::OutOfRange)?;
         }
 
         Ok(fpm)
