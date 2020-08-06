@@ -41,6 +41,17 @@ use core::mem;
 use crate::io;
 use crate::io::Write;
 
+/// A position for using with [`Cursor::seek()`].
+///
+/// [`Cursor::seek()`]: struct.Cursor.html#method.seek
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum SeekPos {
+    /// Seek absolutely, from the start of the buffer.
+    Abs(usize),
+    /// Seek relatively, from the current cursor value.
+    Rel(isize),
+}
+
 /// A cursor over a buffer of memory.
 ///
 /// See the [module documentation](index.html) for more information.
@@ -71,6 +82,52 @@ impl<'a> Cursor<'a> {
         self.cursor = end;
 
         Ok(output)
+    }
+
+    /// Seek to an offset within the underlying buffer.
+    ///
+    /// This function effectively sets the underlying cursor used to partition
+    /// the buffer into "consumed" and "unconsumed portions. This function can
+    /// be used to temporarially backtrack in combination with
+    /// `consumed_len()`.
+    ///
+    /// Returns [`Error::BufferExhausted`] when attempting to seek beyond the end
+    /// of the buffer.
+    ///
+    /// [`Error::BufferExhausted`]: enum.Error.html#variant.BufferExhausted
+    ///
+    /// # Example
+    /// ```
+    /// # use manticore::io::*;
+    /// # use manticore::io::cursor::*;
+    /// # let mut buf = [0; 16];
+    /// let mut cursor = Cursor::new(&mut buf);
+    /// cursor.write_bytes(b"barbar")?;
+    ///
+    /// let mark = cursor.consumed_len();
+    /// cursor.seek(SeekPos::Rel(-5))?;
+    /// cursor.write_bytes(b"foo")?;
+    /// cursor.seek(SeekPos::Abs(mark))?;
+    /// assert_eq!(cursor.consumed_bytes(), b"bfooar");
+    ///
+    /// # Ok::<(), Error>(())
+    /// ```
+    pub fn seek(&mut self, pos: SeekPos) -> Result<(), io::Error> {
+        let offset = match pos {
+            SeekPos::Abs(offset) if offset <= self.buf.len() => offset,
+            SeekPos::Rel(offset) => {
+                let offset = (self.consumed_len() as isize)
+                    .checked_add(offset)
+                    .ok_or(io::Error::BufferExhausted)?;
+                if offset < 0 {
+                    return Err(io::Error::BufferExhausted);
+                }
+                offset as usize
+            }
+            _ => return Err(io::Error::BufferExhausted),
+        };
+        self.cursor = offset;
+        Ok(())
     }
 
     /// Returns the number of bytes consumed thus far.
