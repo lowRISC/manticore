@@ -26,24 +26,23 @@ wire_enum! {
     }
 }
 
-/// An error returned by a manifest parsing operation.
+/// An error returned by a manifestoperation.
 #[derive(Clone, Copy, Debug)]
-pub enum ParseError {
+pub enum Error {
     /// Indicates an error in a low-level [`io`] type.
     ///
     /// [`io`]: ../io/index.html
     Io(io::Error),
-    /// Indicates that a parsed value was out of its expected range, like a
-    /// magic number.
+    /// Indicates that a value was out of its expected range.
     OutOfRange,
     /// Indicates that some assumption about a manifest's alignment (internal
     /// or overall) was violated.
     Unaligned,
-    /// Indicates that a signature verification failed for some reason.
+    /// Indicates that a signature operation failed for some reason.
     SignatureFailure,
 }
 
-impl From<io::Error> for ParseError {
+impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
     }
@@ -67,12 +66,12 @@ fn take_bytes<'m>(r: &mut &'m [u8], n: usize) -> Result<&'m [u8], io::Error> {
 fn read_zerocopy<'m, T: zerocopy::FromBytes>(
     r: &mut &'m [u8],
     count: usize,
-) -> Result<&'m [T], ParseError> {
+) -> Result<&'m [T], Error> {
     let expected_len = core::mem::size_of::<T>()
         .checked_mul(count)
         .ok_or(io::Error::BufferExhausted)?;
     let bytes = take_bytes(r, expected_len)?;
-    let layout = zerocopy::LayoutVerified::new_slice(bytes)
-        .ok_or(ParseError::Unaligned)?;
+    let layout =
+        zerocopy::LayoutVerified::new_slice(bytes).ok_or(Error::Unaligned)?;
     Ok(layout.into_slice())
 }
