@@ -8,7 +8,7 @@ use clap::AppSettings;
 use clap::Arg;
 use clap::SubCommand;
 
-use manticore::io::StdWrite;
+use manticore::io::write::StdWrite;
 use manticore::mem::BumpArena;
 use manticore::protocol;
 use manticore::protocol::firmware_version;

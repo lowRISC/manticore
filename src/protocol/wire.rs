@@ -14,7 +14,7 @@
 //! [`serde`]: https://serde.rs
 
 use crate::io;
-use crate::io::LeInt;
+use crate::io::endian::LeInt;
 use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;

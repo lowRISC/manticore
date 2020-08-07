@@ -14,7 +14,7 @@ use core::{u32, u8};
 use bitflags::bitflags;
 
 use crate::crypto::rsa;
-use crate::io::BitBuf;
+use crate::io::bit_buf::BitBuf;
 use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
