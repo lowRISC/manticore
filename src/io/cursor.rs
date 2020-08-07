@@ -58,16 +58,19 @@ impl<'a> Cursor<'a> {
 
     /// Consumes `n` bytes from the underlying buffer.
     ///
-    /// If `n` bytes are unavailable, `None` is returned.
-    pub fn consume(&mut self, n: usize) -> Option<&mut [u8]> {
-        let end = self.cursor.checked_add(n)?;
+    /// If `n` bytes are unavailable, `BufferExhausted` is returned.
+    pub fn consume(&mut self, n: usize) -> Result<&mut [u8], io::Error> {
+        let end = self
+            .cursor
+            .checked_add(n)
+            .ok_or(io::Error::BufferExhausted)?;
         if self.buf.len() < end {
-            return None;
+            return Err(io::Error::BufferExhausted);
         }
         let output = &mut self.buf[self.cursor..end];
         self.cursor = end;
 
-        Some(output)
+        Ok(output)
     }
 
     /// Returns the number of bytes consumed thus far.
@@ -102,7 +105,7 @@ impl<'a> Cursor<'a> {
 
 impl Write for Cursor<'_> {
     fn write_bytes(&mut self, buf: &[u8]) -> Result<(), io::Error> {
-        let dest = self.consume(buf.len()).ok_or(io::Error::BufferExhausted)?;
+        let dest = self.consume(buf.len())?;
         dest.copy_from_slice(buf);
         Ok(())
     }

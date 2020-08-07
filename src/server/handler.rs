@@ -491,7 +491,7 @@ mod test {
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
         header.to_wire(&mut cursor).unwrap();
         req.to_wire(&mut cursor).unwrap();
-        cursor.consume(5);
+        cursor.consume(5).unwrap();
 
         let req = cursor.take_consumed_bytes();
         assert!(matches!(
