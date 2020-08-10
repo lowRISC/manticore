@@ -9,9 +9,8 @@
 
 use crate::crypto::rsa;
 use crate::hardware;
-use crate::io::Read;
-use crate::io::Write;
 use crate::mem::Arena;
+use crate::net;
 use crate::protocol;
 use crate::protocol::capabilities;
 use crate::protocol::device_id;
@@ -74,8 +73,7 @@ where
     #[cfg_attr(test, inline(never))]
     pub fn process_request<'req>(
         &mut self,
-        req: impl Read,
-        resp: impl Write,
+        port: &mut dyn net::HostPort,
         arena: &'req impl Arena,
     ) -> Result<(), Error> {
         let result = Handler::<&mut Self>::new()
@@ -168,7 +166,7 @@ where
                     err_count: zelf.err_count,
                 })
             })
-            .run(self, req, resp, arena);
+            .run(self, port, arena);
 
         match result {
             Ok(_) => self.ok_count += 1,
@@ -219,25 +217,28 @@ mod test {
         server: &mut PaRot<fake::Identity, fake::Reset, ring::rsa::Builder>,
         request: C::Req,
     ) -> Result<C::Resp, Error> {
-        let mut cursor = Cursor::new(scratch_space);
-
-        let header = Header {
-            is_request: true,
-            command: <C::Req as protocol::Request<'a>>::TYPE,
-        };
-        header.to_wire(&mut cursor).expect("failed to write header");
+        let len = scratch_space.len();
+        let (req_scratch, port_scratch) = scratch_space.split_at_mut(len / 2);
+        let mut cursor = Cursor::new(req_scratch);
         request
             .to_wire(&mut cursor)
             .expect("failed to write request");
+        let request_bytes = cursor.take_consumed_bytes();
 
-        let req = cursor.take_consumed_bytes();
-        server.process_request(req, &mut cursor, arena)?;
-        let mut resp = cursor.take_consumed_bytes();
-        arena.reset();
+        let mut port = net::InMemHost::new(port_scratch);
+        port.request(
+            Header {
+                is_request: true,
+                command: <C::Req as protocol::Request<'a>>::TYPE,
+            },
+            request_bytes,
+        );
 
-        let header =
-            Header::from_wire(&mut resp, arena).expect("failed to read header");
+        server.process_request(&mut port, arena)?;
+
+        let (header, mut resp) = port.response().unwrap();
         assert!(!header.is_request);
+
         let resp_val = FromWire::from_wire(&mut resp, arena)
             .expect("failed to read response");
         assert_eq!(resp.len(), 0);

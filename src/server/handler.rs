@@ -68,8 +68,8 @@
 
 use core::marker::PhantomData;
 
-use crate::io;
 use crate::mem::Arena;
+use crate::net;
 use crate::protocol;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::FromWireError;
@@ -90,6 +90,9 @@ pub mod prelude {
 /// An error returned by a request handler.
 #[derive(Copy, Clone, Debug)]
 pub enum Error {
+    /// Indicates an error originating from a network connection.
+    Network(net::Error),
+
     /// Represents a failure during deserialization.
     FromWireError(FromWireError),
     /// Represents a failure during serialization.
@@ -116,6 +119,12 @@ impl From<FromWireError> for Error {
 impl From<ToWireError> for Error {
     fn from(e: ToWireError) -> Error {
         Error::ToWireError(e)
+    }
+}
+
+impl From<net::Error> for Error {
+    fn from(e: net::Error) -> Error {
+        Error::Network(e)
     }
 }
 
@@ -226,12 +235,11 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
 
     /// The "real" run function.
     #[doc(hidden)]
-    fn run_with_header<R: io::Read, W: io::Write, A: Arena>(
+    fn run_with_header<A: Arena>(
         self,
-        req_header: Header,
         server: Server,
-        req: R,
-        resp: W,
+        header: Header,
+        request: &mut dyn net::HostRequest,
         arena: &'req A,
     ) -> Result<(), Error>;
 
@@ -239,18 +247,18 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
     ///
     /// See the module-level documentation for more information.
     #[inline]
-    fn run<R: io::Read, W: io::Write, A: Arena>(
+    fn run<A: Arena>(
         self,
         server: Server,
-        mut req: R,
-        resp: W,
+        port: &mut dyn net::HostPort,
         arena: &'req A,
     ) -> Result<(), Error> {
-        let req_header = Header::from_wire(&mut req, arena)?;
-        if !req_header.is_request {
+        let request = port.receive()?;
+        let header = request.header()?;
+        if !header.is_request {
             return Err(FromWireError::OutOfRange.into());
         }
-        self.run_with_header(req_header, server, req, resp, arena)
+        self.run_with_header(server, header, request, arena)
     }
 }
 
@@ -268,28 +276,20 @@ where
     ) -> Result<RespOf<'out, Command>, protocol::Error>,
 {
     #[inline]
-    fn run_with_header<R: io::Read, W: io::Write, A: Arena>(
+    fn run_with_header<A: Arena>(
         self,
-        req_header: Header,
         server: Server,
-        mut req: R,
-        mut resp: W,
+        header: Header,
+        request: &mut dyn net::HostRequest,
         arena: &'req A,
     ) -> Result<(), Error> {
-        if req_header.command != ReqOf::<'req, Command>::TYPE {
+        if header.command != ReqOf::<'req, Command>::TYPE {
             // Recurse into the next handler case. Note that this cannot be
             // `run`, since that would re-parse the header incorrectly.
-            return self
-                .prev
-                .run_with_header(req_header, server, req, resp, arena);
+            return self.prev.run_with_header(server, header, request, arena);
         }
 
-        let msg = FromWire::from_wire(&mut req, arena)?;
-        // Ensure that we used up the whole buffer!
-        let remains = req.remaining_data();
-        if remains != 0 {
-            return Err(Error::ReqTooLong(remains));
-        }
+        let msg = FromWire::from_wire(request.payload()?, arena)?;
 
         match (self.handler)(server, msg) {
             Ok(msg) => {
@@ -298,8 +298,9 @@ where
                     command: RespOf::<'out, Command>::TYPE,
                 };
 
-                header.to_wire(&mut resp)?;
-                msg.to_wire(&mut resp)?;
+                let reply = request.reply(header)?;
+                msg.to_wire(reply.sink()?)?;
+                reply.finish()?;
                 Ok(())
             }
             Err(err) => {
@@ -308,8 +309,9 @@ where
                     command: CommandType::Error,
                 };
 
-                header.to_wire(&mut resp)?;
-                err.to_wire(&mut resp)?;
+                let reply = request.reply(header)?;
+                err.to_wire(reply.sink()?)?;
+                reply.finish()?;
                 Ok(())
             }
         }
@@ -320,12 +322,11 @@ impl<'req, 'srv, Server: 'srv> HandlerMethods<'req, 'srv, Server>
     for Handler<Server>
 {
     #[inline]
-    fn run_with_header<R: io::Read, W: io::Write, A: Arena>(
+    fn run_with_header<A: Arena>(
         self,
-        header: Header,
         _: Server,
-        _: R,
-        _: W,
+        header: Header,
+        _: &mut dyn net::HostRequest,
         _: &'req A,
     ) -> Result<(), Error> {
         Err(Error::UnhandledCommand(header.command))
@@ -356,24 +357,28 @@ mod test {
         server: (H, T),
         request: C::Req,
     ) -> Result<C::Resp, Error> {
-        let mut cursor = Cursor::new(scratch_space);
-
-        let header = Header {
-            is_request: true,
-            command: <C::Req as protocol::Request<'a>>::TYPE,
-        };
-        header.to_wire(&mut cursor).expect("failed to write header");
+        let len = scratch_space.len();
+        let (req_scratch, port_scratch) = scratch_space.split_at_mut(len / 2);
+        let mut cursor = Cursor::new(req_scratch);
         request
             .to_wire(&mut cursor)
             .expect("failed to write request");
+        let request_bytes = cursor.take_consumed_bytes();
 
-        let req = cursor.take_consumed_bytes();
-        server.0.run(server.1, req, &mut cursor, arena)?;
-        let mut resp = cursor.take_consumed_bytes();
+        let mut port = net::InMemHost::new(port_scratch);
+        port.request(
+            Header {
+                is_request: true,
+                command: <C::Req as protocol::Request<'a>>::TYPE,
+            },
+            request_bytes,
+        );
 
-        let header =
-            Header::from_wire(&mut resp, arena).expect("failed to read header");
+        server.0.run(server.1, &mut port, arena)?;
+
+        let (header, mut resp) = port.response().unwrap();
         assert!(!header.is_request);
+
         let resp_val = FromWire::from_wire(&mut resp, arena)
             .expect("failed to read response");
         assert_eq!(resp.len(), 0);
@@ -460,43 +465,6 @@ mod test {
         assert!(matches!(
             resp,
             Err(Error::UnhandledCommand(CommandType::DeviceId))
-        ));
-        assert!(!handler_called);
-    }
-
-    #[test]
-    fn single_handler_too_long() {
-        let mut handler_called = false;
-        let handler = Handler::<&str>::new()
-            .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
-                handler_called = true;
-                assert_eq!(zelf, "server state");
-                assert_eq!(req.index, 42);
-
-                Ok(protocol::firmware_version::FirmwareVersionResponse {
-                    version: VERSION1,
-                })
-            });
-
-        let mut scratch = [0; 1024];
-        let mut arena = [0; 64];
-        let arena = BumpArena::new(&mut arena);
-        let mut cursor = Cursor::new(&mut scratch);
-
-        let header = Header {
-            is_request: true,
-            command: CommandType::FirmwareVersion,
-        };
-        let req =
-            protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        header.to_wire(&mut cursor).unwrap();
-        req.to_wire(&mut cursor).unwrap();
-        cursor.consume(5).unwrap();
-
-        let req = cursor.take_consumed_bytes();
-        assert!(matches!(
-            handler.run("server state", req, cursor, &arena),
-            Err(Error::ReqTooLong(5))
         ));
         assert!(!handler_called);
     }
