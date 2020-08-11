@@ -241,8 +241,6 @@ macro_rules! wire_enum {
 mod test {
     wire_enum! {
         /// An enum for testing.
-        #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         pub enum DemoEnum: u8 {
             /// Unknown value
             Unknown = 0x00,

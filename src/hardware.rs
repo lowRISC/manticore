@@ -14,6 +14,9 @@ use core::time::Duration;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Deserializer, Serialize};
+
 /// Provides access to "chip identity" information of various types.
 pub trait Identity {
     /// Returns a string indicating the RoT's firmware version.
@@ -76,6 +79,7 @@ pub trait Flash {
 /// [`Flash`]: trait.Flash.html
 #[derive(Copy, Clone, Debug, AsBytes, FromBytes)]
 #[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FlashPtr {
     /// The abstract address of this pointer.
     pub address: u32,
@@ -90,11 +94,25 @@ pub struct FlashPtr {
 /// [`FlashPtr`]: trait.FlashPtr.html
 #[derive(Copy, Clone, Debug, AsBytes, FromBytes)]
 #[repr(C)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FlashSlice {
     /// The base pointer for this slice.
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "deserialize_bare_ptr")
+    )]
     pub ptr: FlashPtr,
     /// The length of the slice, in bytes.
     pub len: u32,
+}
+
+#[cfg(feature = "serde")]
+fn deserialize_bare_ptr<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<FlashPtr, D::Error> {
+    Ok(FlashPtr {
+        address: Deserialize::deserialize(d)?,
+    })
 }
 
 /// An unspecified out-of-bounds error.
