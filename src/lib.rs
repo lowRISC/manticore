@@ -31,6 +31,9 @@
 //!   software implementations for cryptography traits used by `manticore`.
 //!   This feature is not intended for on-device use-cases either.
 //! - `serde` enables implementations of `serde`'s (de)serialization traits.
+//! - `inject-alloc` makes it possible to replace borrowed content in some
+//!   structs with allocated content. This is mostly useful for tooling that
+//!   needs to use `serde` on those structs.
 //! - `arbitrary-derive` enables implementations of fuzz-testing-related
 //!   traits.
 //!

@@ -61,6 +61,10 @@ tool = [
   "structopt",
 ]
 
+# Enables allocation injection, which makes it possible to replace borrowed
+# content with allocated content in some places.
+inject-alloc = ["std"]
+
 [[bin]]
 name = "manticore-tool"
 path = "src/main.rs"
