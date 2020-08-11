@@ -52,6 +52,7 @@ arbitrary-derive = ["libfuzzer-sys", "std"]
 std = [
   "arrayvec/std",
   "byteorder/std",
+  "serde/std",
   "ring/std",
 ]
 

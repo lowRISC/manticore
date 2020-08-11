@@ -76,6 +76,10 @@ use crate::manifest::container::Container;
 use crate::manifest::read_zerocopy;
 use crate::manifest::take_bytes;
 use crate::manifest::Error;
+use crate::mem::cow::Cow;
+
+#[cfg(all(feature = "inject-alloc", feature = "serde"))]
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// A Firmware Platform Manifest (FPM), describing valid states for platform
 /// firmware storage.
@@ -85,6 +89,26 @@ pub struct Fpm<'m> {
     // TODO: We should pull `4` out into a generic paramter at some point, but
     // it's unlikely that we'll need more than `4`.
     versions: ArrayVec<[FwVersion<'m>; 4]>,
+}
+
+#[cfg(all(feature = "inject-alloc", feature = "serde"))]
+impl<'de: 'm, 'm> Deserialize<'de> for Fpm<'m> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut fpm = Self {
+            versions: ArrayVec::new(),
+        };
+        let versions = Vec::<_>::deserialize(deserializer)?;
+        if versions.len() >= 4 {
+            return Err(serde::de::Error::invalid_length(versions.len(), &"4"));
+        }
+        for version in versions {
+            fpm.versions.push(version);
+        }
+        Ok(fpm)
+    }
 }
 
 /// A firmware version descriptor.
@@ -106,6 +130,10 @@ pub struct Fpm<'m> {
 ///   `blank_byte` value.
 ///
 /// See the [module documentation](index.html) for more information.
+#[cfg_attr(
+    all(feature = "inject-alloc", feature = "serde"),
+    derive(Serialize, Deserialize)
+)]
 pub struct FwVersion<'m> {
     /// The region, in a storage device, where this firmware's version number
     /// would be stored. To check that this is the firmware version loaded into
@@ -113,20 +141,28 @@ pub struct FwVersion<'m> {
     /// `version_id`.
     pub version_region: FlashSlice,
     /// This firmware's version string.
-    pub version: &'m [u8],
+    #[cfg_attr(
+        all(feature = "inject-alloc", feature = "serde"),
+        serde(borrow)
+    )]
+    pub version: Cow<'m, [u8]>,
 
     /// The "signed" region, represented as a list of slices in a storage
     /// device.
-    pub signed_region: &'m [FlashSlice],
+    pub signed_region: Cow<'m, [FlashSlice]>,
     /// The "write" region, represented as a list of slices in a storage device.
-    pub write_region: &'m [FlashSlice],
+    pub write_region: Cow<'m, [FlashSlice]>,
     /// The "unused region blank byte". Every byte in the unused region is
     /// expected to have this value.
     pub blank_byte: u8,
 
     /// The SHA-256 hash of the "signed" region, computed by hashing together
     /// all the bytes in the slices in the `signed_region` list, in order.
-    pub signed_region_hash: &'m sha256::Digest,
+    #[cfg_attr(
+        all(feature = "inject-alloc", feature = "serde"),
+        serde(borrow)
+    )]
+    pub signed_region_hash: Cow<'m, sha256::Digest>,
 }
 
 impl<'m> Fpm<'m> {
@@ -169,11 +205,11 @@ impl<'m> Fpm<'m> {
                         },
                         len: version_len as u32,
                     },
-                    version,
-                    signed_region,
-                    write_region,
+                    version: Cow::Borrowed(version),
+                    signed_region: Cow::Borrowed(signed_region),
+                    write_region: Cow::Borrowed(write_region),
                     blank_byte,
-                    signed_region_hash,
+                    signed_region_hash: Cow::Borrowed(signed_region_hash),
                 })
                 .map_err(|_| Error::OutOfRange)?;
         }
