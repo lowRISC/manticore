@@ -2,15 +2,16 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-use clap::value_t;
-use clap::App;
-use clap::AppSettings;
-use clap::Arg;
-use clap::SubCommand;
+//! `manticore-tool` is a simple command-line tool for manipulating Manticore
+//! data types.
+
+#![deny(missing_docs)]
+#![deny(warnings)]
+#![deny(unused)]
+#![deny(unsafe_code)]
 
 use manticore::io::write::StdWrite;
 use manticore::mem::BumpArena;
-use manticore::protocol;
 use manticore::protocol::firmware_version;
 use manticore::protocol::wire::FromWire;
 use manticore::protocol::wire::ToWire;
@@ -19,18 +20,47 @@ use manticore::protocol::Header;
 
 use serde::de::Deserialize;
 
-use serde_json;
+use structopt::StructOpt;
 
-use std::fs::OpenOptions;
+use std::fs::File;
+use std::io;
 use std::io::BufReader;
-use std::io::Read as _;
+use std::io::Read;
+use std::io::Write;
+use std::path::PathBuf;
 
-/// Deserializes a message in JSON format from `reader` and then serializes the message in wire
-/// format to `writer`.
+/// Opens the given input and output files.
+///
+/// If either file is missing, it is replaced with stdin or stdout, respectively.
+fn open_files(
+    input_file: Option<PathBuf>,
+    output_file: Option<PathBuf>,
+) -> (Box<dyn Read>, Box<dyn Write>) {
+    let input: Box<dyn Read> = match input_file {
+        Some(path) => {
+            let file = File::open(path).expect("failed to open input file");
+            Box::new(BufReader::new(file))
+        }
+        None => Box::new(io::stdin()),
+    };
+
+    let output: Box<dyn Write> = match output_file {
+        Some(path) => {
+            let file = File::create(path).expect("failed to open output file");
+            Box::new(file)
+        }
+        None => Box::new(io::stdout()),
+    };
+
+    (input, output)
+}
+
+/// Deserializes a message in JSON format from `reader` and then serializes the
+/// message in wire format to `writer`.
 fn from_json_to_wire<'de, T, R, W>(reader: R, writer: W)
 where
     T: ToWire + Deserialize<'de>,
-    R: std::io::Read,
+    R: Read,
     W: manticore::io::Write,
 {
     let mut de = serde_json::Deserializer::from_reader(reader);
@@ -38,68 +68,54 @@ where
     msg.to_wire(writer).expect("failed to write request");
 }
 
-/// Deserializes a message in JSON format from `input_file` and then serializes a header + message
-/// in wire format to.`output_file`. Uses `cmd_type` and `is_request` to determine the message type
-///  since the JSON format does not include the message header.
+/// Converts a JSON object into a Manticore command.
+///
+/// This function deserializes a message in JSON format from `input_file` and
+/// then serializes a header + message in wire format to.`output_file`.
+///
+/// Uses `cmd_type` and `is_request` to determine the message type since the
+/// JSON format does not include the message header.
 fn from_json(
     cmd_type: CommandType,
     is_request: bool,
-    input_file: &str,
-    output_file: &str,
+    input: impl Read,
+    mut output: impl Write,
 ) {
-    let mut output = OpenOptions::new()
-        .write(true)
-        .truncate(true)
-        .create(true)
-        .open(&output_file)
-        .expect("failed to open output file");
-
-    let input = OpenOptions::new()
-        .read(true)
-        .open(&input_file)
-        .expect("failed to open input file");
-    let input_reader = BufReader::new(input);
-
     let mut stdwrite = StdWrite(&mut output);
 
-    let header = Header {
+    Header {
         is_request: is_request,
         command: cmd_type,
-    };
-    header
-        .to_wire(&mut stdwrite)
-        .expect("failed to write header");
+    }
+    .to_wire(&mut stdwrite)
+    .expect("failed to write header");
 
     match (is_request, cmd_type) {
         (true, CommandType::FirmwareVersion) => {
             from_json_to_wire::<firmware_version::FirmwareVersionRequest, _, _>(
-                input_reader,
-                stdwrite,
+                input, stdwrite,
             )
         }
         (false, CommandType::FirmwareVersion) => {
             from_json_to_wire::<firmware_version::FirmwareVersionResponse, _, _>(
-                input_reader,
-                stdwrite,
+                input, stdwrite,
             )
         }
         _ => panic!("Unsupported message type"),
     }
 }
 
-/// Macro to deserialize wire format from an input file and then run an operation on the
-/// deserialized message.
+/// Macro to deserialize wire format from an input file and then run an
+/// operation on the deserialized message.
+///
+/// This macro is a temporary workaround some Serde limiatations.
+///
 /// Arguments:
 /// * `input_file`: Identifier to get the input file name from.
-/// * `msg`: Identifier to hold the message to operator.
-/// * `op`: Expression to execute after deserializing `msg` from `input_file`.
+/// * `body`: A "generic" closure to run with the results of the parse.
 macro_rules! read_wire_and_operate {
-    ($input_file:ident, $msg:ident, $op:expr) => {
-        let mut input = OpenOptions::new()
-            .read(true)
-            .open(&$input_file)
-            .expect("failed to open input file");
-
+    ($input:ident, $body:expr) => {
+        let mut input = $input;
         let mut read_buf = Vec::new();
         input
             .read_to_end(&mut read_buf)
@@ -107,147 +123,108 @@ macro_rules! read_wire_and_operate {
 
         let mut arena = vec![0u8; 1024];
         let arena = BumpArena::new(&mut arena);
+
         let mut read_buf_slice = read_buf.as_slice();
         let header = Header::from_wire(&mut read_buf_slice, &arena)
             .expect("failed to read header");
         match (header.is_request, header.command) {
             (true, CommandType::FirmwareVersion) => {
-                let $msg: protocol::firmware_version::FirmwareVersionRequest =
-                    FromWire::from_wire(&mut read_buf_slice, &arena)
-                        .expect("failed to read request");
-
-                $op
+                let message =
+                    firmware_version::FirmwareVersionRequest::from_wire(
+                        &mut read_buf_slice,
+                        &arena,
+                    )
+                    .expect("failed to read response");
+                let body = $body;
+                body(message)
             }
             (false, CommandType::FirmwareVersion) => {
-                let $msg: protocol::firmware_version::FirmwareVersionResponse =
-                    FromWire::from_wire(&mut read_buf_slice, &arena)
-                        .expect("failed to read response");
-
-                $op
+                let message =
+                    firmware_version::FirmwareVersionResponse::from_wire(
+                        &mut read_buf_slice,
+                        &arena,
+                    )
+                    .expect("failed to read response");
+                let body = $body;
+                body(message)
             }
-            _ => {
-                panic!("unsupported response type {:?}", header.command);
-            }
+            _ => panic!("unsupported response type {:?}", header.command),
         }
     };
 }
 
-/// Deserializes a header + message in wire format from `input_file` and then serialize the
-/// message as JSON to `output_file`.
-fn to_json(input_file: &str, output_file: &str) {
-    let output = OpenOptions::new()
-        .write(true)
-        .truncate(true)
-        .create(true)
-        .open(&output_file)
-        .expect("failed to open output file");
-    read_wire_and_operate!(input_file, msg, {
-        serde_json::to_writer(output, &msg)
-            .expect("failed to serialize to JSON")
+/// Converts a Manticore command into a JSON object.
+///
+/// This funciton deserializes a header + message in wire format from `input`
+/// and then serialize the message as JSON to `output`.
+fn to_json(pretty: bool, input: impl Read, output: impl Write) {
+    read_wire_and_operate!(input, |msg| {
+        if pretty {
+            serde_json::to_writer_pretty(output, &msg)
+        } else {
+            serde_json::to_writer(output, &msg)
+        }
+        .expect("failed to serialize to JSON")
     });
 }
 
-/// Deserializes a header + message in wire format from `input_file` and then prints the message
-/// to the console.
-fn print_message(input_file: &str) {
-    read_wire_and_operate!(input_file, msg, eprintln!("{:?}", msg));
+#[derive(Debug, StructOpt)]
+#[structopt(
+    name = "manticore-tool",
+    author = "lowRISC contributors",
+    about = "Command-line tool for working with Manticore data"
+)]
+enum CliCommand {
+    FromJson {
+        /// The command type for the message.
+        #[structopt(short = "t", long)]
+        cmd_type: CommandType,
+
+        /// Whether this message is a request.
+        #[structopt(short = "r", long)]
+        is_request: bool,
+
+        /// JSON file containing containing the message; defaults to stdin.
+        #[structopt(short = "i", long, parse(from_os_str))]
+        input: Option<PathBuf>,
+
+        /// Binary output file; defaults to stdout.
+        #[structopt(short = "o", long, parse(from_os_str))]
+        output: Option<PathBuf>,
+    },
+    ToJson {
+        /// Whether to pretty-print the resulting JSON.
+        #[structopt(short = "p", long)]
+        pretty: bool,
+
+        /// Binary file containing containing the message; defaults to stdin.
+        #[structopt(short = "i", long, parse(from_os_str))]
+        input: Option<PathBuf>,
+
+        /// JSON output file; defaults to stdout.
+        #[structopt(short = "o", long, parse(from_os_str))]
+        output: Option<PathBuf>,
+    },
 }
 
 fn main() {
-    let app = App::new("Manticore Tool")
-        .version("0.1")
-        .author("lowRISC contributors")
-        .about("Command line tool for Manticore library")
-        .setting(AppSettings::ArgRequiredElseHelp)
-        .setting(AppSettings::SubcommandRequiredElseHelp)
-        .arg(
-            Arg::with_name("v")
-                .short("v")
-                .multiple(true)
-                .help("Sets the level of verbosity"),
-        )
-        .subcommand(
-            SubCommand::with_name("fromjson")
-                .about("Generate a message from JSON and serialize it")
-                .arg(
-                    Arg::with_name("cmdtype")
-                        .short("t")
-                        .long("cmdtype")
-                        .help("Command type")
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("isrequest")
-                        .short("r")
-                        .long("isrequest")
-                        .help("Whether the message is a request"),
-                )
-                .arg(
-                    Arg::with_name("input")
-                        .short("i")
-                        .long("input")
-                        .help("JSON input file with message data")
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("output")
-                        .short("o")
-                        .long("output")
-                        .help("output file for serialized message")
-                        .required(true)
-                        .takes_value(true),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("tojson")
-                .about("Deserialize a message and store it as JSON")
-                .arg(
-                    Arg::with_name("input")
-                        .short("i")
-                        .long("input")
-                        .help("input file containing serialized message")
-                        .required(true)
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("output")
-                        .short("o")
-                        .long("output")
-                        .help("output file for message data as JSON")
-                        .required(true)
-                        .takes_value(true),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("print")
-                .about("Deserialize and print a message")
-                .arg(
-                    Arg::with_name("input")
-                        .short("i")
-                        .long("input")
-                        .help("input file containing serialized message")
-                        .required(true)
-                        .takes_value(true),
-                ),
-        );
-    let matches = app.get_matches();
-
-    if let Some(matches) = matches.subcommand_matches("fromjson") {
-        from_json(
-            value_t!(matches.value_of("cmdtype"), CommandType)
-                .unwrap_or_else(|e| e.exit()),
-            matches.is_present("isrequest"),
-            matches.value_of("input").unwrap(),
-            matches.value_of("output").unwrap(),
-        );
-    } else if let Some(matches) = matches.subcommand_matches("tojson") {
-        to_json(
-            matches.value_of("input").unwrap(),
-            matches.value_of("output").unwrap(),
-        );
-    } else if let Some(matches) = matches.subcommand_matches("print") {
-        print_message(matches.value_of("input").unwrap());
+    match CliCommand::from_args() {
+        CliCommand::FromJson {
+            cmd_type,
+            is_request,
+            input,
+            output,
+        } => {
+            let (input, output) = open_files(input, output);
+            from_json(cmd_type, is_request, input, output);
+        }
+        CliCommand::ToJson {
+            pretty,
+            input,
+            output,
+        } => {
+            let (input, output) = open_files(input, output);
+            to_json(pretty, input, output);
+        }
     }
 }

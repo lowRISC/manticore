@@ -13,6 +13,8 @@
 //! [`ToWire`]: trait.ToWire.html
 //! [`serde`]: https://serde.rs
 
+use core::fmt;
+
 use crate::io;
 use crate::io::endian::LeInt;
 use crate::io::Read;
@@ -150,6 +152,12 @@ where
 /// A deserialization-from-string error.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct WireEnumFromStrError;
+
+impl fmt::Display for WireEnumFromStrError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "unknown variant")
+    }
+}
 
 /// A conveinence macro for generating `WireEnum`-implementing enums.
 ///
