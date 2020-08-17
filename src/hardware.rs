@@ -77,12 +77,20 @@ pub trait Flash {
 /// implementation to be read from or written to.
 ///
 /// [`Flash`]: trait.Flash.html
-#[derive(Copy, Clone, Debug, AsBytes, FromBytes)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, AsBytes, FromBytes)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FlashPtr {
     /// The abstract address of this pointer.
     pub address: u32,
+}
+
+impl FlashPtr {
+    /// Convenience method for creating a `FlashPtr` without having to use
+    /// a struct literal
+    pub const fn new(address: u32) -> Self {
+        Self { address }
+    }
 }
 
 /// An abstrace slice into a [`Flash`] type.
@@ -92,7 +100,7 @@ pub struct FlashPtr {
 ///
 /// [`Flash`]: trait.Flash.html
 /// [`FlashPtr`]: trait.FlashPtr.html
-#[derive(Copy, Clone, Debug, AsBytes, FromBytes)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, AsBytes, FromBytes)]
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FlashSlice {
@@ -113,6 +121,17 @@ fn deserialize_bare_ptr<'de, D: Deserializer<'de>>(
     Ok(FlashPtr {
         address: Deserialize::deserialize(d)?,
     })
+}
+
+impl FlashSlice {
+    /// Convenience method for creating a `FlashSlice` without having to use
+    /// a struct literal
+    pub const fn new(ptr: u32, len: u32) -> Self {
+        Self {
+            ptr: FlashPtr::new(ptr),
+            len,
+        }
+    }
 }
 
 /// An unspecified out-of-bounds error.
