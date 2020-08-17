@@ -326,7 +326,7 @@ impl Write for Containerizer<'_> {
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use super::*;
 
     use static_assertions::const_assert_eq;
@@ -353,7 +353,7 @@ mod test {
     const MANIFEST_LEN: usize =
         MANIFEST_HEADER.len() + MANIFEST_CONTENTS.len() + 256;
 
-    fn make_rsa_engine() -> (ring::rsa::Engine, ring::rsa::Signer) {
+    pub fn make_rsa_engine() -> (ring::rsa::Engine, ring::rsa::Signer) {
         let keypair =
             ring::rsa::Keypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
                 .unwrap();

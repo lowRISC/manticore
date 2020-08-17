@@ -69,8 +69,8 @@ use core::mem::size_of;
 use arrayvec::ArrayVec;
 
 use crate::crypto::sha256;
-use crate::hardware::FlashPtr;
 use crate::hardware::FlashSlice;
+use crate::io;
 use crate::io::Read as _;
 use crate::manifest::container::Container;
 use crate::manifest::read_zerocopy;
@@ -85,6 +85,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 /// firmware storage.
 ///
 /// See the [module documentation](index.html) for more information.
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct Fpm<'m> {
     // TODO: We should pull `4` out into a generic paramter at some point, but
     // it's unlikely that we'll need more than `4`.
@@ -130,6 +132,8 @@ impl<'de: 'm, 'm> Deserialize<'de> for Fpm<'m> {
 ///   `blank_byte` value.
 ///
 /// See the [module documentation](index.html) for more information.
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 #[cfg_attr(
     all(feature = "inject-alloc", feature = "serde"),
     derive(Serialize, Deserialize)
@@ -199,12 +203,10 @@ impl<'m> Fpm<'m> {
 
             fpm.versions
                 .try_push(FwVersion {
-                    version_region: FlashSlice {
-                        ptr: FlashPtr {
-                            address: version_addr,
-                        },
-                        len: version_len as u32,
-                    },
+                    version_region: FlashSlice::new(
+                        version_addr,
+                        version_len as u32,
+                    ),
                     version: Cow::Borrowed(version),
                     signed_region: Cow::Borrowed(signed_region),
                     write_region: Cow::Borrowed(write_region),
@@ -217,9 +219,122 @@ impl<'m> Fpm<'m> {
         Ok(fpm)
     }
 
+    /// Serializes this `Fpm` into `out`.
+    pub fn unparse(&self, mut out: impl io::Write) -> Result<(), Error> {
+        out.write_le(self.versions.len() as u32)?;
+        for version in self.versions() {
+            out.write_le(version.version_region.ptr.address)?;
+
+            let signed_len: u16 = version
+                .signed_region
+                .len()
+                .try_into()
+                .map_err(|_| Error::OutOfRange)?;
+            out.write_le(signed_len)?;
+
+            let write_len: u16 = version
+                .write_region
+                .len()
+                .try_into()
+                .map_err(|_| Error::OutOfRange)?;
+            out.write_le(write_len)?;
+
+            out.write_le(version.blank_byte)?;
+
+            let version_len: u8 = version
+                .version
+                .len()
+                .try_into()
+                .map_err(|_| Error::OutOfRange)?;
+            out.write_le(version_len)?;
+            out.write_bytes(&*version.version)?;
+            // Re-align to four bytes. It's only a matter of making sure that
+            // `version`, plus the two previous bytes, are aligned.
+            let misalign = (4 - (version.version.len() + 2) % 4) % 4;
+            for _ in 0..misalign {
+                out.write_le(0u8)?;
+            }
+
+            for slice in version.signed_region.iter() {
+                out.write_le(slice.ptr.address)?;
+                out.write_le(slice.len)?;
+            }
+            for slice in version.write_region.iter() {
+                out.write_le(slice.ptr.address)?;
+                out.write_le(slice.len)?;
+            }
+            out.write_bytes(&*version.signed_region_hash)?;
+        }
+        Ok(())
+    }
+
     /// Returns an iterator over the allowed firmware versions recorded in this
     /// `Fpm`.
     pub fn versions(&self) -> impl Iterator<Item = &FwVersion> {
         self.versions.iter()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::manifest::container::test::make_rsa_engine;
+    use crate::manifest::container::Container;
+    use crate::manifest::container::Containerizer;
+    use crate::manifest::container::Metadata;
+    use crate::manifest::ManifestType;
+
+    #[test]
+    fn round_trip() {
+        let mut buf = vec![0; 1024];
+        let mut buf2 = vec![0; 1024];
+
+        let mut fpm = Fpm {
+            versions: ArrayVec::new(),
+        };
+        // NOTE: writing this as a constant forces const-promotion of the
+        // slice definitions inside.
+        const VERSION: FwVersion = FwVersion {
+            version_region: FlashSlice::new(0x22, 5),
+            version: Cow::Borrowed(&[1, 2, 3, 4, 5]),
+            signed_region: Cow::Borrowed(&[
+                FlashSlice::new(0x0, 256),
+                FlashSlice::new(0x200, 55),
+            ]),
+            write_region: Cow::Borrowed(&[FlashSlice::new(0x400, 100)]),
+            blank_byte: 0xee,
+            signed_region_hash: Cow::Borrowed(&[0xa5; 32]),
+        };
+        fpm.versions.push(VERSION);
+
+        let (mut rsa, mut signer) = make_rsa_engine();
+        let mut builder = Containerizer::new(&mut buf)
+            .unwrap()
+            .with_type(ManifestType::Fpm)
+            .unwrap()
+            .with_metadata(&Metadata { version_id: 0x1 })
+            .unwrap();
+        fpm.unparse(&mut builder).unwrap();
+        let manifest_bytes = builder.sign(&mut signer).unwrap();
+
+        let manifest =
+            Container::parse_and_verify(manifest_bytes, &mut rsa).unwrap();
+        let fpm2 = Fpm::parse(manifest).unwrap();
+        assert_eq!(fpm, fpm2);
+
+        let mut builder = Containerizer::new(&mut buf2)
+            .unwrap()
+            .with_type(ManifestType::Fpm)
+            .unwrap()
+            .with_metadata(&Metadata { version_id: 0x1 })
+            .unwrap();
+        fpm2.unparse(&mut builder).unwrap();
+        let manifest_bytes2 = builder.sign(&mut signer).unwrap();
+        assert_eq!(manifest_bytes, manifest_bytes2);
+
+        let manifest =
+            Container::parse_and_verify(manifest_bytes2, &mut rsa).unwrap();
+        let fpm3 = Fpm::parse(manifest).unwrap();
+        assert_eq!(fpm, fpm3);
     }
 }
