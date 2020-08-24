@@ -15,7 +15,7 @@ use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 /// Provides access to "chip identity" information of various types.
 pub trait Identity {
@@ -105,22 +105,10 @@ impl FlashPtr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FlashSlice {
     /// The base pointer for this slice.
-    #[cfg_attr(
-        feature = "serde",
-        serde(deserialize_with = "deserialize_bare_ptr")
-    )]
+    #[cfg_attr(feature = "serde", serde(flatten))]
     pub ptr: FlashPtr,
     /// The length of the slice, in bytes.
     pub len: u32,
-}
-
-#[cfg(feature = "serde")]
-fn deserialize_bare_ptr<'de, D: Deserializer<'de>>(
-    d: D,
-) -> Result<FlashPtr, D::Error> {
-    Ok(FlashPtr {
-        address: Deserialize::deserialize(d)?,
-    })
 }
 
 impl FlashSlice {

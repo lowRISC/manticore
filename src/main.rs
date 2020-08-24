@@ -10,7 +10,18 @@
 #![deny(unused)]
 #![deny(unsafe_code)]
 
+use manticore::crypto::ring;
+use manticore::crypto::rsa::Builder as _;
+use manticore::crypto::rsa::Keypair as _;
+use manticore::crypto::rsa::SignerBuilder as _;
 use manticore::io::write::StdWrite;
+use manticore::manifest;
+use manticore::manifest::container::Container;
+use manticore::manifest::container::Containerizer;
+use manticore::manifest::container::Metadata;
+use manticore::manifest::fpm::Fpm;
+use manticore::manifest::provenance;
+use manticore::manifest::ManifestType;
 use manticore::mem::BumpArena;
 use manticore::protocol::firmware_version;
 use manticore::protocol::wire::FromWire;
@@ -22,6 +33,7 @@ use serde::de::Deserialize;
 
 use structopt::StructOpt;
 
+use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
@@ -184,7 +196,7 @@ enum CliCommand {
         #[structopt(short = "r", long)]
         is_request: bool,
 
-        /// JSON file containing containing the message; defaults to stdin.
+        /// JSON file containing the message; defaults to stdin.
         #[structopt(short = "i", long, parse(from_os_str))]
         input: Option<PathBuf>,
 
@@ -197,7 +209,45 @@ enum CliCommand {
         #[structopt(short = "p", long)]
         pretty: bool,
 
-        /// Binary file containing containing the message; defaults to stdin.
+        /// Binary file containing the message; defaults to stdin.
+        #[structopt(short = "i", long, parse(from_os_str))]
+        input: Option<PathBuf>,
+
+        /// JSON output file; defaults to stdout.
+        #[structopt(short = "o", long, parse(from_os_str))]
+        output: Option<PathBuf>,
+    },
+    SignManifest {
+        /// PKCS#8-encoded RSA signing key to sign with.
+        #[structopt(short = "k", long, parse(from_os_str))]
+        key: PathBuf,
+
+        /// The manifest type for this operation.
+        #[structopt(short = "t", long)]
+        manifest_type: ManifestType,
+
+        /// The version to encode into the manifest container.
+        #[structopt(short = "v", long)]
+        manifest_version: u32,
+
+        /// JSON file containing the manifest to sign; defaults to stdin.
+        #[structopt(short = "i", long, parse(from_os_str))]
+        input: Option<PathBuf>,
+
+        /// Binary output file; defaults to stdout.
+        #[structopt(short = "o", long, parse(from_os_str))]
+        output: Option<PathBuf>,
+    },
+    ShowManifest {
+        /// PKCS#8-encoded RSA public key to optionally verify the signature
+        #[structopt(short = "k", long, parse(from_os_str))]
+        key: Option<PathBuf>,
+
+        /// Whether to pretty-print the resulting JSON.
+        #[structopt(short = "p", long)]
+        pretty: bool,
+
+        /// Binary file containing the manifest to parse; defaults to stdin.
         #[structopt(short = "i", long, parse(from_os_str))]
         input: Option<PathBuf>,
 
@@ -225,6 +275,100 @@ fn main() {
         } => {
             let (input, output) = open_files(input, output);
             to_json(pretty, input, output);
+        }
+        CliCommand::SignManifest {
+            key,
+            manifest_type,
+            manifest_version,
+            input,
+            output,
+        } => {
+            let (mut input, mut output) = open_files(input, output);
+
+            let key = fs::read(key).expect("failed to open file");
+            let keypair = ring::rsa::Keypair::from_pkcs8(&key)
+                .expect("failed to parse key");
+            let mut signer = ring::rsa::Builder::new()
+                .new_signer(keypair)
+                .expect("failed to create signing engine");
+
+            let mut manifest_buf = vec![0; 0x2000];
+            let mut container = Containerizer::new(&mut manifest_buf)
+                .expect("failed to create containerizer")
+                .with_type(manifest_type)
+                .expect("failed to set manifest type")
+                .with_metadata(&Metadata {
+                    version_id: manifest_version,
+                })
+                .expect("failed to set manifest metadata");
+
+            match manifest_type {
+                ManifestType::Fpm => {
+                    let mut buf = Vec::new();
+                    input.read_to_end(&mut buf).expect("failed to read file");
+
+                    let fpm: Fpm<provenance::Adhoc> =
+                        serde_json::from_slice(&buf)
+                            .expect("failed to parse JSON");
+                    fpm.unparse(&mut container)
+                        .expect("failed to serialize manifest");
+                }
+            }
+
+            let manifest = container
+                .sign(&mut signer)
+                .expect("failed to sign manifest");
+            output
+                .write_all(manifest)
+                .expect("failed to write manifest");
+        }
+        CliCommand::ShowManifest {
+            key,
+            pretty,
+            input,
+            output,
+        } => {
+            let (mut input, output) = open_files(input, output);
+
+            let engine = key.map(|key| {
+                let key = fs::read(key).expect("failed to open file");
+                let keypair = ring::rsa::Keypair::from_pkcs8(&key)
+                    .expect("failed to parse key");
+                ring::rsa::Builder::new()
+                    .new_engine(keypair.public())
+                    .expect("failed to create signature verification engine")
+            });
+            let mut buf = Vec::new();
+            input.read_to_end(&mut buf).expect("failed to read file");
+
+            let container = match engine {
+                Some(mut engine) => {
+                    match Container::parse_and_verify(&buf, &mut engine) {
+                        Ok(c) => c,
+                        Err(manifest::Error::SignatureFailure) => {
+                            panic!("failed to verify signature")
+                        }
+                        Err(_) => panic!("failed to parse manifest container"),
+                    }
+                    .downgrade()
+                }
+                None => Container::parse(&buf)
+                    .expect("failed to parse manifest container"),
+            };
+
+            match container.manifest_type() {
+                ManifestType::Fpm => {
+                    let fpm = Fpm::parse(container)
+                        .expect("failed to parse manifest");
+                    if pretty {
+                        serde_json::to_writer_pretty(output, &fpm)
+                            .expect("failed to write file");
+                    } else {
+                        serde_json::to_writer(output, &fpm)
+                            .expect("failed to write file");
+                    }
+                }
+            }
         }
     }
 }
