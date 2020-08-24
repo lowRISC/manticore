@@ -39,12 +39,15 @@
 //! although the magic number and the manifest body may contain payloads that
 //! are Manticore-specific.
 
+use core::marker::PhantomData;
+
 use crate::crypto::rsa;
 use crate::io;
 use crate::io::cursor::SeekPos;
 use crate::io::Cursor;
 use crate::io::Read as _;
 use crate::io::Write;
+use crate::manifest::provenance;
 use crate::manifest::Error;
 use crate::manifest::ManifestType;
 use crate::protocol::wire::WireEnum;
@@ -72,11 +75,12 @@ pub struct Metadata {
 /// type is a witness that authentication via signature was successful; it is
 /// not possible to parse a `Container` without also verifying it.
 ///
-/// See the [module-level documentation](index.html) for more information.
-pub struct Container<'m> {
+/// See the [module documentation](index.html) for more information.
+pub struct Container<'m, Provenance = provenance::Signed> {
     manifest_type: ManifestType,
     metadata: Metadata,
     body: &'m [u8],
+    _ph: PhantomData<Provenance>,
 }
 
 /// Offsets for fields within the container header.
@@ -89,11 +93,11 @@ const SIG_LEN_OFFSET: usize = 8;
 /// two halves, a word, another half, and two bytes of padding.
 const HEADER_LEN: usize = 2 + 2 + 4 + 2 + 2;
 
-impl<'m> Container<'m> {
+impl<'m> Container<'m, provenance::Signed> {
     /// Parses and verifies a `Container` using the provided [`rsa::Engine`].
     ///
-    /// This function first parses the `Container`'s header, which it uses for
-    /// finding the signature at the end of the buffer.
+    /// This is the only function capable of prodiucing a container with the
+    /// `Signed` provenance.
     ///
     /// `buf` must be aligned to a four-byte boundary.
     ///
@@ -102,6 +106,45 @@ impl<'m> Container<'m> {
         buf: &'m [u8],
         rsa: &mut Rsa,
     ) -> Result<Self, Error> {
+        let (c, sig, signed) = Self::parse_inner(buf)?;
+        rsa.verify_signature(sig, signed)
+            .map_err(|_| Error::SignatureFailure)?;
+        Ok(c)
+    }
+}
+
+impl<'m> Container<'m, provenance::Adhoc> {
+    /// Parses a `Container` without verifying the signature.
+    ///
+    /// The value returned by this function cannot be used for trusted
+    /// operations. See [`parse_and_verify()`].
+    ///
+    /// `buf` must be aligned to a four-byte boundary.
+    ///
+    /// [`parse_and_verify()`]: struct.Container.html#method.parse_and_verify
+    pub fn parse(buf: &'m [u8]) -> Result<Self, Error> {
+        let (c, _, _) = Self::parse_inner(buf)?;
+        Ok(c)
+    }
+}
+
+impl<'m, Provenance> Container<'m, Provenance> {
+    /// Downgrades this `Container`'s provenance to `Adhoc` forgetting that
+    /// this container might have had a valid signature.
+    #[inline(always)]
+    pub fn downgrade(self) -> Container<'m, provenance::Adhoc> {
+        Container {
+            manifest_type: self.manifest_type,
+            metadata: self.metadata,
+            body: self.body,
+            _ph: PhantomData,
+        }
+    }
+
+    /// Performs a parse without verifying the signature, returning the
+    /// the necessary arguments to pass to `verify_signature()`. if that were
+    /// necessary.
+    fn parse_inner(buf: &'m [u8]) -> Result<(Self, &'m [u8], &'m [u8]), Error> {
         if buf.as_ptr().align_offset(4) != 0 {
             return Err(Error::Unaligned);
         }
@@ -133,15 +176,14 @@ impl<'m> Container<'m> {
         let signed_len = len.checked_sub(sig_len).ok_or(Error::OutOfRange)?;
         let signed = &buf[..signed_len];
 
-        rsa.verify_signature(sig, signed)
-            .map_err(|_| Error::SignatureFailure)?;
-
-        Ok(Container {
+        let container = Self {
             manifest_type: ManifestType::from_wire_value(magic)
                 .ok_or(Error::OutOfRange)?,
             metadata: Metadata { version_id: id },
             body,
-        })
+            _ph: PhantomData,
+        };
+        Ok((container, sig, signed))
     }
 
     /// Returns the [`ManifestType`] for this `Container`.

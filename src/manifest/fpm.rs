@@ -64,6 +64,7 @@
 //! ```
 
 use core::convert::TryInto;
+use core::marker::PhantomData;
 use core::mem::size_of;
 
 use arrayvec::ArrayVec;
@@ -73,34 +74,41 @@ use crate::hardware::FlashSlice;
 use crate::io;
 use crate::io::Read as _;
 use crate::manifest::container::Container;
+use crate::manifest::provenance;
 use crate::manifest::read_zerocopy;
 use crate::manifest::take_bytes;
 use crate::manifest::Error;
 use crate::mem::cow::Cow;
 
 #[cfg(all(feature = "inject-alloc", feature = "serde"))]
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// A Firmware Platform Manifest (FPM), describing valid states for platform
 /// firmware storage.
 ///
 /// See the [module documentation](index.html) for more information.
+///
+/// The type parameter `provenance` identifies the source of this `Fpm`. See
+/// the [`provenance` module](../provenance/index.html) for more information.
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
-pub struct Fpm<'m> {
+pub struct Fpm<'m, Provenance = provenance::Signed> {
     // TODO: We should pull `4` out into a generic paramter at some point, but
     // it's unlikely that we'll need more than `4`.
     versions: ArrayVec<[FwVersion<'m>; 4]>,
+
+    _ph: PhantomData<Provenance>,
 }
 
 #[cfg(all(feature = "inject-alloc", feature = "serde"))]
-impl<'de: 'm, 'm> Deserialize<'de> for Fpm<'m> {
+impl<'de: 'm, 'm> Deserialize<'de> for Fpm<'m, provenance::Adhoc> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         let mut fpm = Self {
             versions: ArrayVec::new(),
+            _ph: PhantomData,
         };
         let versions = Vec::<_>::deserialize(deserializer)?;
         if versions.len() >= 4 {
@@ -110,6 +118,21 @@ impl<'de: 'm, 'm> Deserialize<'de> for Fpm<'m> {
             fpm.versions.push(version);
         }
         Ok(fpm)
+    }
+}
+
+#[cfg(all(feature = "inject-alloc", feature = "serde"))]
+impl<'m, Provenance> Serialize for Fpm<'m, Provenance> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeSeq as _;
+        let mut seq = serializer.serialize_seq(Some(self.versions.len()))?;
+        for version in &self.versions {
+            seq.serialize_element(version)?;
+        }
+        seq.end()
     }
 }
 
@@ -169,12 +192,13 @@ pub struct FwVersion<'m> {
     pub signed_region_hash: Cow<'m, sha256::Digest>,
 }
 
-impl<'m> Fpm<'m> {
+impl<'m, Provenance> Fpm<'m, Provenance> {
     /// Parse an `Fpm` out of a parsed and verified `Manifest`.
-    pub fn parse(container: Container<'m>) -> Result<Self, Error> {
+    pub fn parse(container: Container<'m, Provenance>) -> Result<Self, Error> {
         let mut body = container.body();
         let mut fpm = Self {
             versions: ArrayVec::new(),
+            _ph: PhantomData,
         };
 
         let fw_count = body.read_le::<u32>()?;
@@ -268,6 +292,16 @@ impl<'m> Fpm<'m> {
         Ok(())
     }
 
+    /// Downgrades this `Fpm`'s provenance to `Adhoc`, forgetting that it might
+    /// have come from a known-signed container.
+    #[inline(always)]
+    pub fn downgrade(self) -> Fpm<'m, provenance::Adhoc> {
+        Fpm {
+            versions: self.versions,
+            _ph: PhantomData,
+        }
+    }
+
     /// Returns an iterator over the allowed firmware versions recorded in this
     /// `Fpm`.
     pub fn versions(&self) -> impl Iterator<Item = &FwVersion> {
@@ -291,6 +325,7 @@ mod test {
 
         let mut fpm = Fpm {
             versions: ArrayVec::new(),
+            _ph: PhantomData,
         };
         // NOTE: writing this as a constant forces const-promotion of the
         // slice definitions inside.
