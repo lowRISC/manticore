@@ -57,6 +57,7 @@ std = [
 ]
 
 tool = [
+  "inject-alloc",
   "serde",
   "serde_json",
   "structopt",
