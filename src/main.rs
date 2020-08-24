@@ -180,13 +180,14 @@ fn to_json(pretty: bool, input: impl Read, output: impl Write) {
     });
 }
 
+#[deny(missing_docs)]
 #[derive(Debug, StructOpt)]
 #[structopt(
-    name = "manticore-tool",
-    author = "lowRISC contributors",
+    author,
     about = "Command-line tool for working with Manticore data"
 )]
 enum CliCommand {
+    /// Construct a Cerberus message from a JSON representation.
     FromJson {
         /// The command type for the message.
         #[structopt(short = "t", long)]
@@ -204,6 +205,7 @@ enum CliCommand {
         #[structopt(short = "o", long, parse(from_os_str))]
         output: Option<PathBuf>,
     },
+    /// Display a Cerberus message as its JSON representation.
     ToJson {
         /// Whether to pretty-print the resulting JSON.
         #[structopt(short = "p", long)]
@@ -217,6 +219,7 @@ enum CliCommand {
         #[structopt(short = "o", long, parse(from_os_str))]
         output: Option<PathBuf>,
     },
+    /// Create a new signed manifest.
     SignManifest {
         /// PKCS#8-encoded RSA signing key to sign with.
         #[structopt(short = "k", long, parse(from_os_str))]
@@ -238,6 +241,7 @@ enum CliCommand {
         #[structopt(short = "o", long, parse(from_os_str))]
         output: Option<PathBuf>,
     },
+    /// Inspect an existing manifest.
     ShowManifest {
         /// PKCS#8-encoded RSA public key to optionally verify the signature
         #[structopt(short = "k", long, parse(from_os_str))]
