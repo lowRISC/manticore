@@ -48,6 +48,25 @@ impl From<io::Error> for Error {
     }
 }
 
+/// Manifest provenances.
+///
+/// A *provenance* is a marker type used to indicate the source of a parsed
+/// manifest, to help ensure that manifest signatures are properly checked
+/// before the manifest is used.
+///
+/// These types are only really intended to be used as type parameters.
+pub mod provenance {
+    /// The "signed" provenance, indicating a manifest that has been
+    /// appropriately verified.
+    #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+    pub enum Signed {}
+
+    /// The "ad-hoc" provenance, indicating a manifest that came from
+    /// "somewhere else", such as `serde` or manual construction.
+    #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+    pub enum Adhoc {}
+}
+
 fn take_bytes<'m>(r: &mut &'m [u8], n: usize) -> Result<&'m [u8], io::Error> {
     if r.len() < n {
         return Err(io::Error::BufferExhausted);
