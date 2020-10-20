@@ -1,0 +1,101 @@
+// Copyright lowRISC contributors.
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+
+//! Pluggable hardware functionality
+//!
+//! This module provides traits for plugging in OS calls to specialized
+//! hardware functions, such as power-on and reset-related capabilities.
+//! `manticore` uses this functionality to respond to certain protocol
+//! requests.
+
+use core::time::Duration;
+
+pub mod flash;
+
+/// Provides access to "chip identity" information of various types.
+pub trait Identity {
+    /// Returns a string indicating the RoT's firmware version.
+    ///
+    /// Although not enforced, it is recommended that this be an ASCII string.
+    fn firmware_version(&self) -> &[u8; 32];
+
+    /// Returns the "unique device identity" for the device. This is a binary
+    /// value of unspecified format.
+    fn unique_device_identity(&self) -> &[u8];
+}
+
+/// Provides access to device reset-related information for a particular
+/// device.
+pub trait Reset {
+    /// Returns the number of times the device has been reset since it was
+    /// powered on.
+    fn resets_since_power_on(&self) -> u32;
+
+    /// Returns the uptime of the device, i.e., the absolute duration since it
+    /// was last released from reset.
+    ///
+    /// The resolution and accuracy of this value are expected to be
+    /// best-effort.
+    fn uptime(&self) -> Duration;
+}
+
+#[cfg(test)]
+pub(crate) mod fake {
+    use core::convert::TryInto;
+    use core::time::Duration;
+
+    /// A fake `Identity` that returns fixed values.
+    pub struct Identity {
+        firmware_version: Vec<u8>,
+        unique_id: Vec<u8>,
+    }
+
+    impl Identity {
+        /// Creates a new `fake::Identity`.
+        pub fn new(firmware_version: &[u8], unique_id: &[u8]) -> Self {
+            let mut firmware_version = firmware_version.to_vec();
+            while firmware_version.len() < 32 {
+                firmware_version.push(0);
+            }
+            firmware_version.truncate(32);
+
+            Self {
+                firmware_version,
+                unique_id: unique_id.to_vec(),
+            }
+        }
+    }
+
+    impl super::Identity for Identity {
+        fn firmware_version(&self) -> &[u8; 32] {
+            self.firmware_version[..32].try_into().unwrap()
+        }
+        fn unique_device_identity(&self) -> &[u8] {
+            &self.unique_id[..]
+        }
+    }
+
+    /// A fake `Reset` that returns fixed values.
+    pub struct Reset {
+        resets: u32,
+        uptime: Duration,
+    }
+
+    impl Reset {
+        /// Creates a new `fake::Reset`.
+        pub fn new(resets: u32, uptime: Duration) -> Self {
+            Self { resets, uptime }
+        }
+    }
+
+    impl super::Reset for Reset {
+        fn resets_since_power_on(&self) -> u32 {
+            self.resets
+        }
+
+        fn uptime(&self) -> Duration {
+            self.uptime
+        }
+    }
+}

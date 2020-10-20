@@ -70,7 +70,7 @@ use core::mem::size_of;
 use arrayvec::ArrayVec;
 
 use crate::crypto::sha256;
-use crate::hardware::FlashSlice;
+use crate::hardware::flash::FlashSlice;
 use crate::io;
 use crate::io::Read as _;
 use crate::manifest::container::Container;
