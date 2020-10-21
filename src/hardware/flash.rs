@@ -55,8 +55,6 @@ pub enum Error {
 /// block of random-access memory. It is the implementation's responsibility
 /// to implement these operations efficiently with respect to the underlying
 /// device.
-///
-/// The `Flash` trait comes implemented for `[u8]`.
 pub trait Flash {
     /// Returns the size, in bytes, of this device.
     fn size(&self) -> Result<u32, Error>;
@@ -82,6 +80,28 @@ pub trait Flash {
     }
 }
 assert_obj_safe!(Flash);
+
+impl<F: Flash> Flash for &F {
+    #[inline]
+    fn size(&self) -> Result<u32, Error> {
+        F::size(self)
+    }
+
+    #[inline]
+    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
+        F::read(self, offset, out)
+    }
+
+    #[inline]
+    fn program(&mut self, _: Ptr, _: &[u8]) -> Result<(), Error> {
+        Err(Error::Locked)
+    }
+
+    #[inline]
+    fn flush(&mut self) -> Result<(), Error> {
+        Err(Error::Locked)
+    }
+}
 
 impl<F: Flash> Flash for &mut F {
     #[inline]
@@ -113,10 +133,8 @@ impl<F: Flash> Flash for &mut F {
 /// Normal [`Flash`] implementations can be made to support zero-copy
 /// reads by combining them with an [`Arena`]; see [`ArenaFlash`].
 ///
-/// `[u8]` implements this trait with no overhead.
-///
 /// [`Flash`]: trait.Flash.html
-/// [`ArenaFlash]: struct.ArenaFlash.html
+/// [`ArenaFlash`]: struct.ArenaFlash.html
 pub trait FlashZero: Flash {
     /// Attempts to zero-copy read the given region out of this device.
     fn read_zerocopy(&self, slice: Region) -> Result<&[u8], Error>;
@@ -133,6 +151,9 @@ pub trait FlashZero: Flash {
 }
 assert_obj_safe!(FlashZero);
 
+// NOTE: implementing for &impl FlashZero doesn't make sense, because that
+// would result in an unresettable FlashZero.
+
 impl<F: FlashZero> FlashZero for &mut F {
     #[inline]
     fn read_zerocopy(&self, slice: Region) -> Result<&[u8], Error> {
@@ -145,7 +166,104 @@ impl<F: FlashZero> FlashZero for &mut F {
     }
 }
 
-/// Shim for supporting "zero-copy" reads on a [`Flash`] via an [`Arena`].
+/// Adapter for working with a sub-region of a [`Flash`] type.
+///
+/// Reads and writes on the device will be constrained to a given [`Region`].
+/// This is especially useful for operating on a blob contained within another
+/// region of flash.
+///
+/// There is no requirement that [`Region`] actually overlap with the address
+/// space of `F`; the [`Flash`] implementation is still responsible for doing
+/// bounds checks, after offsets are bounds-checked within `Region`.
+#[derive(Copy, Clone)]
+pub struct SubFlash<F>(pub F, pub Region);
+
+impl<F: Flash> SubFlash<F> {
+    /// Creates a new `SubFlash` representing the entirety of the given device.
+    pub fn full(flash: F) -> Result<Self, Error> {
+        let region = Region::new(0, flash.size()?);
+        Ok(Self(flash, region))
+    }
+}
+
+impl<F> SubFlash<F> {
+    /// Interprets `region` as a subregion of this `SubFlash`, returning a new
+    /// `SubFlash` that represents that region.
+    pub fn reslice(self, region: Region) -> Option<Self> {
+        if region.len >= self.1.len {
+            return None;
+        }
+
+        Some(Self(
+            self.0,
+            Region::new(
+                self.1.ptr.address.checked_add(region.ptr.address)?,
+                region.len,
+            ),
+        ))
+    }
+}
+
+impl<F: Flash> Flash for SubFlash<F> {
+    #[inline]
+    fn size(&self) -> Result<u32, Error> {
+        Ok(self.1.len)
+    }
+
+    #[inline]
+    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
+        if offset.address >= self.1.len {
+            return Err(Error::OutOfRange);
+        }
+        let offset = offset
+            .address
+            .checked_add(self.1.ptr.address)
+            .ok_or(Error::OutOfRange)?;
+
+        self.0.read(Ptr::new(offset), out)
+    }
+
+    #[inline]
+    fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
+        if offset.address >= self.1.len {
+            return Err(Error::OutOfRange);
+        }
+        let offset = offset
+            .address
+            .checked_add(self.1.ptr.address)
+            .ok_or(Error::OutOfRange)?;
+
+        self.0.program(Ptr::new(offset), buf)
+    }
+
+    #[inline]
+    fn flush(&mut self) -> Result<(), Error> {
+        self.0.flush()
+    }
+}
+
+impl<F: FlashZero> FlashZero for SubFlash<F> {
+    #[inline]
+    fn read_zerocopy(&self, slice: Region) -> Result<&[u8], Error> {
+        if slice.ptr.address > self.1.len {
+            return Err(Error::OutOfRange);
+        }
+        let offset = slice
+            .ptr
+            .address
+            .checked_add(self.1.ptr.address)
+            .ok_or(Error::OutOfRange)?;
+
+        self.0.read_zerocopy(Region::new(offset, slice.len))
+    }
+
+    #[inline]
+    fn reset(&mut self) -> Result<(), Error> {
+        self.0.reset()
+    }
+}
+
+/// Adapter for supporting "zero-copy" reads on a [`Flash`] via an [`Arena`].
 ///
 /// This type wraps a [`Flash`] type, plus an [`Arena`], and implements
 /// zero-copy reads by first allocating a buffer on the arena and then
@@ -153,6 +271,7 @@ impl<F: FlashZero> FlashZero for &mut F {
 ///
 /// [`Flash`]: trait.Flash.html
 /// [`Arena`]: ../../mem/trait.Arena.html
+#[derive(Copy, Clone)]
 pub struct ArenaFlash<F, A>(pub F, pub A);
 
 impl<F: Flash, A> Flash for ArenaFlash<F, A> {
@@ -193,11 +312,115 @@ impl<F: Flash, A: Arena> FlashZero for ArenaFlash<F, A> {
     }
 }
 
+/// Adapter for converting RAM-backed storage into a [`FlashZero`].
+///
+/// For the purposes of this type, "RAM-backed" means that `AsRef<[u8]>`
+/// is implemented.
+///
+/// [`FlashZero`]: traits.Flash.html
+#[derive(Copy, Clone)]
+pub struct Ram<Bytes>(pub Bytes);
+
+impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
+    fn size(&self) -> Result<u32, Error> {
+        self.0
+            .as_ref()
+            .len()
+            .try_into()
+            .map_err(|_| Error::Unspecified)
+    }
+
+    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
+        let start = offset.address as usize;
+        let end = start.checked_add(out.len()).ok_or(Error::OutOfRange)?;
+        if end > self.0.as_ref().len() {
+            return Err(Error::OutOfRange);
+        }
+
+        out.copy_from_slice(&self.0.as_ref()[start..end]);
+        Ok(())
+    }
+
+    fn program(&mut self, _: Ptr, _: &[u8]) -> Result<(), Error> {
+        return Err(Error::Locked);
+    }
+}
+
+impl<Bytes: AsRef<[u8]>> FlashZero for Ram<Bytes> {
+    fn read_zerocopy(&self, offset: Region) -> Result<&[u8], Error> {
+        let start = offset.ptr.address as usize;
+        let end = start
+            .checked_add(offset.len as usize)
+            .ok_or(Error::OutOfRange)?;
+        if end > self.0.as_ref().len() {
+            return Err(Error::OutOfRange);
+        }
+
+        Ok(&self.0.as_ref()[start..end])
+    }
+}
+
+/// Adapter for converting mutable, RAM-backed storage into a [`FlashZero`].
+///
+/// For the purposes of this type, "RAM-backed" means that `AsRef<[u8]>`
+/// and `AsMut<[u8]>` are implemented.
+///
+/// [`FlashZero`]: traits.Flash.html
+#[derive(Copy, Clone)]
+pub struct RamMut<Bytes>(pub Bytes);
+
+impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
+    fn size(&self) -> Result<u32, Error> {
+        self.0
+            .as_ref()
+            .len()
+            .try_into()
+            .map_err(|_| Error::Unspecified)
+    }
+
+    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
+        let start = offset.address as usize;
+        let end = start.checked_add(out.len()).ok_or(Error::OutOfRange)?;
+        if end > self.0.as_ref().len() {
+            return Err(Error::OutOfRange);
+        }
+
+        out.copy_from_slice(&self.0.as_ref()[start..end]);
+        Ok(())
+    }
+
+    fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
+        let start = offset.address as usize;
+        let end = start.checked_add(buf.len()).ok_or(Error::OutOfRange)?;
+        if end > self.0.as_ref().len() {
+            return Err(Error::OutOfRange);
+        }
+
+        self.0.as_mut()[start..end].copy_from_slice(buf);
+        Ok(())
+    }
+}
+
+impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> FlashZero for RamMut<Bytes> {
+    fn read_zerocopy(&self, offset: Region) -> Result<&[u8], Error> {
+        let start = offset.ptr.address as usize;
+        let end = start
+            .checked_add(offset.len as usize)
+            .ok_or(Error::OutOfRange)?;
+        if end > self.0.as_ref().len() {
+            return Err(Error::OutOfRange);
+        }
+
+        Ok(&self.0.as_ref()[start..end])
+    }
+}
+
 /// A [`Read`]/[`Write`] implementation for operating on a [`Flash`] serially.
 ///
 /// [`Read`]: ../../io/read/trait.Read.html
 /// [`Write`]: ../../io/write/trait.Write.html
 /// [`Flash`]: trait.Flash.html
+#[derive(Copy, Clone)]
 pub struct FlashIo<F> {
     flash: F,
     cursor: u32,
@@ -296,51 +519,5 @@ impl Region {
             ptr: Ptr::new(ptr),
             len,
         }
-    }
-}
-
-/// An unspecified out-of-bounds error.
-#[derive(Copy, Clone, Debug)]
-pub struct OutOfBounds;
-
-impl Flash for [u8] {
-    fn size(&self) -> Result<u32, Error> {
-        self.len().try_into().map_err(|_| Error::Unspecified)
-    }
-
-    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
-        let start = offset.address as usize;
-        let end = start.checked_add(out.len()).ok_or(Error::OutOfRange)?;
-        if end >= self.len() {
-            return Err(Error::OutOfRange);
-        }
-
-        out.copy_from_slice(&self[start..end]);
-        Ok(())
-    }
-
-    fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
-        let start = offset.address as usize;
-        let end = start.checked_add(buf.len()).ok_or(Error::OutOfRange)?;
-        if end >= self.len() {
-            return Err(Error::OutOfRange);
-        }
-
-        self[start..end].copy_from_slice(buf);
-        Ok(())
-    }
-}
-
-impl FlashZero for [u8] {
-    fn read_zerocopy(&self, offset: Region) -> Result<&[u8], Error> {
-        let start = offset.ptr.address as usize;
-        let end = start
-            .checked_add(offset.len as usize)
-            .ok_or(Error::OutOfRange)?;
-        if end >= self.len() {
-            return Err(Error::OutOfRange);
-        }
-
-        Ok(&self[start..end])
     }
 }
