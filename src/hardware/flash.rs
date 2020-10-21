@@ -62,7 +62,7 @@ pub trait Flash {
     fn size(&self) -> Result<u32, Error>;
 
     /// Attempts to read `out.len()` bytes starting at `offset`.
-    fn read(&self, offset: FlashPtr, out: &mut [u8]) -> Result<(), Error>;
+    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error>;
 
     /// Attempts to write `out.len()` bytes starting at `offset`.
     ///
@@ -74,7 +74,7 @@ pub trait Flash {
     /// Implementations are, as an optimization, permitted to assume that
     /// writes will be serial and localized, so as to minimize clearing
     /// operations on flash hardware.
-    fn program(&mut self, offset: FlashPtr, buf: &[u8]) -> Result<(), Error>;
+    fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error>;
 
     /// Flushes any pending `program()` operations.
     fn flush(&mut self) -> Result<(), Error> {
@@ -90,12 +90,12 @@ impl<F: Flash> Flash for &mut F {
     }
 
     #[inline]
-    fn read(&self, offset: FlashPtr, out: &mut [u8]) -> Result<(), Error> {
+    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
         F::read(self, offset, out)
     }
 
     #[inline]
-    fn program(&mut self, offset: FlashPtr, buf: &[u8]) -> Result<(), Error> {
+    fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
         F::program(self, offset, buf)
     }
 
@@ -119,7 +119,7 @@ impl<F: Flash> Flash for &mut F {
 /// [`ArenaFlash]: struct.ArenaFlash.html
 pub trait FlashZero: Flash {
     /// Attempts to zero-copy read the given region out of this device.
-    fn read_zerocopy(&self, slice: FlashSlice) -> Result<&[u8], Error>;
+    fn read_zerocopy(&self, slice: Region) -> Result<&[u8], Error>;
 
     /// Hints to the implementation that it can release any buffered contents
     /// it is currently holding.
@@ -135,7 +135,7 @@ assert_obj_safe!(FlashZero);
 
 impl<F: FlashZero> FlashZero for &mut F {
     #[inline]
-    fn read_zerocopy(&self, slice: FlashSlice) -> Result<&[u8], Error> {
+    fn read_zerocopy(&self, slice: Region) -> Result<&[u8], Error> {
         F::read_zerocopy(self, slice)
     }
 
@@ -162,12 +162,12 @@ impl<F: Flash, A> Flash for ArenaFlash<F, A> {
     }
 
     #[inline]
-    fn read(&self, offset: FlashPtr, out: &mut [u8]) -> Result<(), Error> {
+    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
         self.0.read(offset, out)
     }
 
     #[inline]
-    fn program(&mut self, offset: FlashPtr, buf: &[u8]) -> Result<(), Error> {
+    fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
         self.0.program(offset, buf)
     }
 
@@ -178,7 +178,7 @@ impl<F: Flash, A> Flash for ArenaFlash<F, A> {
 }
 
 impl<F: Flash, A: Arena> FlashZero for ArenaFlash<F, A> {
-    fn read_zerocopy(&self, slice: FlashSlice) -> Result<&[u8], Error> {
+    fn read_zerocopy(&self, slice: Region) -> Result<&[u8], Error> {
         let Self(flash, arena) = self;
         let buf = arena
             .alloc(slice.len as usize)
@@ -227,7 +227,7 @@ impl<F: Flash> FlashIo<F> {
 impl<F: Flash> io::Read for FlashIo<F> {
     fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), io::Error> {
         self.flash
-            .read(FlashPtr::new(self.cursor), out)
+            .read(Ptr::new(self.cursor), out)
             .map_err(|_| io::Error::Internal)?;
         self.cursor += out.len() as u32;
         Ok(())
@@ -241,7 +241,7 @@ impl<F: Flash> io::Read for FlashIo<F> {
 impl<F: Flash> io::Write for FlashIo<F> {
     fn write_bytes(&mut self, buf: &[u8]) -> Result<(), io::Error> {
         self.flash
-            .program(FlashPtr::new(self.cursor), buf)
+            .program(Ptr::new(self.cursor), buf)
             .map_err(|_| io::Error::Internal)?;
         self.cursor += buf.len() as u32;
         Ok(())
@@ -250,50 +250,50 @@ impl<F: Flash> io::Write for FlashIo<F> {
 
 /// An abstract pointer into a [`Flash`] type.
 ///
-/// A `FlashPtr` needs to be used in conjunction with a [`Flash`]
+/// A `Ptr` needs to be used in conjunction with a [`Flash`]
 /// implementation to be read from or written to.
 ///
 /// [`Flash`]: trait.Flash.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, AsBytes, FromBytes)]
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct FlashPtr {
+pub struct Ptr {
     /// The abstract address of this pointer.
     pub address: u32,
 }
 
-impl FlashPtr {
-    /// Convenience method for creating a `FlashPtr` without having to use
+impl Ptr {
+    /// Convenience method for creating a `Ptr` without having to use
     /// a struct literal.
     pub const fn new(address: u32) -> Self {
         Self { address }
     }
 }
 
-/// An abstrace slice into a [`Flash`] type.
+/// A region within  a [`Flash`] type.
 ///
-/// Much like a [`FlashPtr`], a `FlashSlice` needs to be interpreted with
+/// Much like a [`Ptr`], a `Region` needs to be interpreted with
 /// respect to a [`Flash`] implementation.
 ///
 /// [`Flash`]: trait.Flash.html
-/// [`FlashPtr`]: trait.FlashPtr.html
+/// [`Ptr`]: struct.Ptr.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, AsBytes, FromBytes)]
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct FlashSlice {
+pub struct Region {
     /// The base pointer for this slice.
     #[cfg_attr(feature = "serde", serde(flatten))]
-    pub ptr: FlashPtr,
+    pub ptr: Ptr,
     /// The length of the slice, in bytes.
     pub len: u32,
 }
 
-impl FlashSlice {
-    /// Convenience method for creating a `FlashSlice` without having to use
-    /// a struct literal
+impl Region {
+    /// Convenience method for creating a `Region` without having to use
+    /// a struct literal.
     pub const fn new(ptr: u32, len: u32) -> Self {
         Self {
-            ptr: FlashPtr::new(ptr),
+            ptr: Ptr::new(ptr),
             len,
         }
     }
@@ -308,7 +308,7 @@ impl Flash for [u8] {
         self.len().try_into().map_err(|_| Error::Unspecified)
     }
 
-    fn read(&self, offset: FlashPtr, out: &mut [u8]) -> Result<(), Error> {
+    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
         let start = offset.address as usize;
         let end = start.checked_add(out.len()).ok_or(Error::OutOfRange)?;
         if end >= self.len() {
@@ -319,7 +319,7 @@ impl Flash for [u8] {
         Ok(())
     }
 
-    fn program(&mut self, offset: FlashPtr, buf: &[u8]) -> Result<(), Error> {
+    fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
         let start = offset.address as usize;
         let end = start.checked_add(buf.len()).ok_or(Error::OutOfRange)?;
         if end >= self.len() {
@@ -332,7 +332,7 @@ impl Flash for [u8] {
 }
 
 impl FlashZero for [u8] {
-    fn read_zerocopy(&self, offset: FlashSlice) -> Result<&[u8], Error> {
+    fn read_zerocopy(&self, offset: Region) -> Result<&[u8], Error> {
         let start = offset.ptr.address as usize;
         let end = start
             .checked_add(offset.len as usize)
