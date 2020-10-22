@@ -30,7 +30,7 @@
 //!     /// The manifest-specific body.
 //!     body: [u8; self.len - HEADER_LEN - self.sig_len],
 //!     /// The cryptographic signature, an RSA signature in PKCS 1.5
-//!     /// format.
+//!     /// format. This is a signature of the hash of the above fields.
 //!     signature: [u8; self.sig_len],
 //! }
 //! ```
@@ -42,6 +42,7 @@
 use core::marker::PhantomData;
 
 use crate::crypto::rsa;
+use crate::crypto::sha256;
 use crate::io;
 use crate::io::cursor::SeekPos;
 use crate::io::Cursor;
@@ -94,20 +95,24 @@ const SIG_LEN_OFFSET: usize = 8;
 const HEADER_LEN: usize = 2 + 2 + 4 + 2 + 2;
 
 impl<'m> Container<'m, provenance::Signed> {
-    /// Parses and verifies a `Container` using the provided [`rsa::Engine`].
+    /// Parses and verifies a `Container` using the provided cryptographic
+    /// primitives.
     ///
     /// This is the only function capable of prodiucing a container with the
     /// `Signed` provenance.
     ///
     /// `buf` must be aligned to a four-byte boundary.
-    ///
-    /// [`rsa::Engine`]: ../../crypto/rsa/trait.Engine.html
-    pub fn parse_and_verify<Rsa: rsa::Engine>(
+    pub fn parse_and_verify(
         buf: &'m [u8],
-        rsa: &mut Rsa,
+        sha: &impl sha256::Builder,
+        rsa: &mut impl rsa::Engine,
     ) -> Result<Self, Error> {
         let (c, sig, signed) = Self::parse_inner(buf)?;
-        rsa.verify_signature(sig, signed)
+        let mut digest = [0; 32];
+        sha.hash_contiguous(signed, &mut digest)
+            .map_err(|_| Error::SignatureFailure)?;
+
+        rsa.verify_signature(sig, &digest)
             .map_err(|_| Error::SignatureFailure)?;
         Ok(c)
     }
@@ -225,6 +230,7 @@ impl<'m, Provenance> Container<'m, Provenance> {
     /// [`Containerizer`]: struct.Containerizer.html
     pub fn containerize<'buf>(
         &self,
+        sha: &impl sha256::Builder,
         signer: &mut impl rsa::Signer,
         buf: &'buf mut [u8],
     ) -> Result<&'buf mut [u8], Error> {
@@ -232,7 +238,7 @@ impl<'m, Provenance> Container<'m, Provenance> {
             .with_type(self.manifest_type())?
             .with_metadata(self.metadata())?;
         builder.write_bytes(self.body())?;
-        builder.sign(signer)
+        builder.sign(sha, signer)
     }
 }
 
@@ -326,6 +332,7 @@ impl<'m> Containerizer<'m> {
     /// [`Container`]: struct.Container.html
     pub fn sign(
         mut self,
+        sha: &impl sha256::Builder,
         signer: &mut impl rsa::Signer,
     ) -> Result<&'m mut [u8], Error> {
         if !self.has_type || !self.has_metadata {
@@ -354,8 +361,11 @@ impl<'m> Containerizer<'m> {
         self.cursor.seek(SeekPos::Abs(mark))?;
 
         let (message, sig) = self.cursor.consume_with_prior(sig_len)?;
+        let mut digest = [0; 32];
+        sha.hash_contiguous(message, &mut digest)
+            .map_err(|_| Error::SignatureFailure)?;
         signer
-            .sign(message, sig)
+            .sign(&digest, sig)
             .map_err(|_| Error::SignatureFailure)?;
         Ok(self.cursor.take_consumed_bytes())
     }
@@ -378,6 +388,7 @@ pub(crate) mod test {
     use crate::crypto::rsa::Keypair as _;
     use crate::crypto::rsa::Signer as _;
     use crate::crypto::rsa::SignerBuilder as _;
+    use crate::crypto::sha256::Builder as _;
     use crate::crypto::testdata;
 
     const MANIFEST_HEADER: &[u8] = &[
@@ -408,48 +419,60 @@ pub(crate) mod test {
 
     #[test]
     fn parse_manifest() {
+        let sha = ring::sha256::Builder::new();
         let (mut rsa, mut signer) = make_rsa_engine();
 
         let mut manifest = MANIFEST_HEADER.to_vec();
         manifest.extend_from_slice(MANIFEST_CONTENTS);
 
+        let mut digest = [0; 32];
+        sha.hash_contiguous(&manifest, &mut digest).unwrap();
+
         let mut sig = vec![0; signer.pub_len().byte_len()];
-        signer.sign(&manifest, &mut sig).unwrap();
+        signer.sign(&digest, &mut sig).unwrap();
         manifest.extend_from_slice(&sig);
 
         assert_eq!(manifest.len(), MANIFEST_LEN);
 
         let manifest =
-            Container::parse_and_verify(&manifest, &mut rsa).unwrap();
+            Container::parse_and_verify(&manifest, &sha, &mut rsa).unwrap();
         assert_eq!(manifest.manifest_type(), ManifestType::Fpm);
         assert_eq!(manifest.body(), MANIFEST_CONTENTS);
     }
 
     #[test]
     fn parse_manifest_too_short() {
+        let sha = ring::sha256::Builder::new();
         let (mut rsa, mut signer) = make_rsa_engine();
 
         let mut manifest = MANIFEST_HEADER.to_vec();
         manifest.extend_from_slice(&MANIFEST_CONTENTS[1..]);
 
+        let mut digest = [0; 32];
+        sha.hash_contiguous(&manifest, &mut digest).unwrap();
+
         let mut sig = vec![0; signer.pub_len().byte_len()];
-        signer.sign(&manifest, &mut sig).unwrap();
+        signer.sign(&digest, &mut sig).unwrap();
         manifest.extend_from_slice(&sig);
 
         assert_eq!(manifest.len(), MANIFEST_LEN - 1);
 
-        assert!(Container::parse_and_verify(&manifest, &mut rsa).is_err());
+        assert!(Container::parse_and_verify(&manifest, &sha, &mut rsa).is_err());
     }
 
     #[test]
     fn parse_manifest_bad_sig() {
+        let sha = ring::sha256::Builder::new();
         let (mut rsa, mut signer) = make_rsa_engine();
 
         let mut manifest = MANIFEST_HEADER.to_vec();
         manifest.extend_from_slice(MANIFEST_CONTENTS);
 
+        let mut digest = [0; 32];
+        sha.hash_contiguous(&manifest, &mut digest).unwrap();
+
         let mut sig = vec![0; signer.pub_len().byte_len()];
-        signer.sign(&manifest, &mut sig).unwrap();
+        signer.sign(&digest, &mut sig).unwrap();
         // Flip a bit in the signature.
         sig[0] ^= 1;
         manifest.extend_from_slice(&sig);
@@ -457,13 +480,14 @@ pub(crate) mod test {
         assert_eq!(manifest.len(), MANIFEST_LEN);
 
         assert!(matches!(
-            Container::parse_and_verify(&manifest, &mut rsa),
+            Container::parse_and_verify(&manifest, &sha, &mut rsa),
             Err(Error::SignatureFailure)
         ));
     }
 
     #[test]
     fn build_manifest() {
+        let sha = ring::sha256::Builder::new();
         let keypair =
             ring::rsa::Keypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
                 .unwrap();
@@ -482,21 +506,23 @@ pub(crate) mod test {
             })
             .unwrap();
         builder.write_bytes(MANIFEST_CONTENTS).unwrap();
-        let manifest_bytes = builder.sign(&mut signer).unwrap();
+        let manifest_bytes = builder.sign(&sha, &mut signer).unwrap();
         assert_eq!(
             &manifest_bytes[..HEADER_LEN],
             &MANIFEST_HEADER[..HEADER_LEN]
         );
 
         let manifest =
-            Container::parse_and_verify(manifest_bytes, &mut rsa).unwrap();
+            Container::parse_and_verify(manifest_bytes, &sha, &mut rsa)
+                .unwrap();
         assert_eq!(manifest.manifest_type(), ManifestType::Fpm);
         assert_eq!(manifest.metadata().version_id, 0x155aa);
         assert_eq!(manifest.body(), MANIFEST_CONTENTS);
     }
 
     #[test]
-    fn roumd_trip() {
+    fn round_trip() {
+        let sha = ring::sha256::Builder::new();
         let keypair =
             ring::rsa::Keypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
                 .unwrap();
@@ -508,18 +534,22 @@ pub(crate) mod test {
         let mut manifest = MANIFEST_HEADER.to_vec();
         manifest.extend_from_slice(MANIFEST_CONTENTS);
 
+        let mut digest = [0; 32];
+        sha.hash_contiguous(&manifest, &mut digest).unwrap();
+
         let mut sig = vec![0; signer.pub_len().byte_len()];
-        signer.sign(&manifest, &mut sig).unwrap();
+        signer.sign(&digest, &mut sig).unwrap();
 
         manifest.extend_from_slice(&sig);
         assert_eq!(manifest.len(), MANIFEST_LEN);
 
         let parsed_manifest =
-            Container::parse_and_verify(&manifest, &mut rsa).unwrap();
+            Container::parse_and_verify(&manifest, &sha, &mut rsa).unwrap();
 
         let mut buf = vec![0; 512];
-        let new_manifest_bytes =
-            parsed_manifest.containerize(&mut signer, &mut buf).unwrap();
+        let new_manifest_bytes = parsed_manifest
+            .containerize(&sha, &mut signer, &mut buf)
+            .unwrap();
         // Note that this assumes that the padding bytes are always 0xffff.
         assert_eq!(&manifest[..], new_manifest_bytes);
     }

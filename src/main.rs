@@ -295,6 +295,7 @@ fn main() {
             let mut signer = ring::rsa::Builder::new()
                 .new_signer(keypair)
                 .expect("failed to create signing engine");
+            let sha = ring::sha256::Builder::new();
 
             let mut manifest_buf = vec![0; 0x2000];
             let mut container = Containerizer::new(&mut manifest_buf)
@@ -320,7 +321,7 @@ fn main() {
             }
 
             let manifest = container
-                .sign(&mut signer)
+                .sign(&sha, &mut signer)
                 .expect("failed to sign manifest");
             output
                 .write_all(manifest)
@@ -342,12 +343,14 @@ fn main() {
                     .new_engine(keypair.public())
                     .expect("failed to create signature verification engine")
             });
+            let sha = ring::sha256::Builder::new();
+
             let mut buf = Vec::new();
             input.read_to_end(&mut buf).expect("failed to read file");
 
             let container = match engine {
                 Some(mut engine) => {
-                    match Container::parse_and_verify(&buf, &mut engine) {
+                    match Container::parse_and_verify(&buf, &sha, &mut engine) {
                         Ok(c) => c,
                         Err(manifest::Error::SignatureFailure) => {
                             panic!("failed to verify signature")

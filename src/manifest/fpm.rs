@@ -312,6 +312,7 @@ impl<'m, Provenance> Fpm<'m, Provenance> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::crypto::ring;
     use crate::manifest::container::test::make_rsa_engine;
     use crate::manifest::container::Container;
     use crate::manifest::container::Containerizer;
@@ -350,10 +351,13 @@ mod test {
             .with_metadata(&Metadata { version_id: 0x1 })
             .unwrap();
         fpm.unparse(&mut builder).unwrap();
-        let manifest_bytes = builder.sign(&mut signer).unwrap();
+
+        let sha = ring::sha256::Builder::new();
+        let manifest_bytes = builder.sign(&sha, &mut signer).unwrap();
 
         let manifest =
-            Container::parse_and_verify(manifest_bytes, &mut rsa).unwrap();
+            Container::parse_and_verify(manifest_bytes, &sha, &mut rsa)
+                .unwrap();
         let fpm2 = Fpm::parse(manifest).unwrap();
         assert_eq!(fpm, fpm2);
 
@@ -364,11 +368,12 @@ mod test {
             .with_metadata(&Metadata { version_id: 0x1 })
             .unwrap();
         fpm2.unparse(&mut builder).unwrap();
-        let manifest_bytes2 = builder.sign(&mut signer).unwrap();
+        let manifest_bytes2 = builder.sign(&sha, &mut signer).unwrap();
         assert_eq!(manifest_bytes, manifest_bytes2);
 
         let manifest =
-            Container::parse_and_verify(manifest_bytes2, &mut rsa).unwrap();
+            Container::parse_and_verify(manifest_bytes2, &sha, &mut rsa)
+                .unwrap();
         let fpm3 = Fpm::parse(manifest).unwrap();
         assert_eq!(fpm, fpm3);
     }
