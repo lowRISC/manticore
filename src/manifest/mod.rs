@@ -8,6 +8,7 @@
 //! configuration of a system it protects, and to describe policies on what
 //! firmware can run on those systems.
 
+use crate::hardware::flash;
 use crate::io;
 
 pub mod container;
@@ -33,6 +34,10 @@ pub enum Error {
     ///
     /// [`io`]: ../io/index.html
     Io(io::Error),
+    /// Indicates that an error occured in a [`flash`] type.
+    ///
+    /// [`flash`]: ../hardware/flash/html
+    Flash(flash::Error),
     /// Indicates that a value was out of its expected range.
     OutOfRange,
     /// Indicates that some assumption about a manifest's alignment (internal
@@ -45,6 +50,12 @@ pub enum Error {
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
+    }
+}
+
+impl From<flash::Error> for Error {
+    fn from(e: flash::Error) -> Self {
+        Self::Flash(e)
     }
 }
 
