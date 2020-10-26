@@ -43,6 +43,12 @@ use core::marker::PhantomData;
 
 use crate::crypto::rsa;
 use crate::crypto::sha256;
+use crate::crypto::sha256::Hasher as _;
+use crate::hardware::flash::Flash;
+use crate::hardware::flash::FlashIo;
+use crate::hardware::flash::FlashZero;
+use crate::hardware::flash::Region;
+use crate::hardware::flash::SubFlash;
 use crate::io;
 use crate::io::cursor::SeekPos;
 use crate::io::Cursor;
@@ -77,10 +83,11 @@ pub struct Metadata {
 /// not possible to parse a `Container` without also verifying it.
 ///
 /// See the [module documentation](index.html) for more information.
-pub struct Container<'m, Provenance = provenance::Signed> {
+pub struct Container<F, Provenance = provenance::Signed> {
     manifest_type: ManifestType,
     metadata: Metadata,
-    body: &'m [u8],
+    flash: F,
+    body: Region,
     _ph: PhantomData<Provenance>,
 }
 
@@ -94,7 +101,7 @@ const SIG_LEN_OFFSET: usize = 8;
 /// two halves, a word, another half, and two bytes of padding.
 const HEADER_LEN: usize = 2 + 2 + 4 + 2 + 2;
 
-impl<'m> Container<'m, provenance::Signed> {
+impl<F: FlashZero> Container<F, provenance::Signed> {
     /// Parses and verifies a `Container` using the provided cryptographic
     /// primitives.
     ///
@@ -103,44 +110,61 @@ impl<'m> Container<'m, provenance::Signed> {
     ///
     /// `buf` must be aligned to a four-byte boundary.
     pub fn parse_and_verify(
-        buf: &'m [u8],
+        flash: F,
         sha: &impl sha256::Builder,
         rsa: &mut impl rsa::Engine,
     ) -> Result<Self, Error> {
-        let (c, sig, signed) = Self::parse_inner(buf)?;
+        let (mut c, sig, signed) = Self::parse_inner(flash)?;
+
+        let mut bytes = [0u8; 16];
+        let mut r = FlashIo::new(SubFlash(&mut c.flash, signed))?;
+
+        let mut hasher =
+            sha.new_hasher().map_err(|_| Error::SignatureFailure)?;
+        while r.remaining_data() > 0 {
+            let to_read = r.remaining_data().min(16);
+            r.read_bytes(&mut bytes[..to_read])?;
+            hasher
+                .write(&bytes[..to_read])
+                .map_err(|_| Error::SignatureFailure)?;
+        }
+
         let mut digest = [0; 32];
-        sha.hash_contiguous(signed, &mut digest)
+        hasher
+            .finish(&mut digest)
             .map_err(|_| Error::SignatureFailure)?;
 
+        let sig = c.flash.read_zerocopy(sig)?;
         rsa.verify_signature(sig, &digest)
             .map_err(|_| Error::SignatureFailure)?;
+        c.flash.reset()?;
+
         Ok(c)
     }
 }
 
-impl<'m> Container<'m, provenance::Adhoc> {
+impl<F: Flash> Container<F, provenance::Adhoc> {
     /// Parses a `Container` without verifying the signature.
     ///
     /// The value returned by this function cannot be used for trusted
     /// operations. See [`parse_and_verify()`].
     ///
-    /// `buf` must be aligned to a four-byte boundary.
-    ///
     /// [`parse_and_verify()`]: struct.Container.html#method.parse_and_verify
-    pub fn parse(buf: &'m [u8]) -> Result<Self, Error> {
-        let (c, _, _) = Self::parse_inner(buf)?;
+    pub fn parse(flash: F) -> Result<Self, Error> {
+        let (c, _, _) = Self::parse_inner(flash)?;
         Ok(c)
     }
 }
 
-impl<'m, Provenance> Container<'m, Provenance> {
-    /// Downgrades this `Container`'s provenance to `Adhoc` forgetting that
+impl<F: Flash, Provenance> Container<F, Provenance> {
+    /// Downgrades this `Container`'s provenance to `Adhoc`, forgetting that
     /// this container might have had a valid signature.
     #[inline(always)]
-    pub fn downgrade(self) -> Container<'m, provenance::Adhoc> {
+    pub fn downgrade(self) -> Container<F, provenance::Adhoc> {
         Container {
             manifest_type: self.manifest_type,
             metadata: self.metadata,
+            flash: self.flash,
             body: self.body,
             _ph: PhantomData,
         }
@@ -149,16 +173,14 @@ impl<'m, Provenance> Container<'m, Provenance> {
     /// Performs a parse without verifying the signature, returning the
     /// the necessary arguments to pass to `verify_signature()`. if that were
     /// necessary.
-    fn parse_inner(buf: &'m [u8]) -> Result<(Self, &'m [u8], &'m [u8]), Error> {
-        if buf.as_ptr().align_offset(4) != 0 {
-            return Err(Error::Unaligned);
-        }
+    fn parse_inner(mut flash: F) -> Result<(Self, Region, Region), Error> {
+        let flash_len = flash.size()? as usize;
 
-        if HEADER_LEN > buf.len() {
+        if HEADER_LEN > flash_len as usize {
             return Err(Error::OutOfRange);
         }
 
-        let mut r = buf; // Use io::Read.
+        let mut r = FlashIo::new(&mut flash)?;
         let len = r.read_le::<u16>()? as usize;
         let magic = r.read_le::<u16>()?;
         let id = r.read_le::<u32>()?;
@@ -166,25 +188,28 @@ impl<'m, Provenance> Container<'m, Provenance> {
 
         // This length check, combined with the checked arithmetic below,
         // ensures that none of the slice index operations can panic.
-        if len > buf.len() {
+        if len > flash_len {
             return Err(Error::OutOfRange);
         }
-        // Note that, because `HEADER_LEN` is a multiple of 4, the resulting
-        // slice is 4-byte aligned (that is, the two bytes of padding get
-        // sliced off in this operation).
-        let rest = &buf[..len][HEADER_LEN..];
 
+        let rest_len = len.checked_sub(HEADER_LEN).ok_or(Error::OutOfRange)?;
+
+        let body_offset = HEADER_LEN;
         let body_len =
-            rest.len().checked_sub(sig_len).ok_or(Error::OutOfRange)?;
-        let (body, sig) = rest.split_at(body_len);
+            rest_len.checked_sub(sig_len).ok_or(Error::OutOfRange)?;
+        let body = Region::new(body_offset as u32, body_len as u32);
 
-        let signed_len = len.checked_sub(sig_len).ok_or(Error::OutOfRange)?;
-        let signed = &buf[..signed_len];
+        let sig_offset = len.checked_sub(sig_len).ok_or(Error::OutOfRange)?;
+        let sig = Region::new(sig_offset as u32, sig_len as u32);
+
+        let signed_len = sig_offset;
+        let signed = Region::new(0, signed_len as u32);
 
         let container = Self {
             manifest_type: ManifestType::from_wire_value(magic)
                 .ok_or(Error::OutOfRange)?,
             metadata: Metadata { version_id: id },
+            flash,
             body,
             _ph: PhantomData,
         };
@@ -208,16 +233,26 @@ impl<'m, Provenance> Container<'m, Provenance> {
             && self.metadata.version_id >= other.metadata.version_id
     }
 
-    /// Returns this container's [`Metadata`] value.
+    /// Returns this `Container`'s [`Metadata`] value.
     ///
     /// [`Metadata`]: struct.Metadata.html
     pub fn metadata(&self) -> &Metadata {
         &self.metadata
     }
 
-    /// Returns the authenticated body of the `Container`.
-    pub fn body(&self) -> &'m [u8] {
+    /// Returns the authenticated body of this `Container`.
+    pub fn body(&self) -> Region {
         self.body
+    }
+
+    /// Returns a reference to the backing storage for this `Container`.
+    pub fn flash(&self) -> &F {
+        &self.flash
+    }
+
+    /// Returns a mutable reference to the backing storage for this `Container`.
+    pub fn flash_mut(&mut self) -> &mut F {
+        &mut self.flash
     }
 
     /// Re-serializes this `Container` into its binary format.
@@ -237,7 +272,15 @@ impl<'m, Provenance> Container<'m, Provenance> {
         let mut builder = Containerizer::new(buf)?
             .with_type(self.manifest_type())?
             .with_metadata(self.metadata())?;
-        builder.write_bytes(self.body())?;
+
+        let mut bytes = [0u8; 16];
+        let mut r = FlashIo::new(SubFlash(&self.flash, self.body))?;
+        while r.remaining_data() > 0 {
+            let to_read = r.remaining_data().min(16);
+            r.read_bytes(&mut bytes[..to_read])?;
+            builder.write_bytes(&bytes[..to_read])?;
+        }
+
         builder.sign(sha, signer)
     }
 }
@@ -390,6 +433,7 @@ pub(crate) mod test {
     use crate::crypto::rsa::SignerBuilder as _;
     use crate::crypto::sha256::Builder as _;
     use crate::crypto::testdata;
+    use crate::hardware::flash::Ram;
 
     const MANIFEST_HEADER: &[u8] = &[
         0x1f, 0x01, // Total length. This is the header length (12) +
@@ -435,9 +479,13 @@ pub(crate) mod test {
         assert_eq!(manifest.len(), MANIFEST_LEN);
 
         let manifest =
-            Container::parse_and_verify(&manifest, &sha, &mut rsa).unwrap();
+            Container::parse_and_verify(Ram(&manifest), &sha, &mut rsa)
+                .unwrap();
         assert_eq!(manifest.manifest_type(), ManifestType::Fpm);
-        assert_eq!(manifest.body(), MANIFEST_CONTENTS);
+        assert_eq!(
+            manifest.flash().read_zerocopy(manifest.body()).unwrap(),
+            MANIFEST_CONTENTS
+        );
     }
 
     #[test]
@@ -457,7 +505,8 @@ pub(crate) mod test {
 
         assert_eq!(manifest.len(), MANIFEST_LEN - 1);
 
-        assert!(Container::parse_and_verify(&manifest, &sha, &mut rsa).is_err());
+        assert!(Container::parse_and_verify(Ram(&manifest), &sha, &mut rsa)
+            .is_err());
     }
 
     #[test]
@@ -480,7 +529,7 @@ pub(crate) mod test {
         assert_eq!(manifest.len(), MANIFEST_LEN);
 
         assert!(matches!(
-            Container::parse_and_verify(&manifest, &sha, &mut rsa),
+            Container::parse_and_verify(Ram(&manifest), &sha, &mut rsa),
             Err(Error::SignatureFailure)
         ));
     }
@@ -513,11 +562,14 @@ pub(crate) mod test {
         );
 
         let manifest =
-            Container::parse_and_verify(manifest_bytes, &sha, &mut rsa)
+            Container::parse_and_verify(Ram(manifest_bytes), &sha, &mut rsa)
                 .unwrap();
         assert_eq!(manifest.manifest_type(), ManifestType::Fpm);
         assert_eq!(manifest.metadata().version_id, 0x155aa);
-        assert_eq!(manifest.body(), MANIFEST_CONTENTS);
+        assert_eq!(
+            manifest.flash().read_zerocopy(manifest.body()).unwrap(),
+            MANIFEST_CONTENTS
+        );
     }
 
     #[test]
@@ -544,7 +596,8 @@ pub(crate) mod test {
         assert_eq!(manifest.len(), MANIFEST_LEN);
 
         let parsed_manifest =
-            Container::parse_and_verify(&manifest, &sha, &mut rsa).unwrap();
+            Container::parse_and_verify(Ram(&manifest), &sha, &mut rsa)
+                .unwrap();
 
         let mut buf = vec![0; 512];
         let new_manifest_bytes = parsed_manifest

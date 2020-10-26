@@ -14,6 +14,7 @@ use manticore::crypto::ring;
 use manticore::crypto::rsa::Builder as _;
 use manticore::crypto::rsa::Keypair as _;
 use manticore::crypto::rsa::SignerBuilder as _;
+use manticore::hardware::flash::Ram;
 use manticore::io::write::StdWrite;
 use manticore::manifest;
 use manticore::manifest::container::Container;
@@ -349,23 +350,25 @@ fn main() {
             input.read_to_end(&mut buf).expect("failed to read file");
 
             let container = match engine {
-                Some(mut engine) => {
-                    match Container::parse_and_verify(&buf, &sha, &mut engine) {
-                        Ok(c) => c,
-                        Err(manifest::Error::SignatureFailure) => {
-                            panic!("failed to verify signature")
-                        }
-                        Err(_) => panic!("failed to parse manifest container"),
+                Some(mut engine) => match Container::parse_and_verify(
+                    Ram(&buf),
+                    &sha,
+                    &mut engine,
+                ) {
+                    Ok(c) => c,
+                    Err(manifest::Error::SignatureFailure) => {
+                        panic!("failed to verify signature")
                     }
-                    .downgrade()
+                    Err(_) => panic!("failed to parse manifest container"),
                 }
-                None => Container::parse(&buf)
+                .downgrade(),
+                None => Container::parse(Ram(&buf))
                     .expect("failed to parse manifest container"),
             };
 
             match container.manifest_type() {
                 ManifestType::Fpm => {
-                    let fpm = Fpm::parse(container)
+                    let fpm = Fpm::parse(&container)
                         .expect("failed to parse manifest");
                     if pretty {
                         serde_json::to_writer_pretty(output, &fpm)

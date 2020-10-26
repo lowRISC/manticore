@@ -70,7 +70,8 @@ use core::mem::size_of;
 use arrayvec::ArrayVec;
 
 use crate::crypto::sha256;
-use crate::hardware::flash;
+use crate::hardware::flash::FlashZero;
+use crate::hardware::flash::Region;
 use crate::io;
 use crate::io::Read as _;
 use crate::manifest::container::Container;
@@ -166,7 +167,7 @@ pub struct FwVersion<'m> {
     /// would be stored. To check that this is the firmware version loaded into
     /// the storage device, the value at this address should be compared with
     /// `version_id`.
-    pub version_region: flash::Region,
+    pub version_region: Region,
     /// This firmware's version string.
     #[cfg_attr(
         all(feature = "inject-alloc", feature = "serde"),
@@ -176,9 +177,9 @@ pub struct FwVersion<'m> {
 
     /// The "signed" region, represented as a list of slices in a storage
     /// device.
-    pub signed_region: Cow<'m, [flash::Region]>,
+    pub signed_region: Cow<'m, [Region]>,
     /// The "write" region, represented as a list of slices in a storage device.
-    pub write_region: Cow<'m, [flash::Region]>,
+    pub write_region: Cow<'m, [Region]>,
     /// The "unused region blank byte". Every byte in the unused region is
     /// expected to have this value.
     pub blank_byte: u8,
@@ -194,8 +195,12 @@ pub struct FwVersion<'m> {
 
 impl<'m, Provenance> Fpm<'m, Provenance> {
     /// Parse an `Fpm` out of a parsed and verified `Manifest`.
-    pub fn parse(container: Container<'m, Provenance>) -> Result<Self, Error> {
-        let mut body = container.body();
+    pub fn parse(
+        container: &'m Container<impl FlashZero, Provenance>,
+    ) -> Result<Self, Error> {
+        // FIXME(mcyoung): don't read the entire buffer at once.
+        let mut body = container.flash().read_zerocopy(container.body())?;
+
         let mut fpm = Self {
             versions: ArrayVec::new(),
             _ph: PhantomData,
@@ -227,7 +232,7 @@ impl<'m, Provenance> Fpm<'m, Provenance> {
 
             fpm.versions
                 .try_push(FwVersion {
-                    version_region: flash::Region::new(
+                    version_region: Region::new(
                         version_addr,
                         version_len as u32,
                     ),
@@ -313,6 +318,7 @@ impl<'m, Provenance> Fpm<'m, Provenance> {
 mod test {
     use super::*;
     use crate::crypto::ring;
+    use crate::hardware::flash::Ram;
     use crate::manifest::container::test::make_rsa_engine;
     use crate::manifest::container::Container;
     use crate::manifest::container::Containerizer;
@@ -331,13 +337,13 @@ mod test {
         // NOTE: writing this as a constant forces const-promotion of the
         // slice definitions inside.
         const VERSION: FwVersion = FwVersion {
-            version_region: flash::Region::new(0x22, 5),
+            version_region: Region::new(0x22, 5),
             version: Cow::Borrowed(&[1, 2, 3, 4, 5]),
             signed_region: Cow::Borrowed(&[
-                flash::Region::new(0x0, 256),
-                flash::Region::new(0x200, 55),
+                Region::new(0x0, 256),
+                Region::new(0x200, 55),
             ]),
-            write_region: Cow::Borrowed(&[flash::Region::new(0x400, 100)]),
+            write_region: Cow::Borrowed(&[Region::new(0x400, 100)]),
             blank_byte: 0xee,
             signed_region_hash: Cow::Borrowed(&[0xa5; 32]),
         };
@@ -353,12 +359,12 @@ mod test {
         fpm.unparse(&mut builder).unwrap();
 
         let sha = ring::sha256::Builder::new();
-        let manifest_bytes = builder.sign(&sha, &mut signer).unwrap();
+        let manifest_bytes = &*builder.sign(&sha, &mut signer).unwrap();
 
         let manifest =
-            Container::parse_and_verify(manifest_bytes, &sha, &mut rsa)
+            Container::parse_and_verify(Ram(manifest_bytes), &sha, &mut rsa)
                 .unwrap();
-        let fpm2 = Fpm::parse(manifest).unwrap();
+        let fpm2 = Fpm::parse(&manifest).unwrap();
         assert_eq!(fpm, fpm2);
 
         let mut builder = Containerizer::new(&mut buf2)
@@ -372,9 +378,16 @@ mod test {
         assert_eq!(manifest_bytes, manifest_bytes2);
 
         let manifest =
-            Container::parse_and_verify(manifest_bytes2, &sha, &mut rsa)
+            Container::parse_and_verify(Ram(manifest_bytes2), &sha, &mut rsa)
                 .unwrap();
-        let fpm3 = Fpm::parse(manifest).unwrap();
+        let fpm3 = Fpm::parse(&manifest).unwrap();
         assert_eq!(fpm, fpm3);
+
+        // NOTE: this re-orders the drop order for this function so that each
+        // manifest_bytes variable is dropped after all FPMs are dropped.
+        //
+        // This is required to appease the borrow checker.
+        drop(fpm);
+        drop(fpm2);
     }
 }
