@@ -9,3 +9,21 @@ mod arena;
 pub use arena::*;
 
 pub mod cow;
+
+/// Aligns the given address to the alignment for the given type.
+///
+/// `align` must be a power of two; otherwise, the returned value
+/// will be well-defined but unspecified.
+///
+/// This function will always return a value greater than or equal to `addr`.
+/// This invariant is always maintained, even if it would cause an unaligned
+/// value to be returned.
+#[inline]
+pub(in crate) fn align_to(addr: usize, align: usize) -> usize {
+    let mask = align.wrapping_sub(1);
+    let (addr, overflow) = addr.overflowing_add(mask);
+    if overflow {
+        return usize::MAX;
+    }
+    addr & !mask
+}

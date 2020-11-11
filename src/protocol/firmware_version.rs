@@ -12,6 +12,7 @@ use core::convert::TryInto as _;
 use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
+use crate::mem::ArenaExt as _;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
@@ -114,10 +115,7 @@ impl<'a> FromWire<'a> for FirmwareVersionResponse<'a> {
         mut r: R,
         arena: &'a A,
     ) -> Result<Self, FromWireError> {
-        let version: &mut [u8; 32] = arena
-            .alloc(32)?
-            .try_into()
-            .map_err(|_| FromWireError::OutOfRange)?;
+        let version: &mut [u8; 32] = arena.alloc::<[u8; 32]>()?;
         r.read_bytes(version)?;
         Ok(Self { version })
     }
