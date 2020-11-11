@@ -10,6 +10,7 @@
 use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
+use crate::mem::ArenaExt as _;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
@@ -106,7 +107,7 @@ impl<'a> FromWire<'a> for DeviceInfoResponse<'a> {
         arena: &'a A,
     ) -> Result<Self, FromWireError> {
         let len = r.remaining_data();
-        let buf = arena.alloc(len)?;
+        let buf = arena.alloc_slice::<u8>(len)?;
         r.read_bytes(buf)?;
         Ok(Self { info: buf })
     }

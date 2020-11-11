@@ -8,13 +8,22 @@
 
 use core::cell::Cell;
 use core::marker::PhantomData;
+use core::mem;
 use core::ptr::NonNull;
 use core::slice;
 
 use static_assertions::assert_obj_safe;
 
+use zerocopy::AsBytes;
+use zerocopy::FromBytes;
+use zerocopy::LayoutVerified;
+
+use crate::mem::align_to;
+use crate::mem::stride_of;
+
 /// An error indicating that an [`Arena`] has run out of allocatable
-/// memory.
+/// memory or that memory that is more aligned than is supported
+/// was requested.
 ///
 /// [`Arena`]: trait.Arena.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -29,9 +38,18 @@ pub struct OutOfMemory;
 /// See [`BumpArena`] for an illustration of how the borrow checker is used to
 /// do this safely.
 ///
+/// # Safety
+///
+/// `alloc_aligned()` is required to return memory with certain size and
+/// alignment guarantees. While it itself is a safe function, unsafe code
+/// is permitted to rely on these guarantees.
+///
 /// [`BumpArena`]: struct.BumpArena.html
-pub trait Arena {
-    /// Allocate `len` bytes of memory from this arena.
+pub unsafe trait Arena {
+    /// Allocates `len` bytes of `align`-aligned memory from this arena.
+    ///
+    /// This is a low-level function: prefer instead to use the helpers defined
+    /// in [`ArenaExt`].
     ///
     /// This function may be called multiple times, and the returned slices
     /// will be disjoint.
@@ -41,20 +59,30 @@ pub trait Arena {
     /// As such, "poisoned bits", such as the padding bits of Rust structs,
     /// should never be written to memory returned by this function.
     ///
-    /// Calling `alloc(0)` must never fail.
+    /// Calling `alloc(0, 1)` must never fail. Note that there is no
+    /// requirement that calling `alloc(0, n)` will not return a subslice
+    /// of previously returned memory.
     ///
     /// # Panics
+    ///
+    /// This function will panic if `align` is not a power of two.
     ///
     /// This function is permitted to panic under catastrophic failure
     /// conditions, such as completely running out of program memory.
     /// Implementations must advertize whether they panic.
-    fn alloc(&self, len: usize) -> Result<&mut [u8], OutOfMemory>;
+    ///
+    /// [`ArenaExt`]: trait.ArenaExt.html
+    fn alloc_aligned(
+        &self,
+        len: usize,
+        align: usize,
+    ) -> Result<&mut [u8], OutOfMemory>;
 
     /// Resets this arena, essentially freeing all memory that was given out
     /// and allowing it to be allocated once more.
     ///
     /// Calling this function requires that all slices that were given out by
-    /// `alloc()` are unreachable. Hence, this function must take `self` by
+    /// this arena are unreachable. Hence, this function must take `self` by
     /// unique reference: this ensures that no one else is holding references
     /// to the memory inside.
     ///
@@ -66,14 +94,79 @@ pub trait Arena {
     /// # let mut arena = BumpArena::new(&mut data);
     /// // If the first alloc succeeds (regardless of the value of `len`), then
     /// // the subsequent alloc after resetting the arena must also succeed.
-    /// assert!(arena.alloc(64).is_ok());
+    /// assert!(arena.alloc_aligned(64, 1).is_ok());
     /// arena.reset();
-    /// assert!(arena.alloc(64).is_ok());
+    /// assert!(arena.alloc_aligned(64, 1).is_ok());
     /// ```
     fn reset(&mut self);
 }
 
 assert_obj_safe!(Arena);
+
+/// Convenience functions for arenas, exposed as a trait.
+///
+/// Note that this trait is implemened for `&impl Arena`, which is the reason
+/// for the slightly odd signature.
+pub trait ArenaExt<'arena> {
+    /// Allocates a value of type `T`.
+    ///
+    /// Because of the `reset()` function, it needs to be safe to transmute
+    /// `T` back into bytes. As such, There is an additional `AsBytes` bound.
+    /// To avoid having to mess around with destructors, we additionally
+    /// require a `Copy` bound, though this may eventually be removed.
+    ///
+    /// # Panics
+    ///
+    /// This function is permitted to panic under catastrophic failure
+    /// conditions, such as completely running out of program memory.
+    /// Implementations must advertize whether they panic.
+    fn alloc<T>(self) -> Result<&'arena mut T, OutOfMemory>
+    where
+        T: AsBytes + FromBytes + Copy;
+
+    /// Allocates a slice with `n` elements.
+    ///
+    /// Because of the `reset()` function, it needs to be safe to transmute
+    /// `T` back into bytes. As such, There is an additional `AsBytes` bound.
+    /// To avoid having to mess around with destructors, we additionally
+    /// require a `Copy` bound, though this may eventually be removed.
+    ///
+    /// # Panics
+    ///
+    /// This function is permitted to panic under catastrophic failure
+    /// conditions, such as completely running out of program memory.
+    /// Implementations must advertize whether they panic.
+    fn alloc_slice<T>(self, n: usize) -> Result<&'arena mut [T], OutOfMemory>
+    where
+        T: AsBytes + FromBytes + Copy;
+}
+
+impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
+    fn alloc<T: AsBytes + FromBytes + Copy>(
+        self,
+    ) -> Result<&'arena mut T, OutOfMemory> {
+        let bytes =
+            self.alloc_aligned(mem::size_of::<T>(), mem::align_of::<T>())?;
+
+        let lv = LayoutVerified::new(bytes)
+            .expect("alloc_aligned() implemented incorrectly");
+        Ok(lv.into_mut())
+    }
+
+    fn alloc_slice<T: AsBytes + FromBytes + Copy>(
+        self,
+        n: usize,
+    ) -> Result<&'arena mut [T], OutOfMemory> {
+        let bytes_requested =
+            stride_of::<T>().checked_mul(n).ok_or(OutOfMemory)?;
+        let bytes =
+            self.alloc_aligned(bytes_requested, mem::align_of::<T>())?;
+
+        let lv = LayoutVerified::new_slice(bytes)
+            .expect("alloc_aligned() implemented incorrectly");
+        Ok(lv.into_mut_slice())
+    }
+}
 
 /// A bump-allocating [`Arena`] that is backed by a byte slice.
 ///
@@ -85,13 +178,13 @@ assert_obj_safe!(Arena);
 /// let mut data = [0; 128];
 /// let mut arena = BumpArena::new(&mut data);
 ///
-/// let buf1 = arena.alloc(64)?;
-/// let buf2 = arena.alloc(64)?;
+/// let buf1 = arena.alloc::<[u8; 64]>()?;
+/// let buf2 = arena.alloc_slice::<u8>(64)?;
 /// assert_eq!(buf1.len(), 64);
-/// assert!(arena.alloc(1).is_err());
+/// assert!(arena.alloc_slice::<u8>(1).is_err());
 ///
 /// arena.reset();
-/// let buf3 = arena.alloc(64)?;
+/// let buf3 = arena.alloc_slice::<u8>(64)?;
 /// assert_eq!(buf3.len(), 64);
 /// # Ok::<(), OutOfMemory>(())
 /// ```
@@ -104,7 +197,7 @@ assert_obj_safe!(Arena);
 /// let mut data = [0; 128];
 /// let mut arena = BumpArena::new(&mut data);
 ///
-/// let buf = arena.alloc(64)?;
+/// let buf = arena.alloc_slice::<u8>(64)?;
 /// arena.reset();
 /// buf[0] = 42;  // Does not compile!
 /// # Ok::<(), OutOfMemory>(())
@@ -112,7 +205,7 @@ assert_obj_safe!(Arena);
 ///
 /// # Panics
 ///
-/// `BumpArena::alloc()` will never panic.
+/// `BumpArena::alloc_aligned()` will never panic.
 pub struct BumpArena<'arena> {
     // Even though we do not store `slice`, the lifetime trapped in
     // `lifetime_phantom` ensures that the slice is unaccessible until
@@ -143,10 +236,10 @@ impl<'arena> BumpArena<'arena> {
             cursor: Cell::new(0),
         }
     }
-}
 
-impl<'arena> Arena for BumpArena<'arena> {
-    fn alloc(&self, len: usize) -> Result<&mut [u8], OutOfMemory> {
+    /// Allocates unaligned memory of the given length, moving the cursor
+    /// forward as necessary.
+    fn alloc_raw(&self, len: usize) -> Result<&mut [u8], OutOfMemory> {
         if len == 0 {
             return Ok(&mut []);
         }
@@ -165,12 +258,61 @@ impl<'arena> Arena for BumpArena<'arena> {
         let slice = unsafe {
             // SAFE: buf_len >= cursor, and buf_len < isize::MAX; therefore,
             // this cast always produces a positive offset.
-            let offset_ptr = self.buf_ptr.as_ptr().offset(cursor as isize);
+            let offset_ptr = self.buf_ptr.as_ptr().add(cursor);
             // SAFE: buf_ptr[cursor..proposed_cursor] is initialized.
             slice::from_raw_parts_mut(offset_ptr, len)
         };
 
         Ok(slice)
+    }
+
+    /// Aligns the internal buffer to the given alignment.
+    ///
+    /// # Panics
+    ///
+    /// `align` must be a power of two.
+    fn align_to(&self, align: usize) -> Result<(), OutOfMemory> {
+        assert!(align.is_power_of_two());
+
+        // SAFE: see the safety notes in alloc_raw().
+        let current_addr =
+            unsafe { self.buf_ptr.as_ptr().add(self.cursor.get()) as usize };
+        let misalignment = align_to(current_addr, align) - current_addr;
+
+        self.alloc_raw(misalignment)?;
+        Ok(())
+    }
+}
+
+unsafe impl<'arena> Arena for BumpArena<'arena> {
+    fn alloc_aligned(
+        &self,
+        len: usize,
+        align: usize,
+    ) -> Result<&mut [u8], OutOfMemory> {
+        if len == 0 {
+            assert!(align.is_power_of_two());
+
+            // For length zero, we always just return the base address alligned
+            // to the alignment requirement, if that would land inside the
+            // slice in the first place.
+            let base_addr = self.buf_ptr.as_ptr() as usize;
+            let aligned = align_to(base_addr, align);
+            let misalignment = aligned - base_addr;
+            if misalignment >= self.buf_len {
+                return Err(OutOfMemory);
+            }
+
+            // SAFE: aligned is in-bounds, and zero-length slices have no
+            // aliasing restrictions.
+            let slice =
+                unsafe { slice::from_raw_parts_mut(aligned as *mut u8, 0) };
+
+            return Ok(slice);
+        }
+
+        self.align_to(align)?;
+        self.alloc_raw(len)
     }
 
     // NOTE: because this function takes `self` by unique reference, no mutable
@@ -181,5 +323,27 @@ impl<'arena> Arena for BumpArena<'arena> {
     // outstanding poitners to alias.
     fn reset(&mut self) {
         self.cursor.set(0)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn complex_alignments() {
+        let mut data = [0; 128];
+        let arena = BumpArena::new(&mut data);
+
+        let buf = arena.alloc_aligned(1, 1).unwrap();
+        assert_eq!(buf.len(), 1);
+
+        let buf = arena.alloc_aligned(1, 4).unwrap();
+        assert_eq!(buf.len(), 1);
+        assert_eq!(buf.as_ptr() as usize % 4, 0);
+
+        let buf = arena.alloc_aligned(0, 4).unwrap();
+        assert_eq!(buf.len(), 0);
+        assert_eq!(buf.as_ptr() as usize % 4, 0);
     }
 }
