@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::io;
 use crate::mem::Arena;
+use crate::mem::ArenaExt as _;
 
 /// A [`Flash`] error.
 ///
@@ -300,7 +301,7 @@ impl<F: Flash, A: Arena> FlashZero for ArenaFlash<F, A> {
     fn read_zerocopy(&self, slice: Region) -> Result<&[u8], Error> {
         let Self(flash, arena) = self;
         let buf = arena
-            .alloc(slice.len as usize)
+            .alloc_slice::<u8>(slice.len as usize)
             .map_err(|_| Error::Internal)?;
         flash.read(slice.ptr, buf)?;
         Ok(buf)
