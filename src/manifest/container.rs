@@ -47,7 +47,6 @@ use crate::crypto::sha256::Hasher as _;
 use crate::hardware::flash::Flash;
 use crate::hardware::flash::FlashIo;
 use crate::hardware::flash::Region;
-use crate::hardware::flash::SubFlash;
 use crate::io;
 use crate::io::cursor::SeekPos;
 use crate::io::Cursor;
@@ -118,7 +117,8 @@ impl<F: Flash> Container<F, provenance::Signed> {
         let (mut c, sig, signed) = Self::parse_inner(flash)?;
 
         let mut bytes = [0u8; 16];
-        let mut r = FlashIo::new(SubFlash(&mut c.flash, signed))?;
+        let mut r = FlashIo::new(&mut c.flash)?;
+        r.reslice(signed);
 
         let mut hasher =
             sha.new_hasher().map_err(|_| Error::SignatureFailure)?;
@@ -274,7 +274,8 @@ impl<F: Flash, Provenance> Container<F, Provenance> {
             .with_metadata(self.metadata())?;
 
         let mut bytes = [0u8; 16];
-        let mut r = FlashIo::new(SubFlash(&self.flash, self.body))?;
+        let mut r = FlashIo::new(self.flash())?;
+        r.reslice(self.body());
         while r.remaining_data() > 0 {
             let to_read = r.remaining_data().min(16);
             r.read_bytes(&mut bytes[..to_read])?;
