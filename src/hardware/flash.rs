@@ -23,6 +23,7 @@ use zerocopy::FromBytes;
 use serde::{Deserialize, Serialize};
 
 use crate::io;
+use crate::io::Read as _;
 use crate::mem::Arena;
 use crate::mem::OutOfMemory;
 
@@ -385,6 +386,8 @@ impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
 
 /// A [`Read`]/[`Write`] implementation for operating on a [`Flash`] serially.
 ///
+/// `FlashIo` also actas as an `Iterator` over the serial bytes in the [`Flash`].
+///
 /// [`Read`]: ../../io/read/trait.Read.html
 /// [`Write`]: ../../io/write/trait.Write.html
 /// [`Flash`]: trait.Flash.html
@@ -426,6 +429,22 @@ impl<F: Flash> io::Read for FlashIo<F> {
 
     fn remaining_data(&self) -> usize {
         self.len.saturating_sub(self.cursor) as usize
+    }
+}
+
+impl<F: Flash> Iterator for FlashIo<F> {
+    type Item = Result<u8, Error>;
+    fn next(&mut self) -> Option<Result<u8, Error>> {
+        if self.remaining_data() == 0 {
+            return None;
+        }
+
+        let mut byte = [0];
+        if let Err(e) = self.flash.read(Ptr::new(self.cursor), &mut byte) {
+            return Some(Err(e));
+        }
+        self.cursor += 1;
+        Some(Ok(byte[0]))
     }
 }
 
