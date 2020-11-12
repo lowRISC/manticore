@@ -76,7 +76,7 @@ pub unsafe trait Flash {
     fn size(&self) -> Result<u32, Error>;
 
     /// Attempts to read `out.len()` bytes starting at `offset`.
-    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error>;
+    fn read(&self, offset: u32, out: &mut [u8]) -> Result<(), Error>;
 
     /// Attempts to perform a "direct read" of the given `Region`.
     ///
@@ -99,7 +99,7 @@ pub unsafe trait Flash {
     /// # use manticore::hardware::flash::*;
     /// # struct Foo;
     /// # impl Foo {
-    /// # fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
+    /// # fn read(&self, offset: u32, out: &mut [u8]) -> Result<(), Error> {
     /// #   Ok(())
     /// # }
     /// fn read_direct<'a: 'c, 'b: 'c, 'c>(
@@ -109,7 +109,7 @@ pub unsafe trait Flash {
     ///     align: usize,
     /// ) -> Result<&'c [u8], Error> {
     ///     let mut buf = arena.alloc_aligned(region.len as usize, align)?;
-    ///     self.read(region.ptr, &mut buf)?;
+    ///     self.read(region.offset, &mut buf)?;
     ///     Ok(buf)
     /// }
     /// # }
@@ -134,7 +134,7 @@ pub unsafe trait Flash {
     /// Implementations are, as an optimization, permitted to assume that
     /// writes will be serial and localized, so as to minimize clearing
     /// operations on flash hardware.
-    fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error>;
+    fn program(&mut self, offset: u32, buf: &[u8]) -> Result<(), Error>;
 
     /// Flushes any pending `program()` operations.
     fn flush(&mut self) -> Result<(), Error> {
@@ -150,7 +150,7 @@ unsafe impl<F: Flash> Flash for &F {
     }
 
     #[inline]
-    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
+    fn read(&self, offset: u32, out: &mut [u8]) -> Result<(), Error> {
         F::read(self, offset, out)
     }
 
@@ -165,7 +165,7 @@ unsafe impl<F: Flash> Flash for &F {
     }
 
     #[inline]
-    fn program(&mut self, _: Ptr, _: &[u8]) -> Result<(), Error> {
+    fn program(&mut self, _: u32, _: &[u8]) -> Result<(), Error> {
         Err(Error::Locked)
     }
 
@@ -182,7 +182,7 @@ unsafe impl<F: Flash> Flash for &mut F {
     }
 
     #[inline]
-    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
+    fn read(&self, offset: u32, out: &mut [u8]) -> Result<(), Error> {
         F::read(self, offset, out)
     }
 
@@ -197,7 +197,7 @@ unsafe impl<F: Flash> Flash for &mut F {
     }
 
     #[inline]
-    fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
+    fn program(&mut self, offset: u32, buf: &[u8]) -> Result<(), Error> {
         F::program(self, offset, buf)
     }
 
@@ -217,7 +217,7 @@ pub trait FlashExt<'flash> {
     /// See [`ArenaExt::alloc()`](../../mem/arena/trait.ArenaExt.html#tymethod.alloc).
     fn read_object<'b: 'c, 'c, T>(
         self,
-        offset: Ptr,
+        offset: u32,
         arena: &'b dyn Arena,
     ) -> Result<&'c T, Error>
     where
@@ -229,7 +229,7 @@ pub trait FlashExt<'flash> {
     /// See [`ArenaExt::alloc_slice()`](../../mem/arena/trait.ArenaExt.html#tymethod.alloc_slice).
     fn read_slice<'b: 'c, 'c, T>(
         self,
-        offset: Ptr,
+        offset: u32,
         n: usize,
         arena: &'b dyn Arena,
     ) -> Result<&'c [T], Error>
@@ -241,7 +241,7 @@ pub trait FlashExt<'flash> {
 impl<'flash, F: Flash> FlashExt<'flash> for &'flash F {
     fn read_object<'b: 'c, 'c, T>(
         self,
-        offset: Ptr,
+        offset: u32,
         arena: &'b dyn Arena,
     ) -> Result<&'c T, Error>
     where
@@ -249,7 +249,7 @@ impl<'flash, F: Flash> FlashExt<'flash> for &'flash F {
         T: AsBytes + FromBytes + Copy,
     {
         let bytes = self.read_direct(
-            Region::new(offset.address, mem::size_of::<T>() as u32),
+            Region::new(offset, mem::size_of::<T>() as u32),
             arena,
             mem::align_of::<T>(),
         )?;
@@ -261,7 +261,7 @@ impl<'flash, F: Flash> FlashExt<'flash> for &'flash F {
 
     fn read_slice<'b: 'c, 'c, T>(
         self,
-        offset: Ptr,
+        offset: u32,
         n: usize,
         arena: &'b dyn Arena,
     ) -> Result<&'c [T], Error>
@@ -272,7 +272,7 @@ impl<'flash, F: Flash> FlashExt<'flash> for &'flash F {
         let bytes_requested =
             mem::size_of::<T>().checked_mul(n).ok_or(OutOfMemory)?;
         let bytes = self.read_direct(
-            Region::new(offset.address, bytes_requested as u32),
+            Region::new(offset, bytes_requested as u32),
             arena,
             mem::align_of::<T>(),
         )?;
@@ -302,9 +302,9 @@ unsafe impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
     }
 
     #[inline]
-    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
+    fn read(&self, offset: u32, out: &mut [u8]) -> Result<(), Error> {
         out.copy_from_slice(self.read_direct(
-            Region::new(offset.address, out.len() as u32),
+            Region::new(offset, out.len() as u32),
             &OutOfMemory,
             1,
         )?);
@@ -317,7 +317,7 @@ unsafe impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
         arena: &'b dyn Arena,
         align: usize,
     ) -> Result<&'c [u8], Error> {
-        let start = region.ptr.address as usize;
+        let start = region.offset as usize;
         let end = start
             .checked_add(region.len as usize)
             .ok_or(Error::OutOfRange)?;
@@ -336,7 +336,7 @@ unsafe impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
         Ok(buf)
     }
 
-    fn program(&mut self, _: Ptr, _: &[u8]) -> Result<(), Error> {
+    fn program(&mut self, _: u32, _: &[u8]) -> Result<(), Error> {
         Err(Error::Locked)
     }
 }
@@ -360,9 +360,9 @@ unsafe impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
     }
 
     #[inline]
-    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
+    fn read(&self, offset: u32, out: &mut [u8]) -> Result<(), Error> {
         out.copy_from_slice(self.read_direct(
-            Region::new(offset.address, out.len() as u32),
+            Region::new(offset, out.len() as u32),
             &OutOfMemory,
             1,
         )?);
@@ -375,7 +375,7 @@ unsafe impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
         arena: &'b dyn Arena,
         align: usize,
     ) -> Result<&'c [u8], Error> {
-        let start = region.ptr.address as usize;
+        let start = region.offset as usize;
         let end = start
             .checked_add(region.len as usize)
             .ok_or(Error::OutOfRange)?;
@@ -394,8 +394,8 @@ unsafe impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
         Ok(buf)
     }
 
-    fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
-        let start = offset.address as usize;
+    fn program(&mut self, offset: u32, buf: &[u8]) -> Result<(), Error> {
+        let start = offset as usize;
         let end = start.checked_add(buf.len()).ok_or(Error::OutOfRange)?;
         if end > self.0.as_ref().len() {
             return Err(Error::OutOfRange);
@@ -450,7 +450,7 @@ impl<F: Flash> FlashIo<F> {
     /// Adapts this `FlashIo` to only read bytes out from the selected
     /// `Region`.
     pub fn reslice(&mut self, region: Region) {
-        self.cursor = region.ptr.address;
+        self.cursor = region.offset;
         self.len = region.end();
     }
 }
@@ -462,7 +462,7 @@ impl<F: Flash> io::Read for FlashIo<F> {
         }
 
         self.flash
-            .read(Ptr::new(self.cursor), out)
+            .read(self.cursor, out)
             .map_err(|_| io::Error::Internal)?;
         self.cursor += out.len() as u32;
         Ok(())
@@ -481,7 +481,7 @@ impl<F: Flash> Iterator for FlashIo<F> {
         }
 
         let mut byte = [0];
-        if let Err(e) = self.flash.read(Ptr::new(self.cursor), &mut byte) {
+        if let Err(e) = self.flash.read(self.cursor, &mut byte) {
             return Some(Err(e));
         }
         self.cursor += 1;
@@ -496,49 +496,25 @@ impl<F: Flash> io::Write for FlashIo<F> {
         }
 
         self.flash
-            .program(Ptr::new(self.cursor), buf)
+            .program(self.cursor, buf)
             .map_err(|_| io::Error::Internal)?;
         self.cursor += buf.len() as u32;
         Ok(())
     }
 }
 
-/// An abstract pointer into a [`Flash`] type.
+/// A region within a [`Flash`] type.
 ///
-/// A `Ptr` needs to be used in conjunction with a [`Flash`]
-/// implementation to be read from or written to.
-///
-/// [`Flash`]: trait.Flash.html
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, AsBytes, FromBytes)]
-#[repr(transparent)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Ptr {
-    /// The abstract address of this pointer.
-    pub address: u32,
-}
-
-impl Ptr {
-    /// Convenience method for creating a `Ptr` without having to use
-    /// a struct literal.
-    pub const fn new(address: u32) -> Self {
-        Self { address }
-    }
-}
-
-/// A region within  a [`Flash`] type.
-///
-/// Much like a [`Ptr`], a `Region` needs to be interpreted with
-/// respect to a [`Flash`] implementation.
+/// A `Region` needs to be interpreted with respect to a [`Flash`]
+/// implementation; it is otherwise a dumb pointer-length pair.
 ///
 /// [`Flash`]: trait.Flash.html
-/// [`Ptr`]: struct.Ptr.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, AsBytes, FromBytes)]
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Region {
     /// The base pointer for this slice.
-    #[cfg_attr(feature = "serde", serde(flatten))]
-    pub ptr: Ptr,
+    pub offset: u32,
     /// The length of the slice, in bytes.
     pub len: u32,
 }
@@ -546,11 +522,8 @@ pub struct Region {
 impl Region {
     /// Convenience method for creating a `Region` without having to use
     /// a struct literal.
-    pub const fn new(ptr: u32, len: u32) -> Self {
-        Self {
-            ptr: Ptr::new(ptr),
-            len,
-        }
+    pub const fn new(offset: u32, len: u32) -> Self {
+        Self { offset, len }
     }
 
     /// Returns a `Region` big enough to hold a `T`.
@@ -568,7 +541,7 @@ impl Region {
 
     /// Returns the end address of `self`, pointing one past the end of it.
     pub fn end(self) -> u32 {
-        self.ptr.address.saturating_add(self.len)
+        self.offset.saturating_add(self.len)
     }
 
     /// Returns a new `Region` that comes immediately after `self`, with the
@@ -582,14 +555,11 @@ impl Region {
     ///
     /// Returns `None` if `sub` is not a subregion of `self`.
     pub fn subregion(self, sub: Region) -> Option<Self> {
-        if sub.len.saturating_add(sub.ptr.address) > self.len {
+        if sub.len.saturating_add(sub.offset) > self.len {
             return None;
         }
 
-        Some(Region::new(
-            self.ptr.address.checked_add(sub.ptr.address)?,
-            sub.len,
-        ))
+        Some(Region::new(self.offset.checked_add(sub.offset)?, sub.len))
     }
 
     /// Contracts `self` by dropping the first `n` bytes.
@@ -598,7 +568,7 @@ impl Region {
     /// occurs.
     pub fn skip(self, n: u32) -> Option<Self> {
         Some(Region::new(
-            self.ptr.address.checked_add(n)?,
+            self.offset.checked_add(n)?,
             self.len.checked_sub(n)?,
         ))
     }
@@ -607,6 +577,6 @@ impl Region {
     ///
     /// Returns `None` if `n` is greater than `self.len`.
     pub fn take(self, n: u32) -> Option<Self> {
-        Some(Region::new(self.ptr.address, self.len.checked_sub(n)?))
+        Some(Region::new(self.offset, self.len.checked_sub(n)?))
     }
 }
