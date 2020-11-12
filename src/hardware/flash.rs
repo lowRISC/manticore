@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::io;
 use crate::mem::Arena;
-use crate::mem::ArenaExt as _;
+use crate::mem::OutOfMemory;
 
 /// A [`Flash`] error.
 ///
@@ -50,6 +50,12 @@ pub enum Error {
     Unspecified,
 }
 
+impl From<OutOfMemory> for Error {
+    fn from(_: OutOfMemory) -> Error {
+        Error::Internal
+    }
+}
+
 /// Provides access to a flash-like storage device.
 ///
 /// This trait provides abstract operations on a device, as if it were a
@@ -62,6 +68,42 @@ pub trait Flash {
 
     /// Attempts to read `out.len()` bytes starting at `offset`.
     fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error>;
+
+    /// Attempts to perform a "direct read" of the given `Region`.
+    ///
+    /// This function provides an optimization opportunity to implementations.
+    /// Some implementations, such as [`Ram`], already hold all of their
+    /// contents in memory and so can return a reference into themselves;
+    /// however, physically external flash may not have such a choice. Thus,
+    /// an arena must be passed in to provide for the possiblity of an
+    /// allocation requirement.
+    ///
+    /// This function is not provided with a default implementation, though
+    /// the following should be a sufficient starting point:
+    /// ```
+    /// # use manticore::mem::*;
+    /// # use manticore::hardware::flash::*;
+    /// # struct Foo;
+    /// # impl Foo {
+    /// # fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
+    /// #   Ok(())
+    /// # }
+    /// fn read_direct<'a: 'c, 'b: 'c, 'c>(
+    ///     &'a self,
+    ///     region: Region,
+    ///     arena: &'b dyn Arena
+    /// ) -> Result<&'c [u8], Error> {
+    ///     let mut buf = arena.alloc_slice::<u8>(region.len as usize)?;
+    ///     self.read(region.ptr, &mut buf)?;
+    ///     Ok(buf)
+    /// }
+    /// # }
+    /// ```
+    fn read_direct<'a: 'c, 'b: 'c, 'c>(
+        &'a self,
+        region: Region,
+        arena: &'b dyn Arena,
+    ) -> Result<&'c [u8], Error>;
 
     /// Attempts to write `out.len()` bytes starting at `offset`.
     ///
@@ -94,6 +136,15 @@ impl<F: Flash> Flash for &F {
     }
 
     #[inline]
+    fn read_direct<'a: 'c, 'b: 'c, 'c>(
+        &'a self,
+        region: Region,
+        arena: &'b dyn Arena,
+    ) -> Result<&'c [u8], Error> {
+        F::read_direct(self, region, arena)
+    }
+
+    #[inline]
     fn program(&mut self, _: Ptr, _: &[u8]) -> Result<(), Error> {
         Err(Error::Locked)
     }
@@ -116,6 +167,15 @@ impl<F: Flash> Flash for &mut F {
     }
 
     #[inline]
+    fn read_direct<'a: 'c, 'b: 'c, 'c>(
+        &'a self,
+        region: Region,
+        arena: &'b dyn Arena,
+    ) -> Result<&'c [u8], Error> {
+        F::read_direct(self, region, arena)
+    }
+
+    #[inline]
     fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
         F::program(self, offset, buf)
     }
@@ -123,47 +183,6 @@ impl<F: Flash> Flash for &mut F {
     #[inline]
     fn flush(&mut self) -> Result<(), Error> {
         F::flush(self)
-    }
-}
-
-/// A [`Flash`] type that allows for zero-copy reads.
-///
-/// This trait allows implementations that can support a zero-copy read,
-/// perhaps due to their inherently-buffering nature, to do so directly.
-///
-/// Normal [`Flash`] implementations can be made to support zero-copy
-/// reads by combining them with an [`Arena`]; see [`ArenaFlash`].
-///
-/// [`Flash`]: trait.Flash.html
-/// [`ArenaFlash`]: struct.ArenaFlash.html
-pub trait FlashZero: Flash {
-    /// Attempts to zero-copy read the given region out of this device.
-    fn read_zerocopy(&self, slice: Region) -> Result<&[u8], Error>;
-
-    /// Hints to the implementation that it can release any buffered contents
-    /// it is currently holding.
-    ///
-    /// See [`Arena::reset()`].
-    ///
-    /// [`Arena::reset()`]: ../../mem/trait.Arena.html#tymethod.reset
-    fn reset(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
-}
-assert_obj_safe!(FlashZero);
-
-// NOTE: implementing for &impl FlashZero doesn't make sense, because that
-// would result in an unresettable FlashZero.
-
-impl<F: FlashZero> FlashZero for &mut F {
-    #[inline]
-    fn read_zerocopy(&self, slice: Region) -> Result<&[u8], Error> {
-        F::read_zerocopy(self, slice)
-    }
-
-    #[inline]
-    fn reset(&mut self) -> Result<(), Error> {
-        F::reset(self)
     }
 }
 
@@ -225,6 +244,24 @@ impl<F: Flash> Flash for SubFlash<F> {
     }
 
     #[inline]
+    fn read_direct<'a: 'c, 'b: 'c, 'c>(
+        &'a self,
+        region: Region,
+        arena: &'b dyn Arena,
+    ) -> Result<&'c [u8], Error> {
+        if region.ptr.address >= self.1.len {
+            return Err(Error::OutOfRange);
+        }
+        let offset = region
+            .ptr
+            .address
+            .checked_add(self.1.ptr.address)
+            .ok_or(Error::OutOfRange)?;
+
+        self.0.read_direct(Region::new(offset, region.len), arena)
+    }
+
+    #[inline]
     fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
         if offset.address >= self.1.len {
             return Err(Error::OutOfRange);
@@ -243,82 +280,12 @@ impl<F: Flash> Flash for SubFlash<F> {
     }
 }
 
-impl<F: FlashZero> FlashZero for SubFlash<F> {
-    #[inline]
-    fn read_zerocopy(&self, slice: Region) -> Result<&[u8], Error> {
-        if slice.ptr.address > self.1.len {
-            return Err(Error::OutOfRange);
-        }
-        let offset = slice
-            .ptr
-            .address
-            .checked_add(self.1.ptr.address)
-            .ok_or(Error::OutOfRange)?;
-
-        self.0.read_zerocopy(Region::new(offset, slice.len))
-    }
-
-    #[inline]
-    fn reset(&mut self) -> Result<(), Error> {
-        self.0.reset()
-    }
-}
-
-/// Adapter for supporting "zero-copy" reads on a [`Flash`] via an [`Arena`].
-///
-/// This type wraps a [`Flash`] type, plus an [`Arena`], and implements
-/// zero-copy reads by first allocating a buffer on the arena and then
-/// using that allocation to perform a read.
-///
-/// [`Flash`]: trait.Flash.html
-/// [`Arena`]: ../../mem/trait.Arena.html
-#[derive(Copy, Clone)]
-pub struct ArenaFlash<F, A>(pub F, pub A);
-
-impl<F: Flash, A> Flash for ArenaFlash<F, A> {
-    #[inline]
-    fn size(&self) -> Result<u32, Error> {
-        self.0.size()
-    }
-
-    #[inline]
-    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
-        self.0.read(offset, out)
-    }
-
-    #[inline]
-    fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
-        self.0.program(offset, buf)
-    }
-
-    #[inline]
-    fn flush(&mut self) -> Result<(), Error> {
-        self.0.flush()
-    }
-}
-
-impl<F: Flash, A: Arena> FlashZero for ArenaFlash<F, A> {
-    fn read_zerocopy(&self, slice: Region) -> Result<&[u8], Error> {
-        let Self(flash, arena) = self;
-        let buf = arena
-            .alloc_slice::<u8>(slice.len as usize)
-            .map_err(|_| Error::Internal)?;
-        flash.read(slice.ptr, buf)?;
-        Ok(buf)
-    }
-
-    #[inline]
-    fn reset(&mut self) -> Result<(), Error> {
-        Ok(self.1.reset())
-    }
-}
-
-/// Adapter for converting RAM-backed storage into a [`FlashZero`].
+/// Adapter for converting RAM-backed storage into a [`Flash`].
 ///
 /// For the purposes of this type, "RAM-backed" means that `AsRef<[u8]>`
 /// is implemented.
 ///
-/// [`FlashZero`]: traits.Flash.html
+/// [`Flash`]: traits.Flash.html
 #[derive(Copy, Clone)]
 pub struct Ram<Bytes>(pub Bytes);
 
@@ -331,27 +298,23 @@ impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
             .map_err(|_| Error::Unspecified)
     }
 
+    #[inline]
     fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
-        let start = offset.address as usize;
-        let end = start.checked_add(out.len()).ok_or(Error::OutOfRange)?;
-        if end > self.0.as_ref().len() {
-            return Err(Error::OutOfRange);
-        }
-
-        out.copy_from_slice(&self.0.as_ref()[start..end]);
+        out.copy_from_slice(self.read_direct(
+            Region::new(offset.address, out.len() as u32),
+            &OutOfMemory,
+        )?);
         Ok(())
     }
 
-    fn program(&mut self, _: Ptr, _: &[u8]) -> Result<(), Error> {
-        return Err(Error::Locked);
-    }
-}
-
-impl<Bytes: AsRef<[u8]>> FlashZero for Ram<Bytes> {
-    fn read_zerocopy(&self, offset: Region) -> Result<&[u8], Error> {
-        let start = offset.ptr.address as usize;
+    fn read_direct<'a: 'c, 'b: 'c, 'c>(
+        &'a self,
+        region: Region,
+        _: &'b dyn Arena,
+    ) -> Result<&'c [u8], Error> {
+        let start = region.ptr.address as usize;
         let end = start
-            .checked_add(offset.len as usize)
+            .checked_add(region.len as usize)
             .ok_or(Error::OutOfRange)?;
         if end > self.0.as_ref().len() {
             return Err(Error::OutOfRange);
@@ -359,14 +322,18 @@ impl<Bytes: AsRef<[u8]>> FlashZero for Ram<Bytes> {
 
         Ok(&self.0.as_ref()[start..end])
     }
+
+    fn program(&mut self, _: Ptr, _: &[u8]) -> Result<(), Error> {
+        return Err(Error::Locked);
+    }
 }
 
-/// Adapter for converting mutable, RAM-backed storage into a [`FlashZero`].
+/// Adapter for converting mutable, RAM-backed storage into a [`Flash`].
 ///
 /// For the purposes of this type, "RAM-backed" means that `AsRef<[u8]>`
 /// and `AsMut<[u8]>` are implemented.
 ///
-/// [`FlashZero`]: traits.Flash.html
+/// [`Flash`]: traits.Flash.html
 #[derive(Copy, Clone)]
 pub struct RamMut<Bytes>(pub Bytes);
 
@@ -379,15 +346,29 @@ impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
             .map_err(|_| Error::Unspecified)
     }
 
+    #[inline]
     fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
-        let start = offset.address as usize;
-        let end = start.checked_add(out.len()).ok_or(Error::OutOfRange)?;
+        out.copy_from_slice(self.read_direct(
+            Region::new(offset.address, out.len() as u32),
+            &OutOfMemory,
+        )?);
+        Ok(())
+    }
+
+    fn read_direct<'a: 'c, 'b: 'c, 'c>(
+        &'a self,
+        region: Region,
+        _: &'b dyn Arena,
+    ) -> Result<&'c [u8], Error> {
+        let start = region.ptr.address as usize;
+        let end = start
+            .checked_add(region.len as usize)
+            .ok_or(Error::OutOfRange)?;
         if end > self.0.as_ref().len() {
             return Err(Error::OutOfRange);
         }
 
-        out.copy_from_slice(&self.0.as_ref()[start..end]);
-        Ok(())
+        Ok(&self.0.as_ref()[start..end])
     }
 
     fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
@@ -399,20 +380,6 @@ impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
 
         self.0.as_mut()[start..end].copy_from_slice(buf);
         Ok(())
-    }
-}
-
-impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> FlashZero for RamMut<Bytes> {
-    fn read_zerocopy(&self, offset: Region) -> Result<&[u8], Error> {
-        let start = offset.ptr.address as usize;
-        let end = start
-            .checked_add(offset.len as usize)
-            .ok_or(Error::OutOfRange)?;
-        if end > self.0.as_ref().len() {
-            return Err(Error::OutOfRange);
-        }
-
-        Ok(&self.0.as_ref()[start..end])
     }
 }
 

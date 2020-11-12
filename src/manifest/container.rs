@@ -46,7 +46,6 @@ use crate::crypto::sha256;
 use crate::crypto::sha256::Hasher as _;
 use crate::hardware::flash::Flash;
 use crate::hardware::flash::FlashIo;
-use crate::hardware::flash::FlashZero;
 use crate::hardware::flash::Region;
 use crate::hardware::flash::SubFlash;
 use crate::io;
@@ -57,6 +56,7 @@ use crate::io::Write;
 use crate::manifest::provenance;
 use crate::manifest::Error;
 use crate::manifest::ManifestType;
+use crate::mem::Arena;
 use crate::protocol::wire::WireEnum;
 
 /// Metadata for a [`Container`].
@@ -101,7 +101,7 @@ const SIG_LEN_OFFSET: usize = 8;
 /// two halves, a word, another half, and two bytes of padding.
 const HEADER_LEN: usize = 2 + 2 + 4 + 2 + 2;
 
-impl<F: FlashZero> Container<F, provenance::Signed> {
+impl<F: Flash> Container<F, provenance::Signed> {
     /// Parses and verifies a `Container` using the provided cryptographic
     /// primitives.
     ///
@@ -113,6 +113,7 @@ impl<F: FlashZero> Container<F, provenance::Signed> {
         flash: F,
         sha: &impl sha256::Builder,
         rsa: &mut impl rsa::Engine,
+        arena: &impl Arena,
     ) -> Result<Self, Error> {
         let (mut c, sig, signed) = Self::parse_inner(flash)?;
 
@@ -134,10 +135,9 @@ impl<F: FlashZero> Container<F, provenance::Signed> {
             .finish(&mut digest)
             .map_err(|_| Error::SignatureFailure)?;
 
-        let sig = c.flash.read_zerocopy(sig)?;
+        let sig = c.flash.read_direct(sig, arena)?;
         rsa.verify_signature(sig, &digest)
             .map_err(|_| Error::SignatureFailure)?;
-        c.flash.reset()?;
 
         Ok(c)
     }
@@ -434,6 +434,7 @@ pub(crate) mod test {
     use crate::crypto::sha256::Builder as _;
     use crate::crypto::testdata;
     use crate::hardware::flash::Ram;
+    use crate::mem::OutOfMemory;
 
     const MANIFEST_HEADER: &[u8] = &[
         0x1f, 0x01, // Total length. This is the header length (12) +
@@ -478,12 +479,19 @@ pub(crate) mod test {
 
         assert_eq!(manifest.len(), MANIFEST_LEN);
 
-        let manifest =
-            Container::parse_and_verify(Ram(&manifest), &sha, &mut rsa)
-                .unwrap();
+        let manifest = Container::parse_and_verify(
+            Ram(&manifest),
+            &sha,
+            &mut rsa,
+            &OutOfMemory,
+        )
+        .unwrap();
         assert_eq!(manifest.manifest_type(), ManifestType::Fpm);
         assert_eq!(
-            manifest.flash().read_zerocopy(manifest.body()).unwrap(),
+            manifest
+                .flash()
+                .read_direct(manifest.body(), &OutOfMemory)
+                .unwrap(),
             MANIFEST_CONTENTS
         );
     }
@@ -505,8 +513,13 @@ pub(crate) mod test {
 
         assert_eq!(manifest.len(), MANIFEST_LEN - 1);
 
-        assert!(Container::parse_and_verify(Ram(&manifest), &sha, &mut rsa)
-            .is_err());
+        assert!(Container::parse_and_verify(
+            Ram(&manifest),
+            &sha,
+            &mut rsa,
+            &OutOfMemory
+        )
+        .is_err());
     }
 
     #[test]
@@ -529,7 +542,12 @@ pub(crate) mod test {
         assert_eq!(manifest.len(), MANIFEST_LEN);
 
         assert!(matches!(
-            Container::parse_and_verify(Ram(&manifest), &sha, &mut rsa),
+            Container::parse_and_verify(
+                Ram(&manifest),
+                &sha,
+                &mut rsa,
+                &OutOfMemory
+            ),
             Err(Error::SignatureFailure)
         ));
     }
@@ -561,13 +579,20 @@ pub(crate) mod test {
             &MANIFEST_HEADER[..HEADER_LEN]
         );
 
-        let manifest =
-            Container::parse_and_verify(Ram(manifest_bytes), &sha, &mut rsa)
-                .unwrap();
+        let manifest = Container::parse_and_verify(
+            Ram(manifest_bytes),
+            &sha,
+            &mut rsa,
+            &OutOfMemory,
+        )
+        .unwrap();
         assert_eq!(manifest.manifest_type(), ManifestType::Fpm);
         assert_eq!(manifest.metadata().version_id, 0x155aa);
         assert_eq!(
-            manifest.flash().read_zerocopy(manifest.body()).unwrap(),
+            manifest
+                .flash()
+                .read_direct(manifest.body(), &OutOfMemory)
+                .unwrap(),
             MANIFEST_CONTENTS
         );
     }
@@ -595,9 +620,13 @@ pub(crate) mod test {
         manifest.extend_from_slice(&sig);
         assert_eq!(manifest.len(), MANIFEST_LEN);
 
-        let parsed_manifest =
-            Container::parse_and_verify(Ram(&manifest), &sha, &mut rsa)
-                .unwrap();
+        let parsed_manifest = Container::parse_and_verify(
+            Ram(&manifest),
+            &sha,
+            &mut rsa,
+            &OutOfMemory,
+        )
+        .unwrap();
 
         let mut buf = vec![0; 512];
         let new_manifest_bytes = parsed_manifest
