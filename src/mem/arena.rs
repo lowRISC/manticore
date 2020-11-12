@@ -24,9 +24,37 @@ use crate::mem::align_to;
 /// memory or that memory that is more aligned than is supported
 /// was requested.
 ///
+/// Additionally, `OutOfMemory` implements [`Arena`] itself, acting as the
+/// "trivial" no-memory-was-provided arena. This is particularly useful for
+/// when it is known that no memory will ever be allocated on the arena.
+///
 /// [`Arena`]: trait.Arena.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OutOfMemory;
+
+unsafe impl Arena for OutOfMemory {
+    fn alloc_aligned(
+        &self,
+        len: usize,
+        align: usize,
+    ) -> Result<&mut [u8], OutOfMemory> {
+        assert!(align.is_power_of_two());
+        if len == 0 {
+            // SAFE: zero-length slices have no restrictions on the pointer
+            // beyond non-null-ness and well-aligned-ness, so we materialize
+            // one out of thin air.
+            //
+            // NonNull::dangling() is optimial, but that required having a
+            // concrete type. See the note on zero-length slices in
+            // https://doc.rust-lang.org/std/slice/fn.from_raw_parts_mut.html
+            Ok(unsafe { slice::from_raw_parts_mut(align as *mut u8, 0) })
+        } else {
+            Err(*self)
+        }
+    }
+
+    fn reset(&mut self) {}
+}
 
 /// Represents a re-usable allocation arena.
 ///
@@ -45,7 +73,7 @@ pub struct OutOfMemory;
 ///
 /// [`BumpArena`]: struct.BumpArena.html
 pub unsafe trait Arena {
-    /// Allocates `len` bytes of `align`-aligned memory from this arena.
+    /// Allocates `len` bytes of `align`-a`igned memory from this arena.
     ///
     /// This is a low-level function: prefer instead to use the helpers defined
     /// in [`ArenaExt`].
@@ -147,7 +175,7 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
         let bytes =
             self.alloc_aligned(mem::size_of::<T>(), mem::align_of::<T>())?;
 
-        let lv = LayoutVerified::new(bytes)
+        let lv = LayoutVerified::<_, T>::new(bytes)
             .expect("alloc_aligned() implemented incorrectly");
         Ok(lv.into_mut())
     }
@@ -161,7 +189,7 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
         let bytes =
             self.alloc_aligned(bytes_requested, mem::align_of::<T>())?;
 
-        let lv = LayoutVerified::new_slice(bytes)
+        let lv = LayoutVerified::<_, [T]>::new_slice(bytes)
             .expect("alloc_aligned() implemented incorrectly");
         Ok(lv.into_mut_slice())
     }
@@ -296,16 +324,9 @@ unsafe impl<'arena> Arena for BumpArena<'arena> {
         align: usize,
     ) -> Result<&mut [u8], OutOfMemory> {
         if len == 0 {
-            assert!(align.is_power_of_two());
-            // SAFE: zero-length slices have no restrictions on the pointer
-            // beyond non-null-ness and well-aligned-ness, so we materialize
-            // one out of thin air.
-            //
-            // NonNull::dangling() is optimial, but that required having a
-            // concrete type.
-            return Ok(unsafe {
-                slice::from_raw_parts_mut(align as *mut u8, 0)
-            });
+            // Forward to OutOfMemory, which will always succeed on zero-length
+            // allocations.
+            return OutOfMemory.alloc_aligned(0, align);
         }
 
         self.align_to(align)?;
