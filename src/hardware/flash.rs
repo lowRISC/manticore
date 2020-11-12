@@ -625,4 +625,58 @@ impl Region {
             len,
         }
     }
+
+    /// Returns a `Region` big enough to hold a `T`.
+    pub const fn for_type<T>() -> Self {
+        Self::new(0, mem::size_of::<T>() as u32)
+    }
+
+    /// Returns a `Region` big enough to hold a `[T]` with the given number of
+    /// elements.
+    /// 
+    /// Returns `None` on overflow`.
+    pub fn for_slice<T>(n: usize) -> Option<Self> {
+        Some(Self::new(0, mem::size_of::<T>().checked_mul(n)? as u32))
+    }
+
+    /// Returns the end address of `self`, pointing one past the end of it.
+    pub fn end(self) -> u32 {
+        self.ptr.address.saturating_add(self.len)
+    }
+
+    /// Returns a new `Region` that comes immediately after `self`, with the
+    /// given length.
+    pub fn and_then(self, len: u32) -> Self {
+        Self::new(self.end(), len)
+    }
+
+    /// Interprets `sub` as a subregion of `self`, returning a new `Region` of
+    /// the same size as `sub`.
+    /// 
+    /// Returns `None` if `sub` is not a subregion of `self`.
+    pub fn subregion(self, sub: Region) -> Option<Self> {
+        if sub.len.saturating_add(sub.ptr.address) > self.len {
+            return None;
+        }
+
+        Some(Region::new(
+            self.ptr.address.checked_add(sub.ptr.address)?,
+            sub.len,
+        ))
+    }
+
+    /// Contracts `self` by dropping the first `n` bytes.
+    /// 
+    /// Returns `None` if `n` is greater than `self.len`, or if any overflow
+    /// occurs.
+    pub fn skip(self, n: u32) -> Option<Self> {
+        Some(Region::new(self.ptr.address.checked_add(n)?, self.len.checked_sub(n)?))
+    }
+
+    /// Contracts `self` by dropping the last `n` bytes.
+    /// 
+    /// Returns `None` if `n` is greater than `self.len`.
+    pub fn skip_back(self, n: u32) -> Option<Self> {
+        Some(Region::new(self.ptr.address, self.len.checked_sub(n)?))
+    }
 }
