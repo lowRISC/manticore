@@ -70,7 +70,7 @@ use core::mem::size_of;
 use arrayvec::ArrayVec;
 
 use crate::crypto::sha256;
-use crate::hardware::flash::FlashZero;
+use crate::hardware::flash::Flash;
 use crate::hardware::flash::Region;
 use crate::io;
 use crate::io::Read as _;
@@ -80,6 +80,7 @@ use crate::manifest::read_zerocopy;
 use crate::manifest::take_bytes;
 use crate::manifest::Error;
 use crate::mem::cow::Cow;
+use crate::mem::Arena;
 
 #[cfg(all(feature = "inject-alloc", feature = "serde"))]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -196,10 +197,12 @@ pub struct FwVersion<'m> {
 impl<'m, Provenance> Fpm<'m, Provenance> {
     /// Parse an `Fpm` out of a parsed and verified `Manifest`.
     pub fn parse(
-        container: &'m Container<impl FlashZero, Provenance>,
+        container: &'m Container<impl Flash, Provenance>,
+        arena: &'m impl Arena,
     ) -> Result<Self, Error> {
         // FIXME(mcyoung): don't read the entire buffer at once.
-        let mut body = container.flash().read_zerocopy(container.body())?;
+        let mut body =
+            container.flash().read_direct(container.body(), arena)?;
 
         let mut fpm = Self {
             versions: ArrayVec::new(),
@@ -324,6 +327,7 @@ mod test {
     use crate::manifest::container::Containerizer;
     use crate::manifest::container::Metadata;
     use crate::manifest::ManifestType;
+    use crate::mem::OutOfMemory;
 
     #[test]
     fn round_trip() {
@@ -361,10 +365,14 @@ mod test {
         let sha = ring::sha256::Builder::new();
         let manifest_bytes = &*builder.sign(&sha, &mut signer).unwrap();
 
-        let manifest =
-            Container::parse_and_verify(Ram(manifest_bytes), &sha, &mut rsa)
-                .unwrap();
-        let fpm2 = Fpm::parse(&manifest).unwrap();
+        let manifest = Container::parse_and_verify(
+            Ram(manifest_bytes),
+            &sha,
+            &mut rsa,
+            &OutOfMemory,
+        )
+        .unwrap();
+        let fpm2 = Fpm::parse(&manifest, &OutOfMemory).unwrap();
         assert_eq!(fpm, fpm2);
 
         let mut builder = Containerizer::new(&mut buf2)
@@ -377,10 +385,14 @@ mod test {
         let manifest_bytes2 = builder.sign(&sha, &mut signer).unwrap();
         assert_eq!(manifest_bytes, manifest_bytes2);
 
-        let manifest =
-            Container::parse_and_verify(Ram(manifest_bytes2), &sha, &mut rsa)
-                .unwrap();
-        let fpm3 = Fpm::parse(&manifest).unwrap();
+        let manifest = Container::parse_and_verify(
+            Ram(manifest_bytes2),
+            &sha,
+            &mut rsa,
+            &OutOfMemory,
+        )
+        .unwrap();
+        let fpm3 = Fpm::parse(&manifest, &OutOfMemory).unwrap();
         assert_eq!(fpm, fpm3);
 
         // NOTE: this re-orders the drop order for this function so that each

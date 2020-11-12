@@ -24,6 +24,7 @@ use manticore::manifest::fpm::Fpm;
 use manticore::manifest::provenance;
 use manticore::manifest::ManifestType;
 use manticore::mem::BumpArena;
+use manticore::mem::OutOfMemory;
 use manticore::protocol::firmware_version;
 use manticore::protocol::wire::FromWire;
 use manticore::protocol::wire::ToWire;
@@ -354,6 +355,7 @@ fn main() {
                     Ram(&buf),
                     &sha,
                     &mut engine,
+                    &OutOfMemory,
                 ) {
                     Ok(c) => c,
                     Err(manifest::Error::SignatureFailure) => {
@@ -368,7 +370,7 @@ fn main() {
 
             match container.manifest_type() {
                 ManifestType::Fpm => {
-                    let fpm = Fpm::parse(&container)
+                    let fpm = Fpm::parse(&container, &OutOfMemory)
                         .expect("failed to parse manifest");
                     if pretty {
                         serde_json::to_writer_pretty(output, &fpm)
