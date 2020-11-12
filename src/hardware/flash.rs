@@ -283,102 +283,6 @@ impl<'flash, F: Flash> FlashExt<'flash> for &'flash F {
     }
 }
 
-/// Adapter for working with a sub-region of a [`Flash`] type.
-///
-/// Reads and writes on the device will be constrained to a given [`Region`].
-/// This is especially useful for operating on a blob contained within another
-/// region of flash.
-///
-/// There is no requirement that [`Region`] actually overlap with the address
-/// space of `F`; the [`Flash`] implementation is still responsible for doing
-/// bounds checks, after offsets are bounds-checked within `Region`.
-#[derive(Copy, Clone)]
-pub struct SubFlash<F>(pub F, pub Region);
-
-impl<F: Flash> SubFlash<F> {
-    /// Creates a new `SubFlash` representing the entirety of the given device.
-    pub fn full(flash: F) -> Result<Self, Error> {
-        let region = Region::new(0, flash.size()?);
-        Ok(Self(flash, region))
-    }
-}
-
-impl<F> SubFlash<F> {
-    /// Interprets `region` as a subregion of this `SubFlash`, returning a new
-    /// `SubFlash` that represents that region.
-    pub fn reslice(self, region: Region) -> Option<Self> {
-        if region.len >= self.1.len {
-            return None;
-        }
-
-        Some(Self(
-            self.0,
-            Region::new(
-                self.1.ptr.address.checked_add(region.ptr.address)?,
-                region.len,
-            ),
-        ))
-    }
-}
-
-unsafe impl<F: Flash> Flash for SubFlash<F> {
-    #[inline]
-    fn size(&self) -> Result<u32, Error> {
-        Ok(self.1.len)
-    }
-
-    #[inline]
-    fn read(&self, offset: Ptr, out: &mut [u8]) -> Result<(), Error> {
-        if offset.address >= self.1.len {
-            return Err(Error::OutOfRange);
-        }
-        let offset = offset
-            .address
-            .checked_add(self.1.ptr.address)
-            .ok_or(Error::OutOfRange)?;
-
-        self.0.read(Ptr::new(offset), out)
-    }
-
-    #[inline]
-    fn read_direct<'a: 'c, 'b: 'c, 'c>(
-        &'a self,
-        region: Region,
-        arena: &'b dyn Arena,
-        align: usize,
-    ) -> Result<&'c [u8], Error> {
-        if region.ptr.address >= self.1.len {
-            return Err(Error::OutOfRange);
-        }
-        let offset = region
-            .ptr
-            .address
-            .checked_add(self.1.ptr.address)
-            .ok_or(Error::OutOfRange)?;
-
-        self.0
-            .read_direct(Region::new(offset, region.len), arena, align)
-    }
-
-    #[inline]
-    fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {
-        if offset.address >= self.1.len {
-            return Err(Error::OutOfRange);
-        }
-        let offset = offset
-            .address
-            .checked_add(self.1.ptr.address)
-            .ok_or(Error::OutOfRange)?;
-
-        self.0.program(Ptr::new(offset), buf)
-    }
-
-    #[inline]
-    fn flush(&mut self) -> Result<(), Error> {
-        self.0.flush()
-    }
-}
-
 /// Adapter for converting RAM-backed storage into a [`Flash`].
 ///
 /// For the purposes of this type, "RAM-backed" means that `AsRef<[u8]>`
@@ -534,10 +438,29 @@ impl<F: Flash> FlashIo<F> {
     pub fn skip(&mut self, bytes: usize) {
         self.cursor = self.cursor.saturating_add(bytes as u32);
     }
+
+    /// Skips the "end" pointer `bytes` bytes forward.
+    ///
+    /// This operation always succeeds, but attempting to read past the end of
+    /// flash will always result in an error.
+    pub fn take(&mut self, bytes: usize) {
+        self.len = self.len.saturating_sub(bytes as u32);
+    }
+
+    /// Adapts this `FlashIo` to only read bytes out from the selected
+    /// `Region`.
+    pub fn reslice(&mut self, region: Region) {
+        self.cursor = region.ptr.address;
+        self.len = region.end();
+    }
 }
 
 impl<F: Flash> io::Read for FlashIo<F> {
     fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), io::Error> {
+        if self.remaining_data() == 0 {
+            return Err(io::Error::BufferExhausted);
+        }
+
         self.flash
             .read(Ptr::new(self.cursor), out)
             .map_err(|_| io::Error::Internal)?;
@@ -568,6 +491,10 @@ impl<F: Flash> Iterator for FlashIo<F> {
 
 impl<F: Flash> io::Write for FlashIo<F> {
     fn write_bytes(&mut self, buf: &[u8]) -> Result<(), io::Error> {
+        if self.remaining_data() == 0 {
+            return Err(io::Error::BufferExhausted);
+        }
+
         self.flash
             .program(Ptr::new(self.cursor), buf)
             .map_err(|_| io::Error::Internal)?;
@@ -633,7 +560,7 @@ impl Region {
 
     /// Returns a `Region` big enough to hold a `[T]` with the given number of
     /// elements.
-    /// 
+    ///
     /// Returns `None` on overflow`.
     pub fn for_slice<T>(n: usize) -> Option<Self> {
         Some(Self::new(0, mem::size_of::<T>().checked_mul(n)? as u32))
@@ -652,7 +579,7 @@ impl Region {
 
     /// Interprets `sub` as a subregion of `self`, returning a new `Region` of
     /// the same size as `sub`.
-    /// 
+    ///
     /// Returns `None` if `sub` is not a subregion of `self`.
     pub fn subregion(self, sub: Region) -> Option<Self> {
         if sub.len.saturating_add(sub.ptr.address) > self.len {
@@ -666,17 +593,20 @@ impl Region {
     }
 
     /// Contracts `self` by dropping the first `n` bytes.
-    /// 
+    ///
     /// Returns `None` if `n` is greater than `self.len`, or if any overflow
     /// occurs.
     pub fn skip(self, n: u32) -> Option<Self> {
-        Some(Region::new(self.ptr.address.checked_add(n)?, self.len.checked_sub(n)?))
+        Some(Region::new(
+            self.ptr.address.checked_add(n)?,
+            self.len.checked_sub(n)?,
+        ))
     }
 
     /// Contracts `self` by dropping the last `n` bytes.
-    /// 
+    ///
     /// Returns `None` if `n` is greater than `self.len`.
-    pub fn skip_back(self, n: u32) -> Option<Self> {
+    pub fn take(self, n: u32) -> Option<Self> {
         Some(Region::new(self.ptr.address, self.len.checked_sub(n)?))
     }
 }
