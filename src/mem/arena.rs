@@ -25,9 +25,25 @@ use crate::mem::stride_of;
 /// memory or that memory that is more aligned than is supported
 /// was requested.
 ///
+/// Additionally, `OutOfMemory` implements [`Arena`] itself, acting as the
+/// "trivial" no-memory-was-provided arena. This is particularly useful for
+/// when it is known that no memory will ever be allocated on the arena.
+///
 /// [`Arena`]: trait.Arena.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OutOfMemory;
+
+unsafe impl Arena for OutOfMemory {
+    fn alloc_aligned(
+        &self,
+        _: usize,
+        _: usize,
+    ) -> Result<&mut [u8], OutOfMemory> {
+        Err(*self)
+    }
+
+    fn reset(&mut self) {}
+}
 
 /// Represents a re-usable allocation arena.
 ///
@@ -38,7 +54,7 @@ pub struct OutOfMemory;
 /// See [`BumpArena`] for an illustration of how the borrow checker is used to
 /// do this safely.
 ///
-/// # Safety
+/// # Sety
 ///
 /// `alloc_aligned()` is required to return memory with certain size and
 /// alignment guarantees. While it itself is a safe function, unsafe code
@@ -46,7 +62,7 @@ pub struct OutOfMemory;
 ///
 /// [`BumpArena`]: struct.BumpArena.html
 pub unsafe trait Arena {
-    /// Allocates `len` bytes of `align`-aligned memory from this arena.
+    /// Allocates `len` bytes of `align`-a`igned memory from this arena.
     ///
     /// This is a low-level function: prefer instead to use the helpers defined
     /// in [`ArenaExt`].
@@ -148,7 +164,7 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
         let bytes =
             self.alloc_aligned(mem::size_of::<T>(), mem::align_of::<T>())?;
 
-        let lv = LayoutVerified::new(bytes)
+        let lv = LayoutVerified::<_, T>::new(bytes)
             .expect("alloc_aligned() implemented incorrectly");
         Ok(lv.into_mut())
     }
@@ -162,7 +178,7 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
         let bytes =
             self.alloc_aligned(bytes_requested, mem::align_of::<T>())?;
 
-        let lv = LayoutVerified::new_slice(bytes)
+        let lv = LayoutVerified::<_, [T]>::new_slice(bytes)
             .expect("alloc_aligned() implemented incorrectly");
         Ok(lv.into_mut_slice())
     }
