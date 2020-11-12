@@ -13,12 +13,19 @@ use crate::io;
 
 pub mod container;
 pub mod fpm;
+pub mod pfm;
 
 wire_enum! {
     /// A Cerberus manifest type.
     ///
     /// This enum represents the "magic number" `u16` value in a maniest header.
     pub enum ManifestType: u16 {
+        /// A ["Platform Firmware Manifest"], a manifest which describes
+        /// firmware that is allowed to run on a platfrom.
+        ///
+        /// ["Platform Firmware Manifest"]: pfm/index.html
+        Pfm = 0x706d,
+
         /// A ["Firmware Policy Manifest"], a Manticore-specific variant of the
         /// PFM.
         ///
