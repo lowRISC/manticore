@@ -7,8 +7,6 @@
 //! This module provides a Cerberus command allowing the versions of various
 //! on-device firmware to be queried.
 
-use core::convert::TryInto as _;
-
 use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
@@ -100,6 +98,8 @@ make_fuzz_safe! {
 fn deserialize_u8x32<'de: 'a, 'a, D: Deserializer<'de>>(
     d: D,
 ) -> Result<&'a [u8; 32], D::Error> {
+    use core::convert::TryInto as _;
+
     let slice: &'a [u8] = Deserialize::deserialize(d)?;
     slice.try_into().map_err(|_| {
         <D::Error as serde::de::Error>::invalid_length(slice.len(), &"32")

@@ -12,12 +12,16 @@
 //!
 //! [`Flash`]: trait.Flash.html
 
+#![allow(unsafe_code)]
+
 use core::convert::TryInto;
+use core::mem;
 
 use static_assertions::assert_obj_safe;
 
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
+use zerocopy::LayoutVerified;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -63,7 +67,11 @@ impl From<OutOfMemory> for Error {
 /// block of random-access memory. It is the implementation's responsibility
 /// to implement these operations efficiently with respect to the underlying
 /// device.
-pub trait Flash {
+///
+/// # Safety
+///
+/// This trait is unsafe due to alignment requirements in `read_direct()`.
+pub unsafe trait Flash {
     /// Returns the size, in bytes, of this device.
     fn size(&self) -> Result<u32, Error>;
 
@@ -79,6 +87,11 @@ pub trait Flash {
     /// an arena must be passed in to provide for the possiblity of an
     /// allocation requirement.
     ///
+    /// This function additionally takes an alignment requirement: it may be
+    /// useful to require that the returned memory be aligned. Passing an
+    /// alignment greater than `1` may reduce the possibility of avoiding
+    /// copies.
+    ///
     /// This function is not provided with a default implementation, though
     /// the following should be a sufficient starting point:
     /// ```
@@ -92,18 +105,23 @@ pub trait Flash {
     /// fn read_direct<'a: 'c, 'b: 'c, 'c>(
     ///     &'a self,
     ///     region: Region,
-    ///     arena: &'b dyn Arena
+    ///     arena: &'b dyn Arena,
+    ///     align: usize,
     /// ) -> Result<&'c [u8], Error> {
-    ///     let mut buf = arena.alloc_slice::<u8>(region.len as usize)?;
+    ///     let mut buf = arena.alloc_aligned(region.len as usize, align)?;
     ///     self.read(region.ptr, &mut buf)?;
     ///     Ok(buf)
     /// }
     /// # }
     /// ```
+    /// # Panics
+    ///
+    /// This function may panic if `align` is not a power of two.
     fn read_direct<'a: 'c, 'b: 'c, 'c>(
         &'a self,
         region: Region,
         arena: &'b dyn Arena,
+        align: usize,
     ) -> Result<&'c [u8], Error>;
 
     /// Attempts to write `out.len()` bytes starting at `offset`.
@@ -125,7 +143,7 @@ pub trait Flash {
 }
 assert_obj_safe!(Flash);
 
-impl<F: Flash> Flash for &F {
+unsafe impl<F: Flash> Flash for &F {
     #[inline]
     fn size(&self) -> Result<u32, Error> {
         F::size(self)
@@ -141,8 +159,9 @@ impl<F: Flash> Flash for &F {
         &'a self,
         region: Region,
         arena: &'b dyn Arena,
+        align: usize,
     ) -> Result<&'c [u8], Error> {
-        F::read_direct(self, region, arena)
+        F::read_direct(self, region, arena, align)
     }
 
     #[inline]
@@ -156,7 +175,7 @@ impl<F: Flash> Flash for &F {
     }
 }
 
-impl<F: Flash> Flash for &mut F {
+unsafe impl<F: Flash> Flash for &mut F {
     #[inline]
     fn size(&self) -> Result<u32, Error> {
         F::size(self)
@@ -172,8 +191,9 @@ impl<F: Flash> Flash for &mut F {
         &'a self,
         region: Region,
         arena: &'b dyn Arena,
+        align: usize,
     ) -> Result<&'c [u8], Error> {
-        F::read_direct(self, region, arena)
+        F::read_direct(self, region, arena, align)
     }
 
     #[inline]
@@ -184,6 +204,82 @@ impl<F: Flash> Flash for &mut F {
     #[inline]
     fn flush(&mut self) -> Result<(), Error> {
         F::flush(self)
+    }
+}
+
+/// Convenience functions for direct flash reads, exposed as a trait.
+///
+/// Note that this trait is implemened for `&impl Flash`, which is the reason
+/// for the slightly odd signature.
+pub trait FlashExt<'flash> {
+    /// Reads a value of type `T`.
+    ///
+    /// See [`ArenaExt::alloc()`](../../mem/arena/trait.ArenaExt.html#tymethod.alloc).
+    fn read_object<'b: 'c, 'c, T>(
+        self,
+        offset: Ptr,
+        arena: &'b dyn Arena,
+    ) -> Result<&'c T, Error>
+    where
+        'flash: 'c,
+        T: AsBytes + FromBytes + Copy;
+
+    /// Reads a slice of type `[T]`.
+    ///
+    /// See [`ArenaExt::alloc_slice()`](../../mem/arena/trait.ArenaExt.html#tymethod.alloc_slice).
+    fn read_slice<'b: 'c, 'c, T>(
+        self,
+        offset: Ptr,
+        n: usize,
+        arena: &'b dyn Arena,
+    ) -> Result<&'c [T], Error>
+    where
+        'flash: 'c,
+        T: AsBytes + FromBytes + Copy;
+}
+
+impl<'flash, F: Flash> FlashExt<'flash> for &'flash F {
+    fn read_object<'b: 'c, 'c, T>(
+        self,
+        offset: Ptr,
+        arena: &'b dyn Arena,
+    ) -> Result<&'c T, Error>
+    where
+        'flash: 'c,
+        T: AsBytes + FromBytes + Copy,
+    {
+        let bytes = self.read_direct(
+            Region::new(offset.address, mem::size_of::<T>() as u32),
+            arena,
+            mem::align_of::<T>(),
+        )?;
+
+        let lv = LayoutVerified::<_, T>::new(bytes)
+            .expect("alloc_aligned() implemented incorrectly");
+        Ok(lv.into_ref())
+    }
+
+    fn read_slice<'b: 'c, 'c, T>(
+        self,
+        offset: Ptr,
+        n: usize,
+        arena: &'b dyn Arena,
+    ) -> Result<&'c [T], Error>
+    where
+        'flash: 'c,
+        T: AsBytes + FromBytes + Copy,
+    {
+        let bytes_requested =
+            mem::size_of::<T>().checked_mul(n).ok_or(OutOfMemory)?;
+        let bytes = self.read_direct(
+            Region::new(offset.address, bytes_requested as u32),
+            arena,
+            mem::align_of::<T>(),
+        )?;
+
+        let lv = LayoutVerified::<_, [T]>::new_slice(bytes)
+            .expect("alloc_aligned() implemented incorrectly");
+        Ok(lv.into_slice())
     }
 }
 
@@ -225,7 +321,7 @@ impl<F> SubFlash<F> {
     }
 }
 
-impl<F: Flash> Flash for SubFlash<F> {
+unsafe impl<F: Flash> Flash for SubFlash<F> {
     #[inline]
     fn size(&self) -> Result<u32, Error> {
         Ok(self.1.len)
@@ -249,6 +345,7 @@ impl<F: Flash> Flash for SubFlash<F> {
         &'a self,
         region: Region,
         arena: &'b dyn Arena,
+        align: usize,
     ) -> Result<&'c [u8], Error> {
         if region.ptr.address >= self.1.len {
             return Err(Error::OutOfRange);
@@ -259,7 +356,8 @@ impl<F: Flash> Flash for SubFlash<F> {
             .checked_add(self.1.ptr.address)
             .ok_or(Error::OutOfRange)?;
 
-        self.0.read_direct(Region::new(offset, region.len), arena)
+        self.0
+            .read_direct(Region::new(offset, region.len), arena, align)
     }
 
     #[inline]
@@ -290,7 +388,7 @@ impl<F: Flash> Flash for SubFlash<F> {
 #[derive(Copy, Clone)]
 pub struct Ram<Bytes>(pub Bytes);
 
-impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
+unsafe impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
     fn size(&self) -> Result<u32, Error> {
         self.0
             .as_ref()
@@ -304,6 +402,7 @@ impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
         out.copy_from_slice(self.read_direct(
             Region::new(offset.address, out.len() as u32),
             &OutOfMemory,
+            1,
         )?);
         Ok(())
     }
@@ -311,7 +410,8 @@ impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
     fn read_direct<'a: 'c, 'b: 'c, 'c>(
         &'a self,
         region: Region,
-        _: &'b dyn Arena,
+        arena: &'b dyn Arena,
+        align: usize,
     ) -> Result<&'c [u8], Error> {
         let start = region.ptr.address as usize;
         let end = start
@@ -321,7 +421,15 @@ impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
             return Err(Error::OutOfRange);
         }
 
-        Ok(&self.0.as_ref()[start..end])
+        let slice = &self.0.as_ref()[start..end];
+        assert!(align.is_power_of_two());
+        if slice.as_ptr() as usize & (align - 1) == 0 {
+            return Ok(slice);
+        }
+
+        let buf = arena.alloc_aligned(slice.len(), align)?;
+        buf.copy_from_slice(slice);
+        Ok(buf)
     }
 
     fn program(&mut self, _: Ptr, _: &[u8]) -> Result<(), Error> {
@@ -338,7 +446,7 @@ impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
 #[derive(Copy, Clone)]
 pub struct RamMut<Bytes>(pub Bytes);
 
-impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
+unsafe impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
     fn size(&self) -> Result<u32, Error> {
         self.0
             .as_ref()
@@ -352,6 +460,7 @@ impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
         out.copy_from_slice(self.read_direct(
             Region::new(offset.address, out.len() as u32),
             &OutOfMemory,
+            1,
         )?);
         Ok(())
     }
@@ -359,7 +468,8 @@ impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
     fn read_direct<'a: 'c, 'b: 'c, 'c>(
         &'a self,
         region: Region,
-        _: &'b dyn Arena,
+        arena: &'b dyn Arena,
+        align: usize,
     ) -> Result<&'c [u8], Error> {
         let start = region.ptr.address as usize;
         let end = start
@@ -369,7 +479,15 @@ impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
             return Err(Error::OutOfRange);
         }
 
-        Ok(&self.0.as_ref()[start..end])
+        let slice = &self.0.as_ref()[start..end];
+        assert!(align.is_power_of_two());
+        if slice.as_ptr() as usize & (align - 1) == 0 {
+            return Ok(slice);
+        }
+
+        let buf = arena.alloc_aligned(slice.len(), align)?;
+        buf.copy_from_slice(slice);
+        Ok(buf)
     }
 
     fn program(&mut self, offset: Ptr, buf: &[u8]) -> Result<(), Error> {

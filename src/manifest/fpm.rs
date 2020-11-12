@@ -202,7 +202,7 @@ impl<'m, Provenance> Fpm<'m, Provenance> {
     ) -> Result<Self, Error> {
         // FIXME(mcyoung): don't read the entire buffer at once.
         let mut body =
-            container.flash().read_direct(container.body(), arena)?;
+            container.flash().read_direct(container.body(), arena, 4)?;
 
         let mut fpm = Self {
             versions: ArrayVec::new(),
