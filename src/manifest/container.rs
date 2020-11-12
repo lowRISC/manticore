@@ -135,7 +135,7 @@ impl<F: Flash> Container<F, provenance::Signed> {
             .finish(&mut digest)
             .map_err(|_| Error::SignatureFailure)?;
 
-        let sig = c.flash.read_direct(sig, arena)?;
+        let sig = c.flash.read_direct(sig, arena, 1)?;
         rsa.verify_signature(sig, &digest)
             .map_err(|_| Error::SignatureFailure)?;
 
@@ -490,7 +490,7 @@ pub(crate) mod test {
         assert_eq!(
             manifest
                 .flash()
-                .read_direct(manifest.body(), &OutOfMemory)
+                .read_direct(manifest.body(), &OutOfMemory, 1)
                 .unwrap(),
             MANIFEST_CONTENTS
         );
@@ -591,7 +591,7 @@ pub(crate) mod test {
         assert_eq!(
             manifest
                 .flash()
-                .read_direct(manifest.body(), &OutOfMemory)
+                .read_direct(manifest.body(), &OutOfMemory, 1)
                 .unwrap(),
             MANIFEST_CONTENTS
         );
