@@ -255,7 +255,7 @@ impl<'m, Provenance> Fpm<'m, Provenance> {
     pub fn unparse(&self, mut out: impl io::Write) -> Result<(), Error> {
         out.write_le(self.versions.len() as u32)?;
         for version in self.versions() {
-            out.write_le(version.version_region.ptr.address)?;
+            out.write_le(version.version_region.offset)?;
 
             let signed_len: u16 = version
                 .signed_region
@@ -288,11 +288,11 @@ impl<'m, Provenance> Fpm<'m, Provenance> {
             }
 
             for slice in version.signed_region.iter() {
-                out.write_le(slice.ptr.address)?;
+                out.write_le(slice.offset)?;
                 out.write_le(slice.len)?;
             }
             for slice in version.write_region.iter() {
-                out.write_le(slice.ptr.address)?;
+                out.write_le(slice.offset)?;
                 out.write_le(slice.len)?;
             }
             out.write_bytes(&*version.signed_region_hash)?;
