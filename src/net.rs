@@ -17,6 +17,7 @@
 
 #![allow(missing_docs)]
 
+use core::cell::Cell;
 use static_assertions::assert_obj_safe;
 
 use crate::io;
@@ -41,6 +42,8 @@ pub enum Error {
     /// Indicates that some operation was done out of order, such as attempting
     /// to reference part of the request once a reply has begun.
     OutOfOrder,
+    /// The operation timed out.
+    Timeout,
 }
 
 impl From<io::Error> for Error {
@@ -175,6 +178,57 @@ pub trait HostResponse {
     /// Callers should remember to call this function; failing to do so may
     /// result in a response not being sent properly.
     fn finish(&mut self) -> Result<(), Error>;
+}
+
+/// Represents a physical port that can be used to interact with client devices.
+///
+/// This for example is used for a PA RoT to send messages to a AC RoT.
+///
+/// This trait provides a generic mechanism for sending and receiving requests
+/// from devices.
+pub trait DevicePort {
+    /// The send function takes a `header` and `msg` to send to a device.
+    /// The implementation of this function must send the header and msg
+    /// to the device specified by `dest`.
+    ///
+    /// This should block until the operation is complete.
+    ///
+    /// On success it should return nothing.
+    /// On a failure an error is returned.
+    fn send(
+        &mut self,
+        dest: u8,
+        header: Header,
+        msg: &[u8],
+    ) -> Result<(), Error>;
+
+    /// This is a blocking call that should wait for a response or a timeout.
+    ///
+    /// `duration`: Number of milliseconds to wait.
+    ///
+    /// If a response is received in time this should return a success.
+    /// On a time out Error::Timeout is returned.
+    /// Other errors should return a suitable Error as well.
+    fn wait_for_response(&mut self, duration: usize) -> Result<(), Error>;
+
+    /// The `process_response()` function should be called once a reply
+    /// has been received for the device the `send()` operation was sent to.
+    /// `msg` should contain the raw message to be processed.
+    ///
+    /// On success returns the response.
+    fn receive_response(&mut self) -> Result<&mut dyn DeviceResponse, Error>;
+}
+assert_obj_safe!(DevicePort);
+
+/// Provides the "response" half of a transaction with a device.
+///
+/// This for example is used for a PA RoT to send messages to a AC RoT.
+pub trait DeviceResponse {
+    /// Returns the header sent by the device for this response.
+    fn header(&self) -> Result<Header, Error>;
+
+    /// Returns the raw byte stream for the payload of the response.
+    fn payload(&mut self) -> Result<&mut dyn Read, Error>;
 }
 
 /// A simple in-memory [`HostPort`].
@@ -344,5 +398,81 @@ impl HostResponse for InMemInner<'_> {
     fn finish(&mut self) -> Result<(), Error> {
         self.finished = true;
         Ok(())
+    }
+}
+
+/// A simple in-memory [`DevicePort`].
+pub struct InMemDevice<'buf>(InMemDeviceInner<'buf>);
+
+struct InMemDeviceInner<'buf> {
+    rx_header: Cell<Option<Header>>,
+    rx: &'buf [u8],
+    tx_dest: Cell<u8>,
+    tx_header: Cell<Option<Header>>,
+    tx: &'buf mut [u8],
+    finished: Cell<bool>,
+}
+
+impl<'buf> Default for InMemDevice<'buf> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<'buf> InMemDevice<'buf> {
+    /// Creates a new `InMemDeviceInner`, with the given output buffer for holding
+    /// messages to be "transmitted", acting as the final destination for
+    /// replies to this host.
+    pub fn new() -> Self {
+        Self(InMemDeviceInner {
+            rx_header: Cell::new(None),
+            rx: &[],
+            tx_dest: Cell::new(0),
+            tx_header: Cell::new(None),
+            tx: &mut [],
+            finished: Cell::new(false),
+        })
+    }
+
+    pub fn response(&mut self, header: Header, message: &'buf [u8]) {
+        self.0.rx_header.set(Some(header));
+        self.0.rx = message;
+    }
+}
+
+impl<'buf> DevicePort for InMemDevice<'buf> {
+    fn send(
+        &mut self,
+        dest: u8,
+        header: Header,
+        msg: &[u8],
+    ) -> Result<(), Error> {
+        self.0.tx_dest.set(dest);
+        self.0.tx_header.set(Some(header));
+        self.0.tx.copy_from_slice(msg);
+
+        self.0.finished.set(false);
+
+        Ok(())
+    }
+
+    fn wait_for_response(&mut self, _timeout: usize) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn receive_response(&mut self) -> Result<&mut dyn DeviceResponse, Error> {
+        Ok(&mut self.0)
+    }
+}
+impl DeviceResponse for InMemDeviceInner<'_> {
+    fn header(&self) -> Result<Header, Error> {
+        if !self.finished.get() {
+            return Err(Error::OutOfOrder);
+        }
+        Ok(self.tx_header.get().unwrap())
+    }
+
+    fn payload(&mut self) -> Result<&mut dyn Read, Error> {
+        Ok(&mut self.rx)
     }
 }
