@@ -165,7 +165,7 @@ impl<'arena> Arena for BumpArena<'arena> {
         let slice = unsafe {
             // SAFE: buf_len >= cursor, and buf_len < isize::MAX; therefore,
             // this cast always produces a positive offset.
-            let offset_ptr = self.buf_ptr.as_ptr().offset(cursor as isize);
+            let offset_ptr = self.buf_ptr.as_ptr().add(cursor);
             // SAFE: buf_ptr[cursor..proposed_cursor] is initialized.
             slice::from_raw_parts_mut(offset_ptr, len)
         };

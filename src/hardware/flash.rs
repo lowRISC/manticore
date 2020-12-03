@@ -308,7 +308,8 @@ impl<F: Flash, A: Arena> FlashZero for ArenaFlash<F, A> {
 
     #[inline]
     fn reset(&mut self) -> Result<(), Error> {
-        Ok(self.1.reset())
+        self.1.reset();
+        Ok(())
     }
 }
 
@@ -342,7 +343,7 @@ impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
     }
 
     fn program(&mut self, _: Ptr, _: &[u8]) -> Result<(), Error> {
-        return Err(Error::Locked);
+        Err(Error::Locked)
     }
 }
 
