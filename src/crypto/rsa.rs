@@ -60,6 +60,11 @@ impl ModulusLength {
 pub trait PublicKey {
     /// Returns this key's modulus length.
     fn len(&self) -> ModulusLength;
+
+    /// Returns true is this key is empty
+    fn is_empty(&self) -> bool {
+        false
+    }
 }
 
 /// The RSA public/private keypair type for a particular [`Signer`] type.

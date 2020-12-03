@@ -111,6 +111,12 @@ impl Builder {
     }
 }
 
+impl Default for Builder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl rsa::Builder for Builder {
     type Engine = Engine;
 

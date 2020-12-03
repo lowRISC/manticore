@@ -32,7 +32,7 @@ pub trait Builder {
 
     /// Convenience function for hashing a contiguous buffer without having
     /// to deal with a hasher directly.
-    fn hash_contiguous<'a>(
+    fn hash_contiguous(
         &self,
         bytes: &[u8],
         out: &mut Digest,

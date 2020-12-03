@@ -202,10 +202,7 @@ impl CommandType {
     /// Returns `true` when `self` represents a `manticore` extension to the
     /// protocol.
     pub fn is_manticore_extension(self) -> bool {
-        match self {
-            Self::DeviceUptime => true,
-            _ => false,
-        }
+        matches!(self, Self::DeviceUptime)
     }
 }
 

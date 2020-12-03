@@ -57,6 +57,11 @@ impl BitBuf {
         self.len as usize
     }
 
+    /// Returns true is the number of bits in the buffer is zero.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
     /// Returns the bits currently in the buffer; all bits beyond `len` are
     /// guaranteed to be zero.
     pub fn bits(&self) -> u8 {
@@ -116,6 +121,12 @@ impl BitBuf {
     #[inline]
     pub fn write_zero_bits(&mut self, n: usize) -> Result<(), io::Error> {
         self.write_bits(n, 0)
+    }
+}
+
+impl Default for BitBuf {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
