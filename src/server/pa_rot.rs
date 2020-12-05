@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A `manticore` "server" for a PA-RoT.
+//! A `manticore` "server" and "client" for a PA-RoT.
 //!
 //! This module provides structures for serving responses to a host making
 //! requests to a PA-RoT.
@@ -174,6 +174,19 @@ where
         }
         result
     }
+
+    /// Start and process a outgoing request.
+    ///
+    /// The request message will be read from `req`, while the response
+    /// message will be written to `resp`.
+    #[cfg_attr(test, inline(never))]
+    pub fn process_response<'req>(
+        &mut self,
+        _device_port: &mut dyn net::DevicePort,
+        _arena: &'req impl Arena,
+    ) -> Result<(), Error> {
+        unimplemented!()
+    }
 }
 
 #[cfg(test)]
@@ -186,6 +199,7 @@ mod test {
     use crate::hardware::Identity as _;
     use crate::io::Cursor;
     use crate::mem::BumpArena;
+    use crate::net::DevicePort;
     use crate::protocol::capabilities::*;
     use crate::protocol::wire::FromWire;
     use crate::protocol::wire::ToWire;
@@ -245,6 +259,54 @@ mod test {
         Ok(resp_val)
     }
 
+    fn simulate_response<'a, C: protocol::Command<'a>, A: Arena>(
+        scratch_space: &'a mut [u8],
+        arena: &'a mut A,
+        request: C::Req,
+    ) -> Result<C::Resp, Error> {
+        let len = scratch_space.len();
+        let (req_scratch, _port_scratch) = scratch_space.split_at_mut(len / 2);
+        let mut cursor = Cursor::new(req_scratch);
+        request
+            .to_wire(&mut cursor)
+            .expect("failed to write request");
+        let request_bytes = cursor.take_consumed_bytes();
+
+        let header = Header {
+            is_request: true,
+            command: <C::Req as protocol::Request<'a>>::TYPE,
+        };
+
+        // Create the DevicePort
+        let mut device_port = net::InMemDevice::new();
+
+        // Send a request to a device
+        device_port.send(0x10, header, request_bytes).unwrap();
+
+        // Fake the response
+        device_port.response(
+            Header {
+                is_request: false,
+                command: <C::Req as protocol::Request<'a>>::TYPE,
+            },
+            &[1, 0, 2, 0, 3, 0, 4, 0],
+        );
+
+        // Block until we receive a response
+        device_port.wait_for_response(100)?;
+
+        // Get the response
+        let response = device_port.receive_response()?;
+
+        assert_eq!(response.header().unwrap(), header);
+
+        let payload = response.payload().unwrap();
+
+        let resp_val = FromWire::from_wire(payload, arena)
+            .expect("failed to read response");
+        Ok(resp_val)
+    }
+
     #[test]
     fn sanity() {
         let identity = fake::Identity::new(b"test version", b"random bits");
@@ -284,6 +346,17 @@ mod test {
             req,
         )
         .expect("got error from server");
+        assert_eq!(resp.id, DEVICE_ID);
+
+        arena.reset();
+
+        let req = protocol::device_id::DeviceIdRequest;
+        let resp = simulate_response::<protocol::DeviceId, _>(
+            &mut scratch,
+            &mut arena,
+            req,
+        )
+        .expect("got error from client");
         assert_eq!(resp.id, DEVICE_ID);
     }
 }
