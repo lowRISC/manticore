@@ -451,7 +451,7 @@ impl<'buf> DevicePort for InMemDevice<'buf> {
         self.0.tx_header.set(Some(header));
         self.0.tx.copy_from_slice(msg);
 
-        self.0.finished.set(false);
+        self.0.finished.set(true);
 
         Ok(())
     }
