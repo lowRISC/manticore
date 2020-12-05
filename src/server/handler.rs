@@ -250,10 +250,10 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
     fn run<A: Arena>(
         self,
         server: Server,
-        port: &mut dyn net::HostPort,
+        host_port: &mut dyn net::HostPort,
         arena: &'req A,
     ) -> Result<(), Error> {
-        let request = port.receive()?;
+        let request = host_port.receive()?;
         let header = request.header()?;
         if !header.is_request {
             return Err(FromWireError::OutOfRange.into());
