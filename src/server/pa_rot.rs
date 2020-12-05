@@ -73,7 +73,7 @@ where
     #[cfg_attr(test, inline(never))]
     pub fn process_request<'req>(
         &mut self,
-        port: &mut dyn net::HostPort,
+        host_port: &mut dyn net::HostPort,
         arena: &'req impl Arena,
     ) -> Result<(), Error> {
         let result = Handler::<&mut Self>::new()
@@ -166,7 +166,7 @@ where
                     err_count: zelf.err_count,
                 })
             })
-            .run(self, port, arena);
+            .run(self, host_port, arena);
 
         match result {
             Ok(_) => self.ok_count += 1,
@@ -225,8 +225,8 @@ mod test {
             .expect("failed to write request");
         let request_bytes = cursor.take_consumed_bytes();
 
-        let mut port = net::InMemHost::new(port_scratch);
-        port.request(
+        let mut host_port = net::InMemHost::new(port_scratch);
+        host_port.request(
             Header {
                 is_request: true,
                 command: <C::Req as protocol::Request<'a>>::TYPE,
@@ -234,9 +234,9 @@ mod test {
             request_bytes,
         );
 
-        server.process_request(&mut port, arena)?;
+        server.process_request(&mut host_port, arena)?;
 
-        let (header, mut resp) = port.response().unwrap();
+        let (header, mut resp) = host_port.response().unwrap();
         assert!(!header.is_request);
 
         let resp_val = FromWire::from_wire(&mut resp, arena)
