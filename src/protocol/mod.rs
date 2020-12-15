@@ -206,6 +206,21 @@ impl CommandType {
     }
 }
 
+impl From<u8> for CommandType {
+    fn from(num: u8) -> CommandType {
+        match num {
+            0x01 => CommandType::FirmwareVersion,
+            0x02 => CommandType::DeviceCapabilities,
+            0x03 => CommandType::DeviceId,
+            0x04 => CommandType::DeviceInfo,
+            0x87 => CommandType::ResetCounter,
+            0xa0 => CommandType::DeviceUptime,
+            0xa1 => CommandType::RequestCounter,
+            _ => CommandType::Error,
+        }
+    }
+}
+
 /// A parsed `manticore` header.
 ///
 /// This struct represents all of the meaningful fields from a `manticore`
