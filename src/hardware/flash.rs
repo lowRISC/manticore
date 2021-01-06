@@ -431,11 +431,16 @@ impl<F: Flash> FlashIo<F> {
         })
     }
 
+    /// Returns the next address that this `FlashIo` would read from.
+    pub fn cursor(&self) -> u32 {
+        self.cursor
+    }
+
     /// Skips the cursor `bytes` bytes forward.
     ///
     /// This operation always succeeds, but attempting to read past the end of
     /// flash will always result in an error.
-    pub fn skip(&mut self, bytes: usize) {
+    pub fn skip_bytes(&mut self, bytes: usize) {
         self.cursor = self.cursor.saturating_add(bytes as u32);
     }
 
@@ -443,7 +448,7 @@ impl<F: Flash> FlashIo<F> {
     ///
     /// This operation always succeeds, but attempting to read past the end of
     /// flash will always result in an error.
-    pub fn take(&mut self, bytes: usize) {
+    pub fn take_bytes(&mut self, bytes: usize) {
         self.len = self.len.saturating_sub(bytes as u32);
     }
 
