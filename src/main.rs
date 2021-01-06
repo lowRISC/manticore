@@ -320,6 +320,7 @@ fn main() {
                     fpm.unparse(&mut container)
                         .expect("failed to serialize manifest");
                 }
+                m => panic!("unsupported manifest type: {:?}", m),
             }
 
             let manifest = container
@@ -380,6 +381,7 @@ fn main() {
                             .expect("failed to write file");
                     }
                 }
+                m => panic!("unsupported manifest type: {:?}", m),
             }
         }
     }
