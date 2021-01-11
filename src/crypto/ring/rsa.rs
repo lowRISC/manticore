@@ -124,7 +124,10 @@ impl rsa::Builder for Builder {
         true
     }
 
-    fn new_engine(&self, key: PublicKey) -> Result<Engine, Unspecified> {
+    fn new_engine(
+        &self,
+        key: PublicKey,
+    ) -> Result<Engine, rsa::Error<Unspecified>> {
         Ok(Engine { key })
     }
 }
@@ -132,7 +135,10 @@ impl rsa::Builder for Builder {
 impl rsa::SignerBuilder for Builder {
     type Signer = Signer;
 
-    fn new_signer(&self, keypair: Keypair) -> Result<Signer, Unspecified> {
+    fn new_signer(
+        &self,
+        keypair: Keypair,
+    ) -> Result<Signer, rsa::Error<Unspecified>> {
         Ok(Signer { keypair })
     }
 }
@@ -152,9 +158,12 @@ impl rsa::Engine for Engine {
         &mut self,
         signature: &[u8],
         message: &[u8],
-    ) -> Result<(), Unspecified> {
+    ) -> Result<(), rsa::Error<Unspecified>> {
         let scheme = &ring::signature::RSA_PKCS1_2048_8192_SHA256;
-        self.key.key.verify(scheme, message, signature)
+        self.key
+            .key
+            .verify(scheme, message, signature)
+            .map_err(rsa::Error::Custom)
     }
 }
 
@@ -178,10 +187,13 @@ impl rsa::Signer for Signer {
         &mut self,
         message: &[u8],
         signature: &mut [u8],
-    ) -> Result<(), Unspecified> {
+    ) -> Result<(), rsa::Error<Unspecified>> {
         let scheme = &ring::signature::RSA_PKCS1_SHA256;
         let rng = ring::rand::SystemRandom::new();
-        self.keypair.keypair.sign(scheme, &rng, message, signature)
+        self.keypair
+            .keypair
+            .sign(scheme, &rng, message, signature)
+            .map_err(rsa::Error::Custom)
     }
 }
 
