@@ -9,8 +9,28 @@
 /// See [`Hasher`](trait.Hasher.html).
 pub type Digest = [u8; 32];
 
-/// Convenience type alias for simplifying signatures involving a `Builder`.
-pub type Error<H> = <H as Hasher>::Error;
+/// An error returned by a SHA-256 function.
+///
+/// This type serves as a combination of built-in error types known to
+/// Manticore, plus a "custom error" component for surfacing
+/// implementation-specific errors that Manticore can treat as a black box.
+///
+/// This type has the benefit that, unlike a pure associated type, `From`
+/// implementations for error-handling can be implemented on it.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Error<E = ()> {
+    /// The "custom" error type, which is treated by Manticore as a black box.
+    Custom(E),
+}
+
+impl<E> Error<E> {
+    /// Erases the custom error type from this `Error`, replacing it with `()`.
+    pub fn erased(self) -> Error {
+        match self {
+            Self::Custom(_) => Error::Custom(()),
+        }
+    }
+}
 
 /// A builder for creating new [`Hasher`]s.
 ///
@@ -28,7 +48,9 @@ pub trait Builder {
     /// the computation.
     ///
     /// [`Hasher`]: trait.Hasher.html
-    fn new_hasher(&self) -> Result<Self::Hasher, Error<Self::Hasher>>;
+    fn new_hasher(
+        &self,
+    ) -> Result<Self::Hasher, Error<<Self::Hasher as Hasher>::Error>>;
 
     /// Convenience function for hashing a contiguous buffer without having
     /// to deal with a hasher directly.
@@ -36,7 +58,7 @@ pub trait Builder {
         &self,
         bytes: &[u8],
         out: &mut Digest,
-    ) -> Result<(), Error<Self::Hasher>> {
+    ) -> Result<(), Error<<Self::Hasher as Hasher>::Error>> {
         let mut hasher = self.new_hasher()?;
         hasher.write(bytes)?;
         hasher.finish(out)
@@ -49,13 +71,18 @@ pub trait Builder {
 ///
 /// [`Hasher`]: https://doc.rust-lang.org/std/hash/trait.Hasher.html
 pub trait Hasher {
-    /// The error returned when a hashing operation fails.
+    /// A custom error type. If there isn't a meaningful one, use [`Infallible`].
+    ///
+    /// See [`Error`].
+    ///
+    /// [`Error`]: enum.Error.html
+    /// [`Infallible`]: https://doc.rust-lang.org/std/convert/enum.Infallible.html
     type Error;
 
     /// Feeds more data into the current hashing operation.
-    fn write(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
+    fn write(&mut self, bytes: &[u8]) -> Result<(), Error<Self::Error>>;
 
     /// Finishes the current hashing operation, writing the result to the given
     /// buffer.
-    fn finish(self, out: &mut Digest) -> Result<(), Self::Error>;
+    fn finish(self, out: &mut Digest) -> Result<(), Error<Self::Error>>;
 }

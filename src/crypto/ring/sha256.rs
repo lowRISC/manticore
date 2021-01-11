@@ -35,7 +35,7 @@ impl Default for Builder {
 impl sha256::Builder for Builder {
     type Hasher = Hasher;
 
-    fn new_hasher(&self) -> Result<Hasher, Infallible> {
+    fn new_hasher(&self) -> Result<Hasher, sha256::Error<Infallible>> {
         Ok(Hasher {
             ctx: digest::Context::new(&digest::SHA256),
         })
@@ -55,12 +55,15 @@ pub struct Hasher {
 impl sha256::Hasher for Hasher {
     type Error = Infallible;
 
-    fn write(&mut self, bytes: &[u8]) -> Result<(), Infallible> {
+    fn write(&mut self, bytes: &[u8]) -> Result<(), sha256::Error<Infallible>> {
         self.ctx.update(bytes);
         Ok(())
     }
 
-    fn finish(self, out: &mut sha256::Digest) -> Result<(), Infallible> {
+    fn finish(
+        self,
+        out: &mut sha256::Digest,
+    ) -> Result<(), sha256::Error<Infallible>> {
         let digest = self.ctx.finish();
         out.copy_from_slice(digest.as_ref());
         Ok(())
