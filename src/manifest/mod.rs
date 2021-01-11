@@ -8,6 +8,8 @@
 //! configuration of a system it protects, and to describe policies on what
 //! firmware can run on those systems.
 
+use crate::crypto::rsa;
+use crate::crypto::sha256;
 use crate::hardware::flash;
 use crate::io;
 
@@ -56,6 +58,18 @@ impl From<io::Error> for Error {
 impl From<flash::Error> for Error {
     fn from(e: flash::Error) -> Self {
         Self::Flash(e)
+    }
+}
+
+impl<E> From<rsa::Error<E>> for Error {
+    fn from(_: rsa::Error<E>) -> Self {
+        Self::SignatureFailure
+    }
+}
+
+impl<E> From<sha256::Error<E>> for Error {
+    fn from(_: sha256::Error<E>) -> Self {
+        Self::SignatureFailure
     }
 }
 
