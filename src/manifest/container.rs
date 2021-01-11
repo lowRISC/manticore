@@ -120,24 +120,18 @@ impl<F: Flash> Container<F, provenance::Signed> {
         let mut r = FlashIo::new(&mut c.flash)?;
         r.reslice(signed);
 
-        let mut hasher =
-            sha.new_hasher().map_err(|_| Error::SignatureFailure)?;
+        let mut hasher = sha.new_hasher()?;
         while r.remaining_data() > 0 {
             let to_read = r.remaining_data().min(16);
             r.read_bytes(&mut bytes[..to_read])?;
-            hasher
-                .write(&bytes[..to_read])
-                .map_err(|_| Error::SignatureFailure)?;
+            hasher.write(&bytes[..to_read])?;
         }
 
         let mut digest = [0; 32];
-        hasher
-            .finish(&mut digest)
-            .map_err(|_| Error::SignatureFailure)?;
+        hasher.finish(&mut digest)?;
 
         let sig = c.flash.read_direct(sig, arena, 1)?;
-        rsa.verify_signature(sig, &digest)
-            .map_err(|_| Error::SignatureFailure)?;
+        rsa.verify_signature(sig, &digest)?;
 
         Ok(c)
     }
@@ -406,11 +400,8 @@ impl<'m> Containerizer<'m> {
 
         let (message, sig) = self.cursor.consume_with_prior(sig_len)?;
         let mut digest = [0; 32];
-        sha.hash_contiguous(message, &mut digest)
-            .map_err(|_| Error::SignatureFailure)?;
-        signer
-            .sign(&digest, sig)
-            .map_err(|_| Error::SignatureFailure)?;
+        sha.hash_contiguous(message, &mut digest)?;
+        signer.sign(&digest, sig)?;
         Ok(self.cursor.take_consumed_bytes())
     }
 }
