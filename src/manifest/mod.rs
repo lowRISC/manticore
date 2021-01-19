@@ -12,6 +12,7 @@ use crate::crypto::rsa;
 use crate::crypto::sha256;
 use crate::hardware::flash;
 use crate::io;
+use crate::mem::OutOfMemory;
 
 pub mod container;
 pub mod fpm;
@@ -47,6 +48,8 @@ pub enum Error {
     ///
     /// [`flash`]: ../hardware/flash/html
     Flash(flash::Error),
+    /// Indicates that an arena ran out of memory.
+    OutOfMemory,
     /// Indicates that a value was out of its expected range.
     OutOfRange,
     /// Indicates that some assumption about a manifest's alignment (internal
@@ -65,6 +68,12 @@ impl From<io::Error> for Error {
 impl From<flash::Error> for Error {
     fn from(e: flash::Error) -> Self {
         Self::Flash(e)
+    }
+}
+
+impl From<OutOfMemory> for Error {
+    fn from(_: OutOfMemory) -> Self {
+        Self::OutOfMemory
     }
 }
 
