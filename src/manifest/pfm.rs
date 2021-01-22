@@ -998,13 +998,230 @@ mod test {
     use crate::manifest::container::Containerizer;
     use crate::manifest::container::Metadata;
     use crate::manifest::ManifestType;
+    use crate::mem::BumpArena;
     use crate::mem::OutOfMemory;
 
-    #[test]
-    fn smoke() {
-        // This is a basic test to ensure that parsing a PFM and pulling out the
-        // platform id works at all.
+    struct El {
+        ty: u8,
+        version: u8,
+        parent: u8,
+        contents: &'static [u8],
+        hash: bool,
+    }
 
+    fn make_pfm(elements: &[El]) -> Vec<u8> {
+        let manifest_header_len = 12;
+        let toc_header_len = 4;
+        let toc_entries_len = 8 * elements.len();
+        let toc_hashes_len = 32 * elements.iter().filter(|e| e.hash).count();
+        let toc_hash_len = 32;
+
+        let mut pfm = vec![
+            elements.len() as u8,
+            elements.iter().filter(|e| e.hash).count() as u8,
+            0x0,
+            0x0,
+        ];
+        let mut cur_offset = manifest_header_len
+            + toc_header_len
+            + toc_entries_len
+            + toc_hashes_len
+            + toc_hash_len;
+        let mut hash_idx = 0;
+        for el in elements {
+            let [offset_lo, offset_hi] = (cur_offset as u16).to_le_bytes();
+            let [len_lo, len_hi] = (el.contents.len() as u16).to_le_bytes();
+            let hash_idx = if el.hash {
+                hash_idx += 1;
+                hash_idx - 1
+            } else {
+                0xff
+            };
+            let entry = &[
+                el.ty, el.version, offset_lo, offset_hi, //
+                len_lo, len_hi, el.parent, hash_idx,
+            ];
+
+            pfm.extend_from_slice(entry);
+            cur_offset += el.contents.len();
+        }
+
+        for el in elements {
+            if !el.hash {
+                continue;
+            }
+            let sha = RingSha::new();
+            let mut hash = [0; 32];
+            sha.hash_contiguous(el.contents, &mut hash).unwrap();
+            pfm.extend_from_slice(&hash);
+        }
+
+        let sha = RingSha::new();
+        let mut toc_hash = [0; 32];
+        sha.hash_contiguous(&pfm, &mut toc_hash).unwrap();
+        pfm.extend_from_slice(&toc_hash);
+
+        for el in elements {
+            pfm.extend_from_slice(el.contents);
+        }
+
+        let (_, mut signer) = make_rsa_engine();
+        let mut pfm_bytes = [0; 1024];
+        let mut builder = Containerizer::new(&mut pfm_bytes)
+            .unwrap()
+            .with_type(ManifestType::Pfm)
+            .unwrap()
+            .with_metadata(&Metadata { version_id: 42 })
+            .unwrap();
+        builder.write_bytes(&pfm).unwrap();
+        let pfm_bytes = builder.sign(&sha, &mut signer).unwrap();
+
+        pfm_bytes.to_vec()
+    }
+
+    #[test]
+    fn platform_id() {
+        let pfm = make_pfm(&[El {
+            ty: 0x03,
+            version: 0x01,
+            parent: 0xff,
+            contents: &[
+                0x06, 0x00, 0x00, 0x00, // 6 bytes.
+                b'm', b'y', b' ', b'p', // Message: "my pfm".
+                b'f', b'm', 0x11, 0x11, // 2 bytes padding!
+            ],
+            hash: true,
+        }]);
+
+        let sha = RingSha::new();
+        let (mut rsa, _) = make_rsa_engine();
+
+        let manifest =
+            Container::parse_and_verify(Ram(pfm), &sha, &mut rsa, &OutOfMemory)
+                .unwrap();
+
+        let pfm = Pfm::parse(&manifest, &sha, &OutOfMemory).unwrap();
+        let id = pfm.platform_id(&sha, &OutOfMemory).unwrap().unwrap();
+        assert_eq!(id, b"my pfm");
+    }
+
+    #[test]
+    fn fw_versions() {
+        let pfm = make_pfm(&[
+            El {
+                ty: 0x00,
+                version: 0x00,
+                parent: 0xff,
+                contents: &[0xaa, 0x00, 0x00, 0x00],
+                hash: true,
+            },
+            El {
+                ty: 0x01,
+                version: 0x01,
+                parent: 0xff,
+                contents: &[
+                    0x01, 0x03, 0xff, 0xff, // fw #, vesion len
+                    b'a', b'b', b'c', 0xff, // "abc" plus padding
+                ],
+                hash: false,
+            },
+            El {
+                ty: 0x02,
+                version: 0x01,
+                parent: 0x01,
+                #[rustfmt::skip]
+                contents: &[
+                    0x02, 0x01, 0x05, 0xff, // Image #, rw #, version len.
+                    0x12, 0x34, 0x56, 0x78, // Version address.
+                    b'z', b'y', b'x', b'w', // "zyxwv" plus padding.
+                    b'v', 0xff, 0xff, 0xff, //
+
+                    0b000000_10, // Erase region.
+                    0xff, 0xff, 0xff, // Padding.
+                    0x77, 0x77, 0xaa, 0xaa, // Start addr.
+                    0x88, 0x88, 0xaa, 0xaa, // End addr.
+
+                    0x00, 0x01, 0b0000000_0, 0xff, // Hash ty, region #, flags.
+                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, // Hash.
+                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+                    0x00, 0x00, 0x44, 0x45, // Start addr.
+                    0x00, 0x10, 0x44, 0x45, // End addr.
+
+                    0x00,0x02, 0b0000000_1, 0xff, // Hash ty, region #, flags.
+                    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, // Hash.
+                    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
+                    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
+                    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
+                    0x00, 0x10, 0x44, 0x45, // Start addr.
+                    0x00, 0x30, 0x44, 0x45, // End addr.
+                    0x00, 0x50, 0x77, 0x45, // Start addr.
+                    0x00, 0x58, 0x77, 0x45, // End addr.
+                ],
+                hash: true,
+            },
+        ]);
+
+        let sha = RingSha::new();
+        let (mut rsa, _) = make_rsa_engine();
+        let mut arena = vec![0; 2048];
+        let arena = BumpArena::new(&mut arena);
+
+        let manifest =
+            Container::parse_and_verify(Ram(pfm), &sha, &mut rsa, &OutOfMemory)
+                .unwrap();
+
+        let pfm = Pfm::parse(&manifest, &sha, &OutOfMemory).unwrap();
+        let flash_info = pfm.flash_device_info(&sha).unwrap().unwrap();
+        assert_eq!(flash_info.blank_byte(), 0xaa);
+
+        let fws = pfm
+            .allowable_fws()
+            .map(|fw| fw.unwrap().read(&sha, &arena).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(fws.len(), 1);
+        assert_eq!(fws[0].firmware_count(), 1);
+        assert_eq!(fws[0].firmware_id(), b"abc");
+
+        let vers = fws[0]
+            .firmware_versions()
+            .map(|fw| fw.unwrap().read(&sha, &arena).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(vers.len(), 1);
+        assert_eq!(
+            vers[0].version(),
+            (Region::new(0x78563412, 5), b"zyxwv".as_ref())
+        );
+        assert_eq!(vers[0].rw_count(), 1);
+        assert_eq!(vers[0].image_count(), 2);
+
+        let rws = vers[0].rw_regions().collect::<Vec<_>>();
+        assert_eq!(rws[0].failure_policy(), Some(RwFailurePolicy::Erase));
+        assert_eq!(rws[0].region(), Region::new(0xaaaa7777, 0x1111));
+
+        let imgs = vers[0].image_regions().collect::<Vec<_>>();
+        assert!(!imgs[0].must_validate_on_boot());
+        assert_eq!(imgs[0].image_hash(), &[0x11; 32]);
+        assert_eq!(imgs[0].region_count(), 1);
+        assert_eq!(
+            imgs[0].regions().collect::<Vec<_>>(),
+            vec![Region::new(0x45440000, 0x1000)]
+        );
+        assert!(imgs[1].must_validate_on_boot());
+        assert_eq!(imgs[1].image_hash(), &[0xfe; 32]);
+        assert_eq!(imgs[1].region_count(), 2);
+        assert_eq!(
+            imgs[1].regions().collect::<Vec<_>>(),
+            vec![
+                Region::new(0x45441000, 0x2000),
+                Region::new(0x45775000, 0x800),
+            ]
+        );
+    }
+
+    #[test]
+    fn manually_built_pfm() {
         const TOC_BASE: &[u8] = &[
             0x01, 0x01, 0x00,
             0x00, // Entry #, hash #, hash type (sha256), reserved.
