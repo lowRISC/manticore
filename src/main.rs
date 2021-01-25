@@ -20,8 +20,6 @@ use manticore::manifest;
 use manticore::manifest::container::Container;
 use manticore::manifest::container::Containerizer;
 use manticore::manifest::container::Metadata;
-use manticore::manifest::fpm::Fpm;
-use manticore::manifest::provenance;
 use manticore::manifest::ManifestType;
 use manticore::mem::BumpArena;
 use manticore::mem::OutOfMemory;
@@ -288,7 +286,9 @@ fn main() {
             manifest_version,
             input,
             output,
-        } => {
+        } =>
+        #[allow(unused)]
+        {
             let (mut input, mut output) = open_files(input, output);
 
             let key = fs::read(key).expect("failed to open file");
@@ -310,17 +310,8 @@ fn main() {
                 .expect("failed to set manifest metadata");
 
             match manifest_type {
-                ManifestType::Fpm => {
-                    let mut buf = Vec::new();
-                    input.read_to_end(&mut buf).expect("failed to read file");
-
-                    let fpm: Fpm<provenance::Adhoc> =
-                        serde_json::from_slice(&buf)
-                            .expect("failed to parse JSON");
-                    fpm.unparse(&mut container)
-                        .expect("failed to serialize manifest");
-                }
-                m => panic!("unsupported manifest type: {:?}", m),
+                m if true => panic!("unsupported manifest type: {:?}", m),
+                _ => {}
             }
 
             let manifest = container
@@ -370,17 +361,6 @@ fn main() {
             };
 
             match container.manifest_type() {
-                ManifestType::Fpm => {
-                    let fpm = Fpm::parse(&container, &OutOfMemory)
-                        .expect("failed to parse manifest");
-                    if pretty {
-                        serde_json::to_writer_pretty(output, &fpm)
-                            .expect("failed to write file");
-                    } else {
-                        serde_json::to_writer(output, &fpm)
-                            .expect("failed to write file");
-                    }
-                }
                 m => panic!("unsupported manifest type: {:?}", m),
             }
         }

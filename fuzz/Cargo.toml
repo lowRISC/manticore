@@ -142,6 +142,3 @@ path = "fuzz_targets/request_counter_response_to_wire.rs"
 name = "request_counter_response_from_wire"
 path = "fuzz_targets/request_counter_response_from_wire.rs"
 
-[[bin]]
-name = "manifest_parse"
-path = "fuzz_targets/manifest_parse.rs"

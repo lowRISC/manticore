@@ -15,7 +15,6 @@ use crate::io;
 use crate::mem::OutOfMemory;
 
 pub mod container;
-pub mod fpm;
 pub mod pfm;
 
 wire_enum! {
@@ -28,12 +27,6 @@ wire_enum! {
         ///
         /// ["Platform Firmware Manifest"]: pfm/index.html
         Pfm = 0x706d,
-
-        /// A ["Firmware Policy Manifest"], a Manticore-specific variant of the
-        /// PFM.
-        ///
-        /// ["Firmware Policy Manifest"]: fpm/index.html
-        Fpm = 0xda0e,
     }
 }
 
@@ -106,32 +99,4 @@ pub mod provenance {
     /// "somewhere else", such as `serde` or manual construction.
     #[derive(Copy, Clone, PartialEq, Eq, Debug)]
     pub enum Adhoc {}
-}
-
-fn take_bytes<'m>(r: &mut &'m [u8], n: usize) -> Result<&'m [u8], io::Error> {
-    if r.len() < n {
-        return Err(io::Error::BufferExhausted);
-    }
-    let (bytes, rest) = r.split_at(n);
-    *r = rest;
-    Ok(bytes)
-}
-
-/// Reads exactly `n * size_of::<T>` bytes from `r`, and converts them
-/// into a slice of `T`s.
-///
-/// Moreover, this function requires that the next pointer that would be
-/// returned by `read_bytes()` is well-aligned for `T`; otherwise,
-/// `ParseError::Unaligned` is returned.
-fn read_zerocopy<'m, T: zerocopy::FromBytes>(
-    r: &mut &'m [u8],
-    count: usize,
-) -> Result<&'m [T], Error> {
-    let expected_len = core::mem::size_of::<T>()
-        .checked_mul(count)
-        .ok_or(io::Error::BufferExhausted)?;
-    let bytes = take_bytes(r, expected_len)?;
-    let layout =
-        zerocopy::LayoutVerified::new_slice(bytes).ok_or(Error::Unaligned)?;
-    Ok(layout.into_slice())
 }
