@@ -13,6 +13,7 @@ use crate::crypto::sha256;
 use crate::hardware::flash;
 use crate::io;
 use crate::mem::OutOfMemory;
+use crate::protocol::wire::WireEnum;
 
 pub mod container;
 pub mod pfm;
@@ -80,6 +81,26 @@ impl<E> From<sha256::Error<E>> for Error {
     fn from(_: sha256::Error<E>) -> Self {
         Self::SignatureFailure
     }
+}
+
+/// A manifest type.
+///
+/// All manifest types implement this trait, which tracks type information
+/// about a particular manifest type (e.g., the PFM) that can be used by shared
+/// generic code.
+pub trait Manifest {
+    /// A `WireEnum` representing the different kinds of valid element types
+    /// for a Manifest that Manticore understands.
+    type ElementType: WireEnum<Wire = u8>;
+
+    /// The specific value of `ManifestType` representing the type implementing
+    /// this trait.
+    const TYPE: ManifestType;
+
+    /// The minimum version of a particular `ElementType` understood by
+    /// Manticore. All manifest elements must be future-compatible, so knowing
+    /// a "maximum version" is not necessary.
+    fn min_version(ty: Self::ElementType) -> u8;
 }
 
 /// Manifest provenances.
