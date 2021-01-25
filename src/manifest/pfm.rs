@@ -37,6 +37,8 @@ use crate::io::Read as _;
 use crate::manifest::container::Container;
 use crate::manifest::provenance;
 use crate::manifest::Error;
+use crate::manifest::Manifest;
+use crate::manifest::ManifestType;
 use crate::mem::misalign_of;
 use crate::mem::Arena;
 
@@ -309,6 +311,15 @@ impl<'toc> Toc<'toc> {
 pub struct Pfm<'pfm, Flash> {
     toc: Toc<'pfm>,
     flash: &'pfm Flash,
+}
+
+impl<F> Manifest for Pfm<'_, F> {
+    type ElementType = ElementType;
+    const TYPE: ManifestType = ManifestType::Pfm;
+
+    fn min_version(_: ElementType) -> u8 {
+        0
+    }
 }
 
 impl<'pfm, F: Flash> Pfm<'pfm, F> {
