@@ -41,6 +41,9 @@
 
 use core::marker::PhantomData;
 
+use zerocopy::AsBytes;
+use zerocopy::FromBytes;
+
 use crate::crypto::rsa;
 use crate::crypto::sha256;
 use crate::crypto::sha256::Hasher as _;
@@ -54,6 +57,7 @@ use crate::io::Read as _;
 use crate::io::Write;
 use crate::manifest::provenance;
 use crate::manifest::Error;
+use crate::manifest::Manifest;
 use crate::manifest::ManifestType;
 use crate::mem::Arena;
 use crate::protocol::wire::WireEnum;
@@ -73,6 +77,233 @@ pub struct Metadata {
     /// When minting a new manifest, a signing authority should make sure to
     /// bump this value.
     pub version_id: u32,
+}
+
+wire_enum! {
+    /// A hash type for a manifest [`Toc`]
+    ///
+    /// Note that we currently only support the SHA-256 variant, even though
+    /// Cerberus permits SHA-384 and SHA-512 as well.
+    ///
+    /// [`Toc`]: struct.Toc.html
+    #[allow(missing_docs)]
+    pub enum HashType: u8 {
+      Sha256 = 0b000,
+      // Sha384 = 0b001,
+      // Sha512 = 0b010,
+    }
+}
+
+/// A TOC entry's raw bits.
+#[derive(Copy, Clone, PartialEq, Eq, Default, Debug, AsBytes, FromBytes)]
+#[repr(C)]
+struct RawTocEntry {
+    element_type: u8,
+    format_version: u8,
+    offset: u16,
+    len: u16,
+    parent_idx: u8,
+    hash_idx: u8,
+}
+
+/// An entry to a manifest's table of contents.
+///
+/// A TOC entry describes an element in manifest, such as its format and its
+/// location.
+///
+/// A TOC entry is encoded exactly the same way as this struct is laid
+/// out, byte-for-byte.
+///
+/// See [`Toc`](struct.Toc.html).
+pub struct TocEntry<'entry, 'toc, M> {
+    toc: &'entry Toc<'toc, M>,
+    // Invariant: index is always a valid index into `toc.entries`.
+    index: usize,
+}
+
+impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
+    #[inline]
+    fn raw(self) -> &'toc RawTocEntry {
+        &self.toc.entries[self.index]
+    }
+
+    /// Returns this entry's index in the TOC.
+    pub fn index(self) -> usize {
+        self.index
+    }
+
+    /// Returns the type of the element this entry refers to.
+    pub fn element_type(self) -> M::ElementType {
+        <M::ElementType as WireEnum>::from_wire_value(self.raw().element_type)
+            .expect("previously verified by check_invariants()")
+    }
+
+    /// Returns the format version of this TOC entry.
+    ///
+    /// Note that this is always a version Manticore supports;
+    /// Manticore will refuse to parse TOCs with versions it does not
+    /// support.
+    pub fn format_version(self) -> u8 {
+        self.raw().format_version
+    }
+
+    /// Returns a flash region indicating where this entry's data is located.
+    pub fn region(self) -> Region {
+        Region::new(self.raw().offset as u32, self.raw().len as u32)
+    }
+
+    /// Returns this entry's parent, if it has one.
+    pub fn parent(self) -> Option<Self> {
+        match self.raw().parent_idx {
+            0xff => None,
+            x => Some(
+                self.toc
+                    .entry(x as usize)
+                    .expect("previously verified by check_invariants()"),
+            ),
+        }
+    }
+
+    /// Returns this entry's hash, if it has one.
+    pub fn hash(self) -> Option<&'toc sha256::Digest> {
+        match self.raw().hash_idx {
+            0xff => None,
+            x => Some(&self.toc.hashes[x as usize]),
+        }
+    }
+
+    /// Returns an iterator over all of this entry's children.
+    pub fn children(self) -> impl Iterator<Item = TocEntry<'entry, 'toc, M>> {
+        self.toc
+            .entries()
+            .filter(move |e| self.index == e.raw().parent_idx as usize)
+    }
+}
+
+// NOTE: Implemented manually, since derive() would generate incorrect bounds
+// M: Clone and M: Copy on the impls.
+impl<M> Clone for TocEntry<'_, '_, M> {
+    fn clone(&self) -> Self {
+        TocEntry {
+            toc: self.toc,
+            index: self.index,
+        }
+    }
+}
+
+impl<M> Copy for TocEntry<'_, '_, M> {}
+
+/// The table of contents of a PFM.
+///
+/// The table of contents is encoded as follows:
+/// ```text
+/// struct Toc {
+///   entry_count: u8,
+///   hash_count: u8,
+///   hash_type: u8,
+///   entries: [TocEntry; self.entry_count],
+///   hashes: [Digest; self.hash_count],
+///   table_hash: Digest,
+/// }
+/// ```
+///
+/// The layout of the `TocEntry` type is described in [`TocEntry`]. `Digest` is
+/// a hash specified by `hash_type`. Currently, Manticore does not support hash
+/// types other than SHA-256. See [`HashType`] for more information.
+///
+/// The `entries` represent the actual entries to the table of contents; each
+/// entry refers to an *element* in the body of the PFM, describing where it is
+/// and how to decode it.
+///
+/// The `hashes` are digests of certain elements, which entries in the table of
+/// contents refer to. When an element is read out of flash, its hash is
+/// verified against the one present in the TOC, if its TOC entry indicates a
+/// hash. This ensures that the element retains protection of the overall
+/// manifest signature, even if it is parsed long after the TOC has been read
+/// out of flash.
+///
+/// It is not possible to construct a `Toc` directly; it must be parsed out of
+/// a valid [`Pfm`].
+///
+/// [`TocEntry`]: struct.TocEntry.html
+/// [`HashType`]: enum.HashType.html
+/// [`Pfm`]: struct.Pfm.html
+pub struct Toc<'toc, M> {
+    entries: &'toc [RawTocEntry],
+    hashes: &'toc [sha256::Digest],
+    _ph: PhantomData<fn() -> M>
+}
+
+impl<'toc, M: Manifest> Toc<'toc, M> {
+    /// Checks that all invariants of this `Toc` type hold:
+    /// - Every pointer to a hash is in-bounds.
+    /// - Every pointer to a parent is in-bounds.
+    /// - Every type/version pair is well-known.
+    ///
+    /// Returns true if the invariants are upheld.
+    fn check_invariants(&self) -> bool {
+        for entry in self.entries {
+            match <M::ElementType as WireEnum>::from_wire_value(
+                entry.element_type,
+            ) {
+                Some(e) => {
+                    if entry.format_version < M::min_version(e) {
+                        return false;
+                    }
+                }
+                None => return false,
+            }
+
+            if entry.hash_idx != 0xff
+                && self.hashes.len() <= entry.hash_idx as usize
+            {
+                return false;
+            }
+
+            if entry.parent_idx != 0xff
+                && self.hashes.len() <= entry.parent_idx as usize
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Returns the number of entries in this `Toc`.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Returns whether this `Toc` is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns the `i`th entry in this `Toc`.
+    ///
+    /// If there is not `i`th entry, `None` is returned. If the entry specifies
+    /// a hash, it is also returned, otherwise `Some((Some(_), None))` is
+    /// returned.
+    pub fn entry(&self, i: usize) -> Option<TocEntry<'_, 'toc, M>> {
+        if i >= self.len() {
+            return None;
+        }
+
+        Some(TocEntry {
+            toc: self,
+            index: i,
+        })
+    }
+
+    /// Returns an iterator over this `Toc`'s entries and their associated
+    /// hashes, if they specify one.
+    pub fn entries(&self) -> impl Iterator<Item = TocEntry<'_, 'toc, M>> + '_ {
+        (0..self.entries.len()).map(move |i| TocEntry {
+            toc: self,
+            index: i,
+        })
+    }
 }
 
 /// A parsed, verified, manifest container.
