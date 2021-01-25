@@ -110,7 +110,7 @@ impl From<io::Error> for ToWireError {
 pub trait WireEnum: Sized + Copy {
     /// The unrelying "wire type". This is almost always some kind of
     /// unsigned integer.
-    type Wire: LeInt;
+    type Wire;
 
     /// Converts `self` into its underlying wire representation.
     fn to_wire_value(self) -> Self::Wire;
@@ -129,6 +129,7 @@ pub trait WireEnum: Sized + Copy {
 impl<'wire, E> FromWire<'wire> for E
 where
     E: WireEnum,
+    E::Wire: LeInt,
 {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
@@ -142,6 +143,7 @@ where
 impl<E> ToWire for E
 where
     E: WireEnum,
+    E::Wire: LeInt,
 {
     fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
         self.to_wire_value().write_to(&mut w)?;
@@ -178,7 +180,7 @@ impl fmt::Display for WireEnumFromStrError {
 /// the above enum.
 macro_rules! wire_enum {
     ($(#[$meta:meta])* $vis:vis enum $name:ident : $wire:ident {
-        $($(#[$meta_variant:meta])* $variant:ident = $value:literal,)*
+        $($(#[$meta_variant:meta])* $variant:ident = $value:tt,)*
     }) => {
         $(#[$meta])*
         #[repr($wire)]
@@ -193,7 +195,11 @@ macro_rules! wire_enum {
         impl $crate::protocol::wire::WireEnum for $name {
             type Wire = $wire;
             fn to_wire_value(self) -> Self::Wire {
-                self as $wire
+                match self {
+                    $(
+                        Self::$variant => $value,
+                    )*
+                }
             }
             fn from_wire_value(wire: Self::Wire) -> Option<Self> {
                 match wire {
