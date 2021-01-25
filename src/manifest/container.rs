@@ -311,7 +311,7 @@ impl<'m> Containerizer<'m> {
     /// # use manticore::io::Write as _;
     /// # let mut buf = [0; 64];
     /// let mut builder = Containerizer::new(&mut buf)?
-    ///     .with_type(ManifestType::Fpm)?
+    ///     .with_type(ManifestType::Pfm)?
     ///     .with_metadata(&Metadata { version_id: 42 })?;
     /// builder.write_bytes(b"manifest contents stuff")?;
     /// # Ok::<(), Error>(())
@@ -431,7 +431,7 @@ pub(crate) mod test {
     const MANIFEST_HEADER: &[u8] = &[
         0x1f, 0x01, // Total length. This is the header length (12) +
         //          // body length (19) + signature length (256).
-        0x0e, 0xda, // FPM magic.
+        0x6d, 0x70, // PFM magic.
         0xaa, 0x55, 0x01, 0x00, // Container id (0x155aa).
         0x00, 0x01, // Signature length (0x100 = 256).
         0xff, 0xff, // Padding to 4 bytes.
@@ -478,7 +478,7 @@ pub(crate) mod test {
             &OutOfMemory,
         )
         .unwrap();
-        assert_eq!(manifest.manifest_type(), ManifestType::Fpm);
+        assert_eq!(manifest.manifest_type(), ManifestType::Pfm);
         assert_eq!(
             manifest
                 .flash()
@@ -558,7 +558,7 @@ pub(crate) mod test {
         let mut buf = vec![0; 1024];
         let mut builder = Containerizer::new(&mut buf)
             .unwrap()
-            .with_type(ManifestType::Fpm)
+            .with_type(ManifestType::Pfm)
             .unwrap()
             .with_metadata(&Metadata {
                 version_id: 0x155aa,
@@ -578,7 +578,7 @@ pub(crate) mod test {
             &OutOfMemory,
         )
         .unwrap();
-        assert_eq!(manifest.manifest_type(), ManifestType::Fpm);
+        assert_eq!(manifest.manifest_type(), ManifestType::Pfm);
         assert_eq!(manifest.metadata().version_id, 0x155aa);
         assert_eq!(
             manifest
