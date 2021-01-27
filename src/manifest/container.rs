@@ -62,13 +62,17 @@ use crate::manifest::ManifestType;
 use crate::mem::Arena;
 use crate::protocol::wire::WireEnum;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Metadata for a [`Container`].
 ///
 /// This struct describes metadata attached to every manifest, which makes up
 /// part of the signed component.
 ///
 /// [`Comtainer`]: struct.Container.html
-#[derive(Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Metadata {
     /// The "version" or "manifest ID", a monotonically increasing integer that
     /// Manticore can use to protect against playback attacks, by refusing to
@@ -87,6 +91,7 @@ wire_enum! {
     ///
     /// [`Toc`]: struct.Toc.html
     #[allow(missing_docs)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub enum HashType: u8 {
       Sha256 = 0b000,
       // Sha384 = 0b001,
@@ -97,13 +102,13 @@ wire_enum! {
 /// A TOC entry's raw bits.
 #[derive(Copy, Clone, PartialEq, Eq, Default, Debug, AsBytes, FromBytes)]
 #[repr(C)]
-struct RawTocEntry {
-    element_type: u8,
-    format_version: u8,
-    offset: u16,
-    len: u16,
-    parent_idx: u8,
-    hash_idx: u8,
+pub(crate) struct RawTocEntry {
+    pub element_type: u8,
+    pub format_version: u8,
+    pub offset: u16,
+    pub len: u16,
+    pub parent_idx: u8,
+    pub hash_idx: u8,
 }
 
 /// An entry to a manifest's table of contents.

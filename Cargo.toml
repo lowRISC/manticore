@@ -40,7 +40,9 @@ default-features = false
 features = ["derive"]
 
 [dev-dependencies]
+pretty_assertions = "0.6.1"
 ring = "0.16.11"
+serde_json = "1.0"
 
 [features]
 default = ["std", "ring"]
