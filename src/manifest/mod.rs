@@ -16,6 +16,8 @@ use crate::mem::OutOfMemory;
 use crate::protocol::wire::WireEnum;
 
 pub mod container;
+#[cfg(feature = "std")]
+pub mod owned;
 pub mod pfm;
 
 wire_enum! {

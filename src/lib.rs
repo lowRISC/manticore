@@ -51,6 +51,9 @@
 #[macro_use]
 pub mod protocol;
 
+#[cfg(feature = "serde")]
+mod serde;
+
 pub mod crypto;
 pub mod hardware;
 pub mod io;
