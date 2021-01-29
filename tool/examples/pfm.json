@@ -1,0 +1,51 @@
+{
+    "version_id": 42,
+    "elements": [
+        { "blank_byte": "0xff" },
+        { "platform_id": "my cool platform" },
+        {
+            "version_count": 1,
+            "firmware_id": "my cool firmware",
+            "flags": "0b10101010",
+            "hashed": false,
+            "children": [{
+                "version_addr": "0x12345678",
+                "version_str": "ver-1.2.2",
+                "rw_regions": [{
+                    "flags": "0b00110011",
+                    "region": { "offset": "0x00008000", "len": "0x8000" }
+                }],
+                "image_regions": [
+                    {
+                        "flags": "0o7",
+                        "hash_type": "Sha256",
+                        "hash": [
+                            42, 42, 42, 42, 42, 42, 42, 42,
+                            42, 42, 42, 42, 42, 42, 42, 42,
+                            42, 42, 42, 42, 42, 42, 42, 42,
+                            42, 42, 42, 42, 42, 42, 42, 42
+                        ],
+                        "regions": [
+                            { "offset": "0x10000", "len": "0x1000" },
+                            { "offset": "0x18000", "len": "0x800" }
+                        ]
+                    },
+                    {
+                        "flags": 0,
+                        "hash_type": "Sha256",
+                        "hash": [
+                            77, 77, 77, 77, 77, 77, 77, 77,
+                            77, 77, 77, 77, 77, 77, 77, 77,
+                            77, 77, 77, 77, 77, 77, 77, 77,
+                            77, 77, 77, 77, 77, 77, 77, 77
+                        ],
+                        "regions": [
+                            { "offset": "0x20000", "len": "0x800" },
+                            { "offset": "0x28000", "len": "0x1000" }
+                        ]
+                    }
+                ]
+            }]
+        }
+    ]
+}

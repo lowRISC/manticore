@@ -659,9 +659,9 @@ mod test {
 
     use crate::crypto::ring;
     use crate::crypto::sha256::Builder as _;
+    use crate::crypto::testdata;
     use crate::hardware::flash::Ram;
     use crate::io::Write as _;
-    use crate::crypto::testdata;
     use crate::manifest::owned;
     use crate::manifest::ManifestType;
     use crate::manifest::Metadata;

@@ -579,7 +579,8 @@ mod test {
         let (mut rsa, mut signer) = testdata::rsa();
 
         let bytes = pfm.sign(0x00, &sha, &mut signer).unwrap();
-        let pfm2 = owned::Container::parse(&bytes, &sha, &mut rsa).unwrap();
+        let pfm2 =
+            owned::Container::parse(&bytes, &sha, Some(&mut rsa)).unwrap();
         assert!(!pfm2.bad_signature);
         assert!(!pfm2.bad_toc_hash);
         assert!(pfm2.bad_hashes.is_empty());

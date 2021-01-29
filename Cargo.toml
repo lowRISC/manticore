@@ -71,7 +71,7 @@ inject-alloc = ["std"]
 
 [[bin]]
 name = "manticore-tool"
-path = "src/main.rs"
+path = "tool/main.rs"
 required-features = ["std", "tool"]
 
 [lib]
