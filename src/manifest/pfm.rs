@@ -28,13 +28,12 @@ use zerocopy::FromBytes;
 use zerocopy::LayoutVerified;
 
 use crate::crypto::sha256;
-use crate::crypto::sha256::Hasher as _;
 use crate::hardware::flash::Flash;
-use crate::hardware::flash::FlashExt as _;
-use crate::hardware::flash::FlashIo;
 use crate::hardware::flash::Region;
 use crate::io::Read as _;
 use crate::manifest::container::Container;
+use crate::manifest::container::HashType;
+use crate::manifest::container::TocEntry;
 use crate::manifest::provenance;
 use crate::manifest::Error;
 use crate::manifest::Manifest;
@@ -64,244 +63,6 @@ wire_enum! {
     }
 }
 
-wire_enum! {
-    /// A hash type, as defined in certain parts of the PFM.
-    ///
-    /// Note that we currently only support the SHA-256 variant, even though
-    /// Cerberus permits SHA-384 and SHA-512 as well.
-    #[allow(missing_docs)]
-    pub enum HashType: u8 {
-      Sha256 = 0b000,
-      // Sha384 = 0b001,
-      // Sha512 = 0b010,
-    }
-}
-
-/// An entry to a PFM's table of contents.
-///
-/// A TOC entry describes an element in the PFM, such as its format and its
-/// location.
-///
-/// A TOC entry is encoded exactly the same way as this struct is laid
-/// out, byte-for-byte.
-///
-/// See [`Toc`](struct.Toc.html).
-#[derive(Copy, Clone, PartialEq, Eq, AsBytes, FromBytes)]
-#[repr(C)]
-pub struct TocEntry {
-    element_type: u8,
-    format_version: u8,
-    offset: u16,
-    len: u16,
-    parent_idx: u8,
-    hash_idx: u8,
-}
-
-#[allow(clippy::len_without_is_empty)]
-impl TocEntry {
-    /// Returns the type of the element this entry refers to.
-    ///
-    /// Returns `None` if the encoded element type is not known to Manticore.
-    pub fn element_type(&self) -> Option<ElementType> {
-        ElementType::from_wire_value(self.element_type)
-    }
-
-    /// Returns the format version for the element this entry refers to.
-    ///
-    /// Along with the type of the element, this value describes how to decode
-    /// the serialized element in the PFM.
-    pub fn format_version(&self) -> u8 {
-        self.format_version
-    }
-
-    /// Returns the flash address at which this entry's element begins.
-    ///
-    /// This value is measured from the start of the PFM's manifest frame,
-    /// rather than from the start of the PFM's table of contents.
-    pub fn offset(&self) -> usize {
-        self.offset as _
-    }
-
-    /// Returns the length, in bytes, of this entry's element.
-    pub fn len(&self) -> usize {
-        self.len as _
-    }
-
-    /// Returns the TOC index of this entry's parent, if it has one.
-    pub fn parent_idx(&self) -> Option<usize> {
-        match self.parent_idx {
-            0xff => None,
-            x => Some(x as _),
-        }
-    }
-
-    /// Returns the TOC hash index of this entry, if it has one.
-    pub fn hash_idx(&self) -> Option<usize> {
-        match self.hash_idx {
-            0xff => None,
-            x => Some(x as _),
-        }
-    }
-}
-
-/// The table of contents of a PFM.
-///
-/// The table of contents is encoded as follows:
-/// ```text
-/// struct Toc {
-///   entry_count: u8,
-///   hash_count: u8,
-///   hash_type: u8,
-///   entries: [TocEntry; self.entry_count],
-///   hashes: [Digest; self.hash_count],
-///   table_hash: Digest,
-/// }
-/// ```
-///
-/// The layout of the `TocEntry` type is described in [`TocEntry`]. `Digest` is
-/// a hash specified by `hash_type`. Currently, Manticore does not support hash
-/// types other than SHA-256. See [`HashType`] for more information.
-///
-/// The `entries` represent the actual entries to the table of contents; each
-/// entry refers to an *element* in the body of the PFM, describing where it is
-/// and how to decode it.
-///
-/// The `hashes` are digests of certain elements, which entries in the table of
-/// contents refer to. When an element is read out of flash, its hash is
-/// verified against the one present in the TOC, if its TOC entry indicates a
-/// hash. This ensures that the element retains protection of the overall
-/// manifest signature, even if it is parsed long after the TOC has been read
-/// out of flash.
-///
-/// It is not possible to construct a `Toc` directly; it must be parsed out of
-/// a valid [`Pfm`].
-///
-/// [`TocEntry`]: struct.TocEntry.html
-/// [`HashType`]: enum.HashType.html
-/// [`Pfm`]: struct.Pfm.html
-pub struct Toc<'toc> {
-    entries: &'toc [TocEntry],
-    hashes: &'toc [sha256::Digest],
-}
-
-impl<'toc> Toc<'toc> {
-    /// Checks that all invariants of this `Toc` type hold:
-    /// - Every pointer to a hash is in-bounds.
-    /// - Every pointer to a parent is in-bounds.
-    ///
-    /// Returns true if the invariants are upheld.
-    fn verify_invariants(&self) -> bool {
-        for entry in self.entries {
-            if let Some(idx) = entry.hash_idx() {
-                if self.hashes.len() <= idx {
-                    return false;
-                }
-            }
-            if let Some(idx) = entry.parent_idx() {
-                if self.entries.len() <= idx {
-                    return false;
-                }
-            }
-        }
-
-        true
-    }
-
-    /// Returns the number of entries in this `Toc`.
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    /// Returns whether this `Toc` is empty.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    /// Returns the `i`th entry in this `Toc`.
-    ///
-    /// If there is not `i`th entry, `None` is returned. If the entry specifies
-    /// a hash, it is also returned, otherwise `Some((Some(_), None))` is
-    /// returned.
-    pub fn entry(
-        &self,
-        i: usize,
-    ) -> Option<(&'toc TocEntry, Option<&'toc sha256::Digest>)> {
-        let entry = self.entries.get(i)?;
-        match entry.hash_idx() {
-            // NOTE: This indexing operation cannot panic due to `Toc`'s invariants.
-            Some(idx) => Some((entry, Some(&self.hashes[idx]))),
-            None => Some((entry, None)),
-        }
-    }
-
-    /// Returns an iterator over this `Toc`'s entries and their associated
-    /// hashes, if they specify one.
-    pub fn entries(
-        &self,
-    ) -> impl Iterator<Item = (&'toc TocEntry, Option<&'toc sha256::Digest>)> + '_
-    {
-        // NOTE: The unwrap() below cannot panic, because `i` is always in-bounds.
-        (0..self.entries.len()).map(move |i| self.entry(i).unwrap())
-    }
-
-    /// Returns an iterator over this `Toc`'s entries of a specific type.
-    ///
-    /// The items returned by this iterator also include the index of the entry
-    /// in the overall table.
-    pub fn entries_of_type(
-        &self,
-        ty: ElementType,
-    ) -> impl Iterator<
-        Item = (usize, &'toc TocEntry, Option<&'toc sha256::Digest>),
-    > + '_ {
-        self.entries()
-            .enumerate()
-            .map(|(i, (e, h))| (i, e, h))
-            .filter(move |(_, e, _)| e.element_type() == Some(ty))
-    }
-
-    /// Returns the first entry in this `Toc` of a particular type, if any.
-    pub fn first_entry_of_type(
-        &self,
-        ty: ElementType,
-    ) -> Option<(usize, &'toc TocEntry, Option<&'toc sha256::Digest>)> {
-        self.entries_of_type(ty).next()
-    }
-
-    /// Returns an iterator over all `Toc` entries that have the given parent
-    /// index and given type.
-    ///
-    /// The items returned by this iterator also include the index of the entry
-    /// in the overall table.
-    pub fn children_of(
-        &self,
-        parent_idx: usize,
-    ) -> impl Iterator<
-        Item = (usize, &'toc TocEntry, Option<&'toc sha256::Digest>),
-    > + '_ {
-        self.entries()
-            .enumerate()
-            .map(|(i, (e, h))| (i, e, h))
-            .filter(move |(_, e, _)| e.parent_idx() == Some(parent_idx))
-    }
-
-    /// Returns an iterator over all `Toc` entries that have the given parent
-    /// index.
-    ///
-    /// The items returned by this iterator also include the index of the entry
-    /// in the overall table.
-    pub fn children_of_type(
-        &self,
-        parent_idx: usize,
-        ty: ElementType,
-    ) -> impl Iterator<
-        Item = (usize, &'toc TocEntry, Option<&'toc sha256::Digest>),
-    > + '_ {
-        self.entries_of_type(ty)
-            .filter(move |(_, e, _)| e.parent_idx() == Some(parent_idx))
-    }
-}
-
 /// A Platform Firmware Manifest.
 ///
 /// This type provides functions for parsing a PFM's table of contents and
@@ -309,8 +70,7 @@ impl<'toc> Toc<'toc> {
 ///
 /// This type only maintains the TOC in memory for book-keeping.
 pub struct Pfm<'pfm, Flash> {
-    toc: Toc<'pfm>,
-    flash: &'pfm Flash,
+    container: Container<'pfm, Self, Flash, provenance::Signed>,
 }
 
 impl<F> Manifest for Pfm<'_, F> {
@@ -323,73 +83,11 @@ impl<F> Manifest for Pfm<'_, F> {
 }
 
 impl<'pfm, F: Flash> Pfm<'pfm, F> {
-    /// Parses the table of contents of a PFM.
-    ///
-    /// This function may allocate on `toc_arena`, even if parsing fails; in
-    /// that case, it is the caller's responsibility to reset the arena.
-    pub fn parse<'flash: 'pfm, 'arena: 'pfm>(
-        container: &'flash Container<F, provenance::Signed>,
-        sha: &impl sha256::Builder,
-        toc_arena: &'arena impl Arena,
-    ) -> Result<Self, Error> {
-        let flash = container.flash();
-        let mut io = FlashIo::new(flash)?;
-        io.skip_bytes(container.body().offset as usize);
-
-        let entry_count = io.read_le::<u8>()?;
-        let hash_count = io.read_le::<u8>()?;
-        let hash_type = io.read_le::<u8>()?;
-        // FIXME: we don't deal with hash types that aren't SHA-256.
-        if hash_type != HashType::Sha256.to_wire_value() {
-            return Err(Error::OutOfRange);
-        }
-        let reserved = io.read_le::<u8>()?;
-
-        let mut cursor = io.cursor();
-        let entries = flash.read_slice::<TocEntry>(
-            cursor,
-            entry_count as usize,
-            toc_arena,
-        )?;
-        cursor += mem::size_of_val(entries) as u32;
-
-        let hashes = flash.read_slice::<sha256::Digest>(
-            cursor,
-            hash_count as usize,
-            toc_arena,
-        )?;
-        cursor += mem::size_of_val(hashes) as u32;
-
-        let mut toc_hash = [0; 32];
-        flash.read(cursor, &mut toc_hash)?;
-
-        let mut hasher = sha.new_hasher()?;
-
-        hasher.write(&[entry_count])?;
-        hasher.write(&[hash_count])?;
-        hasher.write(&[hash_type])?;
-        hasher.write(&[reserved])?;
-
-        hasher.write(entries.as_bytes())?;
-        hasher.write(hashes.as_bytes())?;
-
-        let mut hash = [0; 32];
-        hasher.finish(&mut hash)?;
-        if hash != toc_hash {
-            return Err(Error::SignatureFailure);
-        }
-
-        let toc = Toc { entries, hashes };
-        if !toc.verify_invariants() {
-            return Err(Error::OutOfRange);
-        }
-
-        Ok(Pfm { toc, flash })
-    }
-
-    /// Returns this PFM's table of contents.
-    pub fn toc(&self) -> &Toc<'pfm> {
-        &self.toc
+    /// Creates a new PFM handle using the given `Container`.
+    pub fn new(
+        container: Container<'pfm, Self, F, provenance::Signed>,
+    ) -> Self {
+        Pfm { container }
     }
 
     /// Extracts the Platform ID from this PFM, allocating it onto the provided
@@ -397,59 +95,45 @@ impl<'pfm, F: Flash> Pfm<'pfm, F> {
     ///
     /// This function will also verify the hash of the Platform ID, if one is
     /// present.
-    pub fn platform_id<'id>(
+    pub fn platform_id(
         &self,
         sha: &impl sha256::Builder,
-        arena: &'id impl Arena,
-    ) -> Result<Option<&'id [u8]>, Error>
-    where
-        'pfm: 'id,
-    {
-        let (_, entry, hash) =
-            match self.toc.first_entry_of_type(ElementType::PlatformId) {
-                Some(x) => x,
-                None => return Ok(None),
-            };
-        let start = entry.offset() as u32;
-        if entry.len() < 4 {
+        arena: &'pfm impl Arena,
+    ) -> Result<Option<PlatformId<'pfm>>, Error> {
+        let entry = match self
+            .container
+            .toc()
+            .entries()
+            .find(|e| e.element_type() == ElementType::PlatformId)
+        {
+            Some(x) => x,
+            None => return Ok(None),
+        };
+        if entry.region().len < 4 {
             return Err(Error::OutOfRange);
         }
 
-        let mut header = [0; 4];
-        self.flash.read(start, &mut header)?;
-        let len = header[0];
-        let max_len = entry.len() - 4;
-        if len as usize >= max_len {
+        let data =
+            self.container
+                .flash()
+                .read_direct(entry.region(), arena, 1)?;
+        let (header, rest) = data.split_at(4);
+        let len = header[0] as usize;
+        if rest.len() < len {
             return Err(Error::OutOfRange);
         }
-        let align_len = max_len - len as usize;
-        if align_len >= 4 {
-            return Err(Error::OutOfRange);
-        }
 
-        let id = self
-            .flash
-            .read_slice::<u8>(start + 4, len as usize, arena)?;
+        let id = &rest[..len];
 
-        if let Some(expected) = hash {
-            let mut hasher = sha.new_hasher()?;
-            hasher.write(&header)?;
-            hasher.write(id)?;
-
-            // Trailing bytes after the id; these need to be included in the hash.
-            let mut align = [0; 4];
-            let align = &mut align[..align_len as usize];
-            self.flash.read(start + 4 + len as u32, align)?;
-            hasher.write(&*align)?;
-
+        if let Some(expected) = entry.hash() {
             let mut hash = [0; 32];
-            hasher.finish(&mut hash)?;
+            sha.hash_contiguous(&data, &mut hash)?;
             if &hash != expected {
                 return Err(Error::SignatureFailure);
             }
         }
 
-        Ok(Some(id))
+        Ok(Some(PlatformId { _data: data, id }))
     }
 
     /// Extracts the `FlashDeviceInfo` element from this PFM.
@@ -459,33 +143,39 @@ impl<'pfm, F: Flash> Pfm<'pfm, F> {
     pub fn flash_device_info(
         &self,
         sha: &impl sha256::Builder,
-    ) -> Result<Option<FlashDeviceInfo>, Error> {
-        let (_, entry, hash) =
-            match self.toc.first_entry_of_type(ElementType::FlashDevice) {
-                Some(x) => x,
-                None => return Ok(None),
-            };
-        let start = entry.offset() as u32;
-        if entry.len() != 4 || entry.format_version() != 0 {
+        arena: &'pfm impl Arena,
+    ) -> Result<Option<FlashDeviceInfo<'pfm>>, Error> {
+        let entry = match self
+            .container
+            .toc()
+            .entries()
+            .find(|e| e.element_type() == ElementType::FlashDevice)
+        {
+            Some(x) => x,
+            None => return Ok(None),
+        };
+        if entry.region().len < 4 {
             return Err(Error::OutOfRange);
         }
 
-        let mut header = [0; 4];
-        self.flash.read(start, &mut header)?;
-        let blank_byte = header[0];
+        let data =
+            self.container
+                .flash()
+                .read_direct(entry.region(), arena, 1)?;
+        let blank_byte = data[0];
 
-        if let Some(expected) = hash {
-            let mut hasher = sha.new_hasher()?;
-            hasher.write(&header)?;
-
+        if let Some(expected) = entry.hash() {
             let mut hash = [0; 32];
-            hasher.finish(&mut hash)?;
+            sha.hash_contiguous(&data, &mut hash)?;
             if &hash != expected {
                 return Err(Error::SignatureFailure);
             }
         }
 
-        Ok(Some(FlashDeviceInfo { blank_byte }))
+        Ok(Some(FlashDeviceInfo {
+            _data: data,
+            blank_byte,
+        }))
     }
 
     /// Returns an iterator over the `AllowableFw` elements of this PFM.
@@ -494,21 +184,26 @@ impl<'pfm, F: Flash> Pfm<'pfm, F> {
     /// allowing the user to lazily select which entries to read from flash.
     pub fn allowable_fws(
         &self,
-    ) -> impl Iterator<Item = Result<AllowableFwEntry<'_, 'pfm, F>, Error>> + '_
-    {
-        self.toc.entries_of_type(ElementType::AllowableFw).map(
-            move |(idx, entry, hash)| {
-                if entry.len() < 4 || entry.format_version() != 1 {
-                    return Err(Error::OutOfRange);
-                }
-                Ok(AllowableFwEntry {
-                    pfm: self,
-                    toc_index: idx,
-                    toc_entry: *entry,
-                    hash,
-                })
-            },
-        )
+    ) -> impl Iterator<Item = AllowableFwEntry<'_, 'pfm, F>> + '_ {
+        self.container
+            .toc()
+            .entries()
+            .filter(|e| e.element_type() == ElementType::AllowableFw)
+            .map(move |entry| AllowableFwEntry { pfm: self, entry })
+    }
+}
+
+/// An identifier for the platform a PFM is for.
+pub struct PlatformId<'pfm> {
+    _data: &'pfm [u8],
+    id: &'pfm [u8],
+}
+
+impl<'pfm> PlatformId<'pfm> {
+    /// Returns the byte-string identifier that represents the platform this
+    /// PFM is for.
+    pub fn id_string(&self) -> &'pfm [u8] {
+        self.id
     }
 }
 
@@ -516,11 +211,12 @@ impl<'pfm, F: Flash> Pfm<'pfm, F> {
 ///
 /// Note that this is distinct from the flash device that the PFM itself is
 /// stored in.
-pub struct FlashDeviceInfo {
+pub struct FlashDeviceInfo<'pfm> {
+    _data: &'pfm [u8],
     blank_byte: u8,
 }
 
-impl FlashDeviceInfo {
+impl<'pfm> FlashDeviceInfo<'pfm> {
     /// Returns the "blank byte" for this `FlashDevice`.
     ///
     /// The "blank byte" is the byte value that unallocated regions in the
@@ -540,63 +236,41 @@ impl FlashDeviceInfo {
 /// [`Pfm::allowable_firmware()`]: struct.Pfm.html#method.allowable_firmware
 pub struct AllowableFwEntry<'a, 'pfm, Flash> {
     pfm: &'a Pfm<'pfm, Flash>,
-    toc_index: usize,
-    toc_entry: TocEntry,
-    hash: Option<&'pfm sha256::Digest>,
+    entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash>>,
 }
 
 impl<'a, 'pfm, F: Flash> AllowableFwEntry<'a, 'pfm, F> {
-    /// Returns the `Toc` entry defining this element, including its index
-    /// in the `Toc`.
-    pub fn toc_entry(&self) -> (usize, TocEntry) {
-        (self.toc_index, self.toc_entry)
+    /// Returns the `Toc` entry defining this element.
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F>> {
+        self.entry
     }
 
     /// Reads the contents of this element into memory, verifying its hash
     /// and potentially allocating it on `arena`.
-    pub fn read<'id>(
+    pub fn read(
         self,
         sha: &impl sha256::Builder,
-        arena: &'id impl Arena,
-    ) -> Result<AllowableFw<'a, 'id, 'pfm, F>, Error>
-    where
-        'pfm: 'id,
-    {
-        let entry = self.toc_entry;
-        let start = entry.offset() as u32;
-
-        let mut header = [0; 4];
-        self.pfm.flash.read(start, &mut header)?;
-        let fw_count = header[0];
-        let id_len = header[1];
-        let max_len = entry.len() - 4;
-        if id_len as usize >= max_len {
-            return Err(Error::OutOfRange);
-        }
-        let align_len = max_len - id_len as usize;
-        if align_len >= 4 {
-            return Err(Error::OutOfRange);
-        }
-
-        let fw_id = self.pfm.flash.read_slice::<u8>(
-            start + 4,
-            id_len as usize,
+        arena: &'pfm impl Arena,
+    ) -> Result<AllowableFw<'a, 'pfm, F>, Error> {
+        let data = self.pfm.container.flash().read_direct(
+            self.entry.region(),
             arena,
+            1,
         )?;
+        let (header, rest) = data.split_at(4);
+        let fw_count = header[0] as usize;
+        let id_len = header[1] as usize;
+        // FIXME: Don't drop this on the ground.
+        let _flags = header[2];
 
-        if let Some(expected) = self.hash {
-            let mut hasher = sha.new_hasher()?;
-            hasher.write(&header)?;
-            hasher.write(fw_id)?;
+        if rest.len() < id_len {
+            return Err(Error::OutOfRange);
+        }
+        let fw_id = &rest[..id_len];
 
-            // Trailing bytes after the id; these need to be included in the hash.
-            let mut align = [0; 4];
-            let align = &mut align[..align_len as usize];
-            self.pfm.flash.read(start + 4 + id_len as u32, align)?;
-            hasher.write(&*align)?;
-
+        if let Some(expected) = self.entry.hash() {
             let mut hash = [0; 32];
-            hasher.finish(&mut hash)?;
+            sha.hash_contiguous(&data, &mut hash)?;
             if &hash != expected {
                 return Err(Error::SignatureFailure);
             }
@@ -604,7 +278,8 @@ impl<'a, 'pfm, F: Flash> AllowableFwEntry<'a, 'pfm, F> {
 
         Ok(AllowableFw {
             entry: self,
-            fw_count: fw_count as usize,
+            _data: data,
+            fw_count,
             fw_id,
         })
     }
@@ -618,17 +293,17 @@ impl<'a, 'pfm, F: Flash> AllowableFwEntry<'a, 'pfm, F> {
 ///
 /// [`Pfm::allowable_firmware()`]: struct.Pfm.html#method.allowable_firmware
 /// [`AllowableFwEntry::read()`]: struct.AllowableFwEntry.html#method.read
-pub struct AllowableFw<'a, 'id, 'pfm, Flash> {
+pub struct AllowableFw<'a, 'pfm, Flash> {
     entry: AllowableFwEntry<'a, 'pfm, Flash>,
+    _data: &'pfm [u8],
     fw_count: usize,
-    fw_id: &'id [u8],
+    fw_id: &'pfm [u8],
 }
 
-impl<'a, 'id, 'pfm, F: Flash> AllowableFw<'a, 'id, 'pfm, F> {
-    /// Returns the `Toc` entry defining this element, including its index
-    /// in the `Toc`.
-    pub fn toc_entry(&self) -> (usize, TocEntry) {
-        (self.entry.toc_index, self.entry.toc_entry)
+impl<'a, 'pfm, F: Flash> AllowableFw<'a, 'pfm, F> {
+    /// Returns the `Toc` entry defining this element.
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F>> {
+        self.entry.entry
     }
 
     /// Returns the number of specific, allowable firmware images associated
@@ -641,7 +316,7 @@ impl<'a, 'id, 'pfm, F: Flash> AllowableFw<'a, 'id, 'pfm, F> {
     }
 
     /// Returns the firmware ID string for this element.
-    pub fn firmware_id(&self) -> &'id [u8] {
+    pub fn firmware_id(&self) -> &'pfm [u8] {
         self.fw_id
     }
 
@@ -651,22 +326,13 @@ impl<'a, 'id, 'pfm, F: Flash> AllowableFw<'a, 'id, 'pfm, F> {
     /// allowing the user to lazily select which entries to read from flash.
     pub fn firmware_versions(
         &self,
-    ) -> impl Iterator<Item = Result<FwVersionEntry<'a, 'pfm, F>, Error>> + '_
-    {
-        self.entry
-            .pfm
-            .toc()
-            .children_of_type(self.entry.toc_index, ElementType::FwVersion)
-            .map(move |(idx, entry, hash)| {
-                if entry.len() < 4 || entry.format_version() != 1 {
-                    return Err(Error::OutOfRange);
-                }
-                Ok(FwVersionEntry {
-                    pfm: self.entry.pfm,
-                    toc_index: idx,
-                    toc_entry: *entry,
-                    hash,
-                })
+    ) -> impl Iterator<Item = FwVersionEntry<'_, 'pfm, F>> + '_ {
+        self.entry()
+            .children()
+            .filter(|e| e.element_type() == ElementType::FwVersion)
+            .map(move |entry| FwVersionEntry {
+                version: self,
+                entry,
             })
     }
 }
@@ -679,50 +345,38 @@ impl<'a, 'id, 'pfm, F: Flash> AllowableFw<'a, 'id, 'pfm, F> {
 /// [`FwVersion`]: struct.FwVersion.html
 /// [`AllowableFw::firmware_versions()`]: struct.AllowableFw.html#method.firmware_versions
 pub struct FwVersionEntry<'a, 'pfm, Flash> {
-    pfm: &'a Pfm<'pfm, Flash>,
-    toc_index: usize,
-    toc_entry: TocEntry,
-    hash: Option<&'pfm sha256::Digest>,
+    version: &'a AllowableFw<'a, 'pfm, Flash>,
+    entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash>>,
 }
 
 impl<'a, 'pfm, F: Flash> FwVersionEntry<'a, 'pfm, F> {
-    /// Returns the `Toc` entry defining this element, including its index
-    /// in the `Toc`.
-    pub fn toc_entry(&self) -> (usize, TocEntry) {
-        (self.toc_index, self.toc_entry)
+    /// Returns the `Toc` entry defining this element.
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F>> {
+        self.entry
     }
 
     /// Reads the contents of this element into memory, verifying its hash
     /// and potentially allocating it on `arena`.
-    pub fn read<'buf>(
+    pub fn read(
         self,
         sha: &impl sha256::Builder,
-        arena: &'buf impl Arena,
-    ) -> Result<FwVersion<'a, 'buf, 'pfm, F>, Error>
-    where
-        'pfm: 'buf,
-    {
-        // We can't avoid this read due to the requirement of both verifying
-        // the hash and having all of the data read into memory at once.
-        //
-        // Note that this needs to be aligned to a 4-byte boundary for some of
-        // the zero-copy operations below to work.
-        let mut buf = &*self.pfm.flash.read_direct(
-            Region::new(
-                self.toc_entry.offset() as u32,
-                self.toc_entry.len() as u32,
-            ),
+        arena: &'pfm impl Arena,
+    ) -> Result<FwVersion<'a, 'pfm, F>, Error> {
+        #[rustfmt::skip]
+        let data = self.version.entry.pfm.container.flash().read_direct(
+            self.entry.region(),
             arena,
             mem::align_of::<u32>(),
         )?;
-        if let Some(expected) = self.hash {
+        if let Some(expected) = self.entry.hash() {
             let mut hash = [0; 32];
-            sha.hash_contiguous(buf, &mut hash)?;
+            sha.hash_contiguous(data, &mut hash)?;
             if &hash != expected {
                 return Err(Error::SignatureFailure);
             }
         }
 
+        let mut buf = data;
         let image_count = buf.read_le::<u8>()? as usize;
         let rw_count = buf.read_le::<u8>()? as usize;
         let version_len = buf.read_le::<u8>()? as usize;
@@ -797,6 +451,7 @@ impl<'a, 'pfm, F: Flash> FwVersionEntry<'a, 'pfm, F> {
 
         Ok(FwVersion {
             entry: self,
+            _data: data,
             version_addr,
             version_str,
             rw_regions,
@@ -813,21 +468,22 @@ impl<'a, 'pfm, F: Flash> FwVersionEntry<'a, 'pfm, F> {
 ///
 /// [`AllowableFw::firmware_versions()`]: struct.AllowableFw.html#method.firmware_versions
 /// [`FwVersion::read()`]: struct.FwVersion.html#method.read
-pub struct FwVersion<'a, 'buf, 'pfm, Flash> {
+pub struct FwVersion<'a, 'pfm, Flash> {
     #[allow(unused)]
     entry: FwVersionEntry<'a, 'pfm, Flash>,
+    _data: &'pfm [u8],
     version_addr: u32,
-    version_str: &'buf [u8],
-    rw_regions: &'buf [RwRegion],
+    version_str: &'pfm [u8],
+    rw_regions: &'pfm [RwRegion],
     // TODO: Can we get away with u16 here?
-    image_region_offsets: &'buf [u32],
-    unparsed_image_regions: &'buf [u8],
+    image_region_offsets: &'pfm [u32],
+    unparsed_image_regions: &'pfm [u8],
 }
 
-impl<'buf, Flash> FwVersion<'_, 'buf, '_, Flash> {
+impl<'pfm, F> FwVersion<'_, 'pfm, F> {
     /// Returns the flash region in which this `FwVersion`'s version string
     /// would be located, and the expected value of that region.
-    pub fn version(&self) -> (Region, &'buf [u8]) {
+    pub fn version(&self) -> (Region, &'pfm [u8]) {
         (
             Region::new(self.version_addr, self.version_str.len() as u32),
             self.version_str,
@@ -997,293 +653,193 @@ impl FwRegion<'_> {
 }
 
 #[cfg(test)]
+#[allow(unused)]
 mod test {
     use super::*;
 
-    use crate::crypto::ring::sha256::Builder as RingSha;
+    use crate::crypto::ring;
     use crate::crypto::sha256::Builder as _;
     use crate::hardware::flash::Ram;
     use crate::io::Write as _;
     use crate::manifest::container::test::make_rsa_engine;
     use crate::manifest::container::Container;
-    use crate::manifest::container::Containerizer;
     use crate::manifest::container::Metadata;
+    use crate::manifest::owned;
     use crate::manifest::ManifestType;
     use crate::mem::BumpArena;
     use crate::mem::OutOfMemory;
 
-    struct El {
-        ty: u8,
-        version: u8,
-        parent: u8,
-        contents: &'static [u8],
-        hash: bool,
-    }
+    use serde_json::from_str;
 
-    fn make_pfm(elements: &[El]) -> Vec<u8> {
-        let manifest_header_len = 12;
-        let toc_header_len = 4;
-        let toc_entries_len = 8 * elements.len();
-        let toc_hashes_len = 32 * elements.iter().filter(|e| e.hash).count();
-        let toc_hash_len = 32;
+    #[test]
+    fn empty() {
+        let sha = ring::sha256::Builder::new();
+        let (mut rsa, mut signer) = make_rsa_engine();
 
-        let mut pfm = vec![
-            elements.len() as u8,
-            elements.iter().filter(|e| e.hash).count() as u8,
-            0x0,
-            0x0,
-        ];
-        let mut cur_offset = manifest_header_len
-            + toc_header_len
-            + toc_entries_len
-            + toc_hashes_len
-            + toc_hash_len;
-        let mut hash_idx = 0;
-        for el in elements {
-            let [offset_lo, offset_hi] = (cur_offset as u16).to_le_bytes();
-            let [len_lo, len_hi] = (el.contents.len() as u16).to_le_bytes();
-            let hash_idx = if el.hash {
-                hash_idx += 1;
-                hash_idx - 1
-            } else {
-                0xff
-            };
-            let entry = &[
-                el.ty, el.version, offset_lo, offset_hi, //
-                len_lo, len_hi, el.parent, hash_idx,
-            ];
+        #[rustfmt::skip]
+        let pfm: owned::Pfm = from_str(r#"{
+            "version_id": 42,
+            "elements": []
+        }"#).unwrap();
+        let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
 
-            pfm.extend_from_slice(entry);
-            cur_offset += el.contents.len();
-        }
+        let container = Container::parse_and_verify(
+            &bytes,
+            &sha,
+            &mut rsa,
+            &OutOfMemory,
+            &OutOfMemory,
+        )
+        .unwrap();
+        let pfm = Pfm::new(container);
 
-        for el in elements {
-            if !el.hash {
-                continue;
-            }
-            let sha = RingSha::new();
-            let mut hash = [0; 32];
-            sha.hash_contiguous(el.contents, &mut hash).unwrap();
-            pfm.extend_from_slice(&hash);
-        }
-
-        let sha = RingSha::new();
-        let mut toc_hash = [0; 32];
-        sha.hash_contiguous(&pfm, &mut toc_hash).unwrap();
-        pfm.extend_from_slice(&toc_hash);
-
-        for el in elements {
-            pfm.extend_from_slice(el.contents);
-        }
-
-        let (_, mut signer) = make_rsa_engine();
-        let mut pfm_bytes = [0; 1024];
-        let mut builder = Containerizer::new(&mut pfm_bytes)
-            .unwrap()
-            .with_type(ManifestType::Pfm)
-            .unwrap()
-            .with_metadata(&Metadata { version_id: 42 })
-            .unwrap();
-        builder.write_bytes(&pfm).unwrap();
-        let pfm_bytes = builder.sign(&sha, &mut signer).unwrap();
-
-        pfm_bytes.to_vec()
+        assert!(pfm.platform_id(&sha, &OutOfMemory).unwrap().is_none());
+        assert!(pfm.flash_device_info(&sha, &OutOfMemory).unwrap().is_none());
+        assert_eq!(pfm.allowable_fws().count(), 0);
     }
 
     #[test]
     fn platform_id() {
-        let pfm = make_pfm(&[El {
-            ty: 0x03,
-            version: 0x01,
-            parent: 0xff,
-            contents: &[
-                0x06, 0x00, 0x00, 0x00, // 6 bytes.
-                b'm', b'y', b' ', b'p', // Message: "my pfm".
-                b'f', b'm', 0x11, 0x11, // 2 bytes padding!
-            ],
-            hash: true,
-        }]);
+        let sha = ring::sha256::Builder::new();
+        let (mut rsa, mut signer) = make_rsa_engine();
 
-        let sha = RingSha::new();
-        let (mut rsa, _) = make_rsa_engine();
+        #[rustfmt::skip]
+        let pfm: owned::Pfm = from_str(r#"{
+            "version_id": 42,
+            "elements": [{ "platform_id": "my pfm" }]
+        }"#).unwrap();
+        let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
 
-        let manifest =
-            Container::parse_and_verify(Ram(pfm), &sha, &mut rsa, &OutOfMemory)
-                .unwrap();
+        let container = Container::parse_and_verify(
+            &bytes,
+            &sha,
+            &mut rsa,
+            &OutOfMemory,
+            &OutOfMemory,
+        )
+        .unwrap();
+        let pfm = Pfm::new(container);
 
-        let pfm = Pfm::parse(&manifest, &sha, &OutOfMemory).unwrap();
         let id = pfm.platform_id(&sha, &OutOfMemory).unwrap().unwrap();
-        assert_eq!(id, b"my pfm");
+        assert_eq!(id.id_string(), b"my pfm");
     }
 
     #[test]
     fn fw_versions() {
-        let pfm = make_pfm(&[
-            El {
-                ty: 0x00,
-                version: 0x00,
-                parent: 0xff,
-                contents: &[0xaa, 0x00, 0x00, 0x00],
-                hash: true,
-            },
-            El {
-                ty: 0x01,
-                version: 0x01,
-                parent: 0xff,
-                contents: &[
-                    0x01, 0x03, 0xff, 0xff, // fw #, vesion len
-                    b'a', b'b', b'c', 0xff, // "abc" plus padding
-                ],
-                hash: false,
-            },
-            El {
-                ty: 0x02,
-                version: 0x01,
-                parent: 0x01,
-                #[rustfmt::skip]
-                contents: &[
-                    0x02, 0x01, 0x05, 0xff, // Image #, rw #, version len.
-                    0x12, 0x34, 0x56, 0x78, // Version address.
-                    b'z', b'y', b'x', b'w', // "zyxwv" plus padding.
-                    b'v', 0xff, 0xff, 0xff, //
-
-                    0b000000_10, // Erase region.
-                    0xff, 0xff, 0xff, // Padding.
-                    0x77, 0x77, 0xaa, 0xaa, // Start addr.
-                    0x88, 0x88, 0xaa, 0xaa, // End addr.
-
-                    0x00, 0x01, 0b0000000_0, 0xff, // Hash ty, region #, flags.
-                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, // Hash.
-                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
-                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
-                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
-                    0x00, 0x00, 0x44, 0x45, // Start addr.
-                    0x00, 0x10, 0x44, 0x45, // End addr.
-
-                    0x00,0x02, 0b0000000_1, 0xff, // Hash ty, region #, flags.
-                    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, // Hash.
-                    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
-                    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
-                    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
-                    0x00, 0x10, 0x44, 0x45, // Start addr.
-                    0x00, 0x30, 0x44, 0x45, // End addr.
-                    0x00, 0x50, 0x77, 0x45, // Start addr.
-                    0x00, 0x58, 0x77, 0x45, // End addr.
-                ],
-                hash: true,
-            },
-        ]);
-
-        let sha = RingSha::new();
-        let (mut rsa, _) = make_rsa_engine();
-        let mut arena = vec![0; 2048];
-        let arena = BumpArena::new(&mut arena);
-
-        let manifest =
-            Container::parse_and_verify(Ram(pfm), &sha, &mut rsa, &OutOfMemory)
-                .unwrap();
-
-        let pfm = Pfm::parse(&manifest, &sha, &OutOfMemory).unwrap();
-        let flash_info = pfm.flash_device_info(&sha).unwrap().unwrap();
-        assert_eq!(flash_info.blank_byte(), 0xaa);
-
-        let fws = pfm
-            .allowable_fws()
-            .map(|fw| fw.unwrap().read(&sha, &arena).unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(fws.len(), 1);
-        assert_eq!(fws[0].firmware_count(), 1);
-        assert_eq!(fws[0].firmware_id(), b"abc");
-
-        let vers = fws[0]
-            .firmware_versions()
-            .map(|fw| fw.unwrap().read(&sha, &arena).unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(vers.len(), 1);
-        assert_eq!(
-            vers[0].version(),
-            (Region::new(0x78563412, 5), b"zyxwv".as_ref())
-        );
-        assert_eq!(vers[0].rw_count(), 1);
-        assert_eq!(vers[0].image_count(), 2);
-
-        let rws = vers[0].rw_regions().collect::<Vec<_>>();
-        assert_eq!(rws[0].failure_policy(), Some(RwFailurePolicy::Erase));
-        assert_eq!(rws[0].region(), Region::new(0xaaaa7777, 0x1111));
-
-        let imgs = vers[0].image_regions().collect::<Vec<_>>();
-        assert!(!imgs[0].must_validate_on_boot());
-        assert_eq!(imgs[0].image_hash(), &[0x11; 32]);
-        assert_eq!(imgs[0].region_count(), 1);
-        assert_eq!(
-            imgs[0].regions().collect::<Vec<_>>(),
-            vec![Region::new(0x45440000, 0x1000)]
-        );
-        assert!(imgs[1].must_validate_on_boot());
-        assert_eq!(imgs[1].image_hash(), &[0xfe; 32]);
-        assert_eq!(imgs[1].region_count(), 2);
-        assert_eq!(
-            imgs[1].regions().collect::<Vec<_>>(),
-            vec![
-                Region::new(0x45441000, 0x2000),
-                Region::new(0x45775000, 0x800),
-            ]
-        );
-    }
-
-    #[test]
-    fn manually_built_pfm() {
-        const TOC_BASE: &[u8] = &[
-            0x01, 0x01, 0x00,
-            0x00, // Entry #, hash #, hash type (sha256), reserved.
-            0x03, 0x01, 0x58, 0x00, // Type 3, version 1, offset 88.
-            0x0c, 0x00, 0xff, 0x00, // Length 12, no parent, hash idx 0.
-        ];
-
-        const ID_ELEMENT: &[u8] = &[
-            0x06, 0x00, 0x00, 0x00, // 6 bytes.
-            b'm', b'y', b' ', b'p', // Message: "my pfm".
-            b'f', b'm', 0x11, 0x11, // 2 bytes padding!
-        ];
-
-        let sha = RingSha::new();
-        let mut hash = [0; 32];
-
-        let mut pfm_vec = Vec::new();
-        pfm_vec.extend_from_slice(TOC_BASE);
-
-        // Add the element hash.
-        sha.hash_contiguous(&ID_ELEMENT, &mut hash).unwrap();
-        pfm_vec.extend_from_slice(&hash);
-
-        // Add the TOC hash.
-        sha.hash_contiguous(&pfm_vec, &mut hash).unwrap();
-        pfm_vec.extend_from_slice(&hash);
-
-        // Add the element itself.
-        pfm_vec.extend_from_slice(ID_ELEMENT);
-
+        let sha = ring::sha256::Builder::new();
         let (mut rsa, mut signer) = make_rsa_engine();
-        let mut pfm_bytes = [0; 1024];
-        let mut builder = Containerizer::new(&mut pfm_bytes)
-            .unwrap()
-            .with_type(ManifestType::Pfm)
-            .unwrap()
-            .with_metadata(&Metadata { version_id: 42 })
-            .unwrap();
-        builder.write_bytes(&pfm_vec).unwrap();
-        let pfm_bytes = builder.sign(&sha, &mut signer).unwrap();
 
-        let manifest = Container::parse_and_verify(
-            Ram(pfm_bytes),
+        #[rustfmt::skip]
+        let pfm: owned::Pfm = from_str(r#"{
+            "version_id": 42,
+            "elements": [
+                { "blank_byte": "0xff" },
+                {
+                    "version_count": 1,
+                    "firmware_id": "my cool firmware",
+                    "flags": "0b10101010",
+                    "hashed": false,
+                    "children": [{
+                        "version_addr": "0x12345678",
+                        "version_str": "ver-1.2.2",
+                        "rw_regions": [{
+                            "flags": "0b00110011",
+                            "region": {
+                                "offset": "0x00008000",
+                                "len": "0x8000"
+                            }
+                        }],
+                        "image_regions": [
+                            {
+                                "flags": "0o7",
+                                "hash_type": "Sha256",
+                                "hash": [
+                                    42, 42, 42, 42, 42, 42, 42, 42,
+                                    42, 42, 42, 42, 42, 42, 42, 42,
+                                    42, 42, 42, 42, 42, 42, 42, 42,
+                                    42, 42, 42, 42, 42, 42, 42, 42
+                                ],
+                                "regions": [
+                                    { "offset": "0x10000", "len": "0x1000" },
+                                    { "offset": "0x18000", "len": "0x800" }
+                                ]
+                            },
+                            {
+                                "flags": 0,
+                                "hash_type": "Sha256",
+                                "hash": [
+                                    77, 77, 77, 77, 77, 77, 77, 77,
+                                    77, 77, 77, 77, 77, 77, 77, 77,
+                                    77, 77, 77, 77, 77, 77, 77, 77,
+                                    77, 77, 77, 77, 77, 77, 77, 77
+                                ],
+                                "regions": [
+                                    { "offset": "0x20000", "len": "0x800" },
+                                    { "offset": "0x28000", "len": "0x1000" }
+                                ]
+                            }
+                        ]
+                    }]
+                }
+            ]
+        }"#).unwrap();
+        let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
+
+        let container = Container::parse_and_verify(
+            &bytes,
             &sha,
             &mut rsa,
             &OutOfMemory,
+            &OutOfMemory,
         )
         .unwrap();
+        let pfm = Pfm::new(container);
 
-        let pfm = Pfm::parse(&manifest, &sha, &OutOfMemory).unwrap();
-        let id = pfm.platform_id(&sha, &OutOfMemory).unwrap().unwrap();
-        assert_eq!(id, b"my pfm");
+        let device =
+            pfm.flash_device_info(&sha, &OutOfMemory).unwrap().unwrap();
+        assert_eq!(device.blank_byte(), 0xff);
+
+        let mut allowed_fws = pfm.allowable_fws().map(Some).collect::<Vec<_>>();
+        assert_eq!(allowed_fws.len(), 1);
+
+        let allowed = allowed_fws[0]
+            .take()
+            .unwrap()
+            .read(&sha, &OutOfMemory)
+            .unwrap();
+        assert_eq!(allowed.firmware_id(), b"my cool firmware");
+
+        let mut arena = [0; 256];
+        let arena = BumpArena::new(&mut arena);
+        let mut versions =
+            allowed.firmware_versions().map(Some).collect::<Vec<_>>();
+        assert_eq!(allowed_fws.len(), 1);
+
+        let fw = versions[0].take().unwrap().read(&sha, &arena).unwrap();
+        assert_eq!(
+            fw.version(),
+            (Region::new(0x12345678, 9), b"ver-1.2.2".as_ref())
+        );
+        assert_eq!(fw.rw_count(), 1);
+        assert_eq!(fw.image_count(), 2);
+
+        let rws = fw.rw_regions().collect::<Vec<_>>();
+        assert_eq!(rws.len(), 1);
+        assert_eq!(rws[0].region(), Region::new(0x8000, 0x8000));
+
+        let imgs = fw.image_regions().collect::<Vec<_>>();
+        assert_eq!(imgs.len(), 2);
+
+        assert_eq!(imgs[0].image_hash(), &[42; 32]);
+        assert_eq!(imgs[0].region_count(), 2);
+        assert_eq!(imgs[0].region(0), Some(Region::new(0x10000, 0x1000)));
+        assert_eq!(imgs[0].region(1), Some(Region::new(0x18000, 0x800)));
+        assert!(imgs[0].region(2).is_none());
+
+        assert_eq!(imgs[1].image_hash(), &[77; 32]);
+        assert_eq!(imgs[1].region_count(), 2);
+        assert_eq!(imgs[1].region(0), Some(Region::new(0x20000, 0x800)));
+        assert_eq!(imgs[1].region(1), Some(Region::new(0x28000, 0x1000)));
+        assert!(imgs[1].region(2).is_none());
     }
 }
