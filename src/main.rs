@@ -280,8 +280,7 @@ fn main() {
             manifest_version,
             input,
             output,
-        } =>
-        {
+        } => {
             let (mut input, mut output) = open_files(input, output);
 
             let key = fs::read(key).expect("failed to open file");

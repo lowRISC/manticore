@@ -31,13 +31,13 @@ use crate::crypto::sha256;
 use crate::hardware::flash::Flash;
 use crate::hardware::flash::Region;
 use crate::io::Read as _;
-use crate::manifest::Container;
-use crate::manifest::HashType;
-use crate::manifest::TocEntry;
 use crate::manifest::provenance;
+use crate::manifest::Container;
 use crate::manifest::Error;
+use crate::manifest::HashType;
 use crate::manifest::Manifest;
 use crate::manifest::ManifestType;
+use crate::manifest::TocEntry;
 use crate::mem::misalign_of;
 use crate::mem::Arena;
 
@@ -661,10 +661,10 @@ mod test {
     use crate::crypto::sha256::Builder as _;
     use crate::hardware::flash::Ram;
     use crate::io::Write as _;
-    use crate::manifest::container::test::make_rsa_engine;
-    use crate::manifest::Metadata;
+    use crate::crypto::testdata;
     use crate::manifest::owned;
     use crate::manifest::ManifestType;
+    use crate::manifest::Metadata;
     use crate::mem::BumpArena;
     use crate::mem::OutOfMemory;
 
@@ -673,7 +673,7 @@ mod test {
     #[test]
     fn empty() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = make_rsa_engine();
+        let (mut rsa, mut signer) = testdata::rsa();
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
@@ -700,7 +700,7 @@ mod test {
     #[test]
     fn platform_id() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = make_rsa_engine();
+        let (mut rsa, mut signer) = testdata::rsa();
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
@@ -726,7 +726,7 @@ mod test {
     #[test]
     fn fw_versions() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = make_rsa_engine();
+        let (mut rsa, mut signer) = testdata::rsa();
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{

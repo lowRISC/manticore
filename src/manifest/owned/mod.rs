@@ -21,11 +21,11 @@ use crate::crypto::sha256;
 use crate::io::write::StdWrite;
 use crate::io::Read as _;
 use crate::io::Write as _;
-use crate::manifest::HashType;
-use crate::manifest::Metadata;
 use crate::manifest::container::RawTocEntry;
 use crate::manifest::Error;
+use crate::manifest::HashType;
 use crate::manifest::ManifestType;
+use crate::manifest::Metadata;
 use crate::protocol::wire::WireEnum;
 
 #[cfg(feature = "serde")]

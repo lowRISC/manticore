@@ -85,9 +85,9 @@ use crate::protocol::wire::WireEnum;
 
 mod container;
 pub use container::Container;
-pub use container::Toc;
 pub use container::HashType;
 pub use container::Metadata;
+pub use container::Toc;
 pub use container::TocEntry;
 
 #[cfg(feature = "std")]
