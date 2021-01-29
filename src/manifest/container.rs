@@ -40,6 +40,7 @@
 //! are Manticore-specific.
 
 use core::marker::PhantomData;
+use core::mem;
 
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
@@ -48,13 +49,10 @@ use crate::crypto::rsa;
 use crate::crypto::sha256;
 use crate::crypto::sha256::Hasher as _;
 use crate::hardware::flash::Flash;
+use crate::hardware::flash::FlashExt as _;
 use crate::hardware::flash::FlashIo;
 use crate::hardware::flash::Region;
-use crate::io;
-use crate::io::cursor::SeekPos;
-use crate::io::Cursor;
 use crate::io::Read as _;
-use crate::io::Write;
 use crate::manifest::provenance;
 use crate::manifest::Error;
 use crate::manifest::Manifest;
@@ -236,7 +234,7 @@ impl<M> Copy for TocEntry<'_, '_, M> {}
 pub struct Toc<'toc, M> {
     entries: &'toc [RawTocEntry],
     hashes: &'toc [sha256::Digest],
-    _ph: PhantomData<fn() -> M>
+    _ph: PhantomData<fn() -> M>,
 }
 
 impl<'toc, M: Manifest> Toc<'toc, M> {
@@ -318,25 +316,19 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
 /// not possible to parse a `Container` without also verifying it.
 ///
 /// See the [module documentation](index.html) for more information.
-pub struct Container<F, Provenance = provenance::Signed> {
+pub struct Container<'f, M, F, Provenance = provenance::Signed> {
     manifest_type: ManifestType,
     metadata: Metadata,
-    flash: F,
-    body: Region,
+    flash: &'f F,
+    toc: Toc<'f, M>,
     _ph: PhantomData<Provenance>,
 }
-
-/// Offsets for fields within the container header.
-const LEN_OFFSET: usize = 0;
-const TYPE_OFFSET: usize = 2;
-const ID_OFFSET: usize = 4;
-const SIG_LEN_OFFSET: usize = 8;
 
 /// The length of the container header in bytes:
 /// two halves, a word, another half, and two bytes of padding.
 const HEADER_LEN: usize = 2 + 2 + 4 + 2 + 2;
 
-impl<F: Flash> Container<F, provenance::Signed> {
+impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Signed> {
     /// Parses and verifies a `Container` using the provided cryptographic
     /// primitives.
     ///
@@ -345,12 +337,13 @@ impl<F: Flash> Container<F, provenance::Signed> {
     ///
     /// `buf` must be aligned to a four-byte boundary.
     pub fn parse_and_verify(
-        flash: F,
+        flash: &'f F,
         sha: &impl sha256::Builder,
         rsa: &mut impl rsa::Engine,
-        arena: &impl Arena,
+        toc_arena: &'f impl Arena,
+        verify_arena: &impl Arena,
     ) -> Result<Self, Error> {
-        let (mut c, sig, signed) = Self::parse_inner(flash)?;
+        let (mut c, sig, signed) = Self::parse_inner(flash, sha, toc_arena)?;
 
         let mut bytes = [0u8; 16];
         let mut r = FlashIo::new(&mut c.flash)?;
@@ -366,44 +359,53 @@ impl<F: Flash> Container<F, provenance::Signed> {
         let mut digest = [0; 32];
         hasher.finish(&mut digest)?;
 
-        let sig = c.flash.read_direct(sig, arena, 1)?;
+        let sig = c.flash.read_direct(sig, verify_arena, 1)?;
         rsa.verify_signature(sig, &digest)?;
 
         Ok(c)
     }
 }
 
-impl<F: Flash> Container<F, provenance::Adhoc> {
+impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Adhoc> {
     /// Parses a `Container` without verifying the signature.
     ///
     /// The value returned by this function cannot be used for trusted
     /// operations. See [`parse_and_verify()`].
     ///
     /// [`parse_and_verify()`]: struct.Container.html#method.parse_and_verify
-    pub fn parse(flash: F) -> Result<Self, Error> {
-        let (c, _, _) = Self::parse_inner(flash)?;
+    #[inline]
+    pub fn parse(
+        flash: &'f F,
+        sha: &impl sha256::Builder,
+        toc_arena: &'f impl Arena,
+    ) -> Result<Self, Error> {
+        let (c, _, _) = Self::parse_inner(flash, sha, toc_arena)?;
         Ok(c)
     }
 }
 
-impl<F: Flash, Provenance> Container<F, Provenance> {
+impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     /// Downgrades this `Container`'s provenance to `Adhoc`, forgetting that
     /// this container might have had a valid signature.
     #[inline(always)]
-    pub fn downgrade(self) -> Container<F, provenance::Adhoc> {
+    pub fn downgrade(self) -> Container<'f, M, F, provenance::Adhoc> {
         Container {
             manifest_type: self.manifest_type,
             metadata: self.metadata,
             flash: self.flash,
-            body: self.body,
+            toc: self.toc,
             _ph: PhantomData,
         }
     }
 
     /// Performs a parse without verifying the signature, returning the
-    /// the necessary arguments to pass to `verify_signature()`. if that were
+    /// the necessary arguments to pass to `verify_signature()`, if that were
     /// necessary.
-    fn parse_inner(mut flash: F) -> Result<(Self, Region, Region), Error> {
+    fn parse_inner(
+        mut flash: &'f F,
+        sha: &impl sha256::Builder,
+        toc_arena: &'f impl Arena,
+    ) -> Result<(Self, Region, Region), Error> {
         let flash_len = flash.size()? as usize;
 
         if HEADER_LEN > flash_len as usize {
@@ -411,24 +413,71 @@ impl<F: Flash, Provenance> Container<F, Provenance> {
         }
 
         let mut r = FlashIo::new(&mut flash)?;
+
+        // Container header.
         let len = r.read_le::<u16>()? as usize;
         let magic = r.read_le::<u16>()?;
         let id = r.read_le::<u32>()?;
         let sig_len = r.read_le::<u16>()? as usize;
+        // FIXME: Manticore currently ignores this value.
+        let _sig_type = r.read_le::<u8>()?;
+        let _ = r.read_le::<u8>()?;
 
-        // This length check, combined with the checked arithmetic below,
-        // ensures that none of the slice index operations can panic.
-        if len > flash_len {
+        // TOC header.
+        let entry_count = r.read_le::<u8>()?;
+        let hash_count = r.read_le::<u8>()?;
+        let hash_type = r.read_le::<u8>()?;
+        let reserved = r.read_le::<u8>()?;
+
+        // FIXME: we don't deal with hash types that aren't SHA-256.
+        if hash_type != HashType::Sha256.to_wire_value() {
             return Err(Error::OutOfRange);
         }
 
-        let rest_len = len.checked_sub(HEADER_LEN).ok_or(Error::OutOfRange)?;
+        let mut cursor = r.cursor();
+        let entries = flash.read_slice::<RawTocEntry>(
+            cursor,
+            entry_count as usize,
+            toc_arena,
+        )?;
+        cursor += mem::size_of_val(entries) as u32;
 
-        let body_offset = HEADER_LEN;
-        let body_len =
-            rest_len.checked_sub(sig_len).ok_or(Error::OutOfRange)?;
-        let body = Region::new(body_offset as u32, body_len as u32);
+        let hashes = flash.read_slice::<sha256::Digest>(
+            cursor,
+            hash_count as usize,
+            toc_arena,
+        )?;
+        cursor += mem::size_of_val(hashes) as u32;
 
+        let mut toc_hash = [0; 32];
+        flash.read(cursor, &mut toc_hash)?;
+
+        let mut hasher = sha.new_hasher()?;
+
+        hasher.write(&[entry_count])?;
+        hasher.write(&[hash_count])?;
+        hasher.write(&[hash_type])?;
+        hasher.write(&[reserved])?;
+
+        hasher.write(entries.as_bytes())?;
+        hasher.write(hashes.as_bytes())?;
+
+        let mut hash = [0; 32];
+        hasher.finish(&mut hash)?;
+        if hash != toc_hash {
+            return Err(Error::SignatureFailure);
+        }
+
+        let toc = Toc {
+            entries,
+            hashes,
+            _ph: PhantomData,
+        };
+        if !toc.check_invariants() {
+            return Err(Error::OutOfRange);
+        }
+
+        // Compute the signature/signed regions for verification later on.
         let sig_offset = len.checked_sub(sig_len).ok_or(Error::OutOfRange)?;
         let sig = Region::new(sig_offset as u32, sig_len as u32);
 
@@ -440,7 +489,7 @@ impl<F: Flash, Provenance> Container<F, Provenance> {
                 .ok_or(Error::OutOfRange)?,
             metadata: Metadata { version_id: id },
             flash,
-            body,
+            toc,
             _ph: PhantomData,
         };
         Ok((container, sig, signed))
@@ -470,181 +519,16 @@ impl<F: Flash, Provenance> Container<F, Provenance> {
         &self.metadata
     }
 
-    /// Returns the authenticated body of this `Container`.
-    pub fn body(&self) -> Region {
-        self.body
+    /// Returns this `Container`'s [`Toc`].
+    ///
+    /// [`Toc`]: struct.Toc.html
+    pub fn toc(&self) -> &Toc<'f, M> {
+        &self.toc
     }
 
-    /// Returns a reference to the backing storage for this `Container`.
-    pub fn flash(&self) -> &F {
-        &self.flash
-    }
-
-    /// Returns a mutable reference to the backing storage for this `Container`.
-    pub fn flash_mut(&mut self) -> &mut F {
-        &mut self.flash
-    }
-
-    /// Re-serializes this `Container` into its binary format.
-    ///
-    /// Re-serialization will not be exact; in particular, having the same
-    /// signature will depend on having the original signing keys.
-    ///
-    /// For more fine-grained control of serialiation, see [`Containerizer`].
-    ///
-    /// [`Containerizer`]: struct.Containerizer.html
-    pub fn containerize<'buf>(
-        &self,
-        sha: &impl sha256::Builder,
-        signer: &mut impl rsa::Signer,
-        buf: &'buf mut [u8],
-    ) -> Result<&'buf mut [u8], Error> {
-        let mut builder = Containerizer::new(buf)?
-            .with_type(self.manifest_type())?
-            .with_metadata(self.metadata())?;
-
-        let mut bytes = [0u8; 16];
-        let mut r = FlashIo::new(self.flash())?;
-        r.reslice(self.body());
-        while r.remaining_data() > 0 {
-            let to_read = r.remaining_data().min(16);
-            r.read_bytes(&mut bytes[..to_read])?;
-            builder.write_bytes(&bytes[..to_read])?;
-        }
-
-        builder.sign(sha, signer)
-    }
-}
-
-/// A [`Write`] implementation for writing new manifest containers.
-///
-/// Once all the parts of the container have been initialized, `sign()` can
-/// be used to produce an authentic, encoded manifest.
-///
-/// [`Write`]: ../../io/trait.Write.html
-pub struct Containerizer<'m> {
-    // Invariant: at all times, the pointer within the cursor should point
-    // beyond the "header" portion; `seek()` is used to move the cursor back
-    // when modifying the header.
-    cursor: Cursor<'m>,
-
-    has_type: bool,
-    has_metadata: bool,
-}
-
-impl<'m> Containerizer<'m> {
-    /// Creates a new, empty containerizer.
-    ///
-    /// This function does not perform I/O, but it will verify that `out`
-    /// is at least large enough to hold a [`Container`] header.
-    ///
-    /// Typically, this function will followed up by calls to other
-    /// `Containerizer` functions before it is used as a [`Write`].
-    ///
-    /// # Example
-    /// ```
-    /// # use manticore::manifest::{*, container::*};
-    /// # use manticore::io::Write as _;
-    /// # let mut buf = [0; 64];
-    /// let mut builder = Containerizer::new(&mut buf)?
-    ///     .with_type(ManifestType::Pfm)?
-    ///     .with_metadata(&Metadata { version_id: 42 })?;
-    /// builder.write_bytes(b"manifest contents stuff")?;
-    /// # Ok::<(), Error>(())
-    /// ```
-    ///
-    /// [`Container`]: struct.Container.html
-    /// [`Write`]: ../../io/trait.Write.html
-    pub fn new(out: &'m mut [u8]) -> Result<Self, Error> {
-        let mut cursor = Cursor::new(out);
-        cursor.seek(SeekPos::Abs(HEADER_LEN))?;
-
-        Ok(Self {
-            cursor,
-            has_type: false,
-            has_metadata: false,
-        })
-    }
-
-    /// Writes the given [`ManifestType`] into this `Containerizer`.
-    ///
-    /// [`ManifestType`]: ../enum.ManifestType.html
-    #[inline]
-    pub fn with_type(
-        mut self,
-        manifest_type: ManifestType,
-    ) -> Result<Self, Error> {
-        let mark = self.cursor.consumed_len();
-        self.cursor.seek(SeekPos::Abs(TYPE_OFFSET))?;
-        self.cursor.write_le(manifest_type.to_wire_value())?;
-        self.cursor.seek(SeekPos::Abs(mark))?;
-
-        self.has_type = true;
-        Ok(self)
-    }
-
-    /// Writes the given [`Metadata`] into this `Containerizer`.
-    ///
-    /// [`Metadata`]: struct.Metadata.html
-    #[inline]
-    pub fn with_metadata(mut self, metadata: &Metadata) -> Result<Self, Error> {
-        let mark = self.cursor.consumed_len();
-        self.cursor.seek(SeekPos::Abs(ID_OFFSET))?;
-        self.cursor.write_le(metadata.version_id)?;
-        self.cursor.seek(SeekPos::Abs(mark))?;
-
-        self.has_metadata = true;
-        Ok(self)
-    }
-
-    /// Completes the containerization process by signing all of the contents
-    /// and producing an encoded [`Container`].
-    ///
-    /// `with_type()` and `with_metadata()` must have been called before this
-    /// function is called; otherwise, an error will be returned.
-    ///
-    /// [`Container`]: struct.Container.html
-    pub fn sign(
-        mut self,
-        sha: &impl sha256::Builder,
-        signer: &mut impl rsa::Signer,
-    ) -> Result<&'m mut [u8], Error> {
-        if !self.has_type || !self.has_metadata {
-            return Err(Error::OutOfRange);
-        }
-
-        let sig_len = signer.pub_len().byte_len();
-        let total_len = self
-            .cursor
-            .consumed_len()
-            .checked_add(sig_len)
-            .ok_or(io::Error::BufferExhausted)?;
-
-        let u16_max = u16::MAX as usize;
-        if total_len > u16_max || sig_len > u16_max {
-            return Err(Error::OutOfRange);
-        }
-
-        let mark = self.cursor.consumed_len();
-        self.cursor.seek(SeekPos::Abs(LEN_OFFSET))?;
-        self.cursor.write_le(total_len as u16)?;
-        self.cursor.seek(SeekPos::Abs(SIG_LEN_OFFSET))?;
-        self.cursor.write_le(sig_len as u16)?;
-        // Always set the "padding" bytes to 0xff.
-        self.cursor.write_le(0xffffu16)?;
-        self.cursor.seek(SeekPos::Abs(mark))?;
-
-        let (message, sig) = self.cursor.consume_with_prior(sig_len)?;
-        let mut digest = [0; 32];
-        sha.hash_contiguous(message, &mut digest)?;
-        signer.sign(&digest, sig)?;
-        Ok(self.cursor.take_consumed_bytes())
-    }
-}
-
-impl Write for Containerizer<'_> {
-    fn write_bytes(&mut self, buf: &[u8]) -> Result<(), io::Error> {
-        self.cursor.write_bytes(buf)
+    /// Returns the backing storage for this `Container`.
+    pub fn flash(&self) -> &'f F {
+        self.flash
     }
 }
 
@@ -652,32 +536,18 @@ impl Write for Containerizer<'_> {
 pub(crate) mod test {
     use super::*;
 
-    use static_assertions::const_assert_eq;
-
     use crate::crypto::ring;
     use crate::crypto::rsa::Builder as _;
     use crate::crypto::rsa::Keypair as _;
-    use crate::crypto::rsa::Signer as _;
     use crate::crypto::rsa::SignerBuilder as _;
-    use crate::crypto::sha256::Builder as _;
     use crate::crypto::testdata;
     use crate::hardware::flash::Ram;
+    use crate::manifest::owned;
+    use crate::manifest::pfm;
+    use crate::manifest::pfm::Pfm;
     use crate::mem::OutOfMemory;
 
-    const MANIFEST_HEADER: &[u8] = &[
-        0x1f, 0x01, // Total length. This is the header length (12) +
-        //          // body length (19) + signature length (256).
-        0x6d, 0x70, // PFM magic.
-        0xaa, 0x55, 0x01, 0x00, // Container id (0x155aa).
-        0x00, 0x01, // Signature length (0x100 = 256).
-        0xff, 0xff, // Padding to 4 bytes.
-    ];
-
-    const MANIFEST_CONTENTS: &[u8] = b"Container contents!";
-    const_assert_eq!(MANIFEST_CONTENTS.len(), 19);
-
-    const MANIFEST_LEN: usize =
-        MANIFEST_HEADER.len() + MANIFEST_CONTENTS.len() + 256;
+    use serde_json::from_str;
 
     pub fn make_rsa_engine() -> (ring::rsa::Engine, ring::rsa::Signer) {
         let keypair =
@@ -690,177 +560,132 @@ pub(crate) mod test {
         (rsa, signer)
     }
 
+    // NOTE: To effectively run these tests, we use PFM-from-JSON to generate
+    // some of the tests, but they're intended to be independent of the actual
+    // manifest type.
+
     #[test]
-    fn parse_manifest() {
+    fn empty() {
         let sha = ring::sha256::Builder::new();
         let (mut rsa, mut signer) = make_rsa_engine();
 
-        let mut manifest = MANIFEST_HEADER.to_vec();
-        manifest.extend_from_slice(MANIFEST_CONTENTS);
+        #[rustfmt::skip]
+        let pfm: owned::Pfm = from_str(r#"{
+            "version_id": 42,
+            "elements": []
+        }"#).unwrap();
+        let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
+        type Flash = Ram<Vec<u8>>;
 
-        let mut digest = [0; 32];
-        sha.hash_contiguous(&manifest, &mut digest).unwrap();
-
-        let mut sig = vec![0; signer.pub_len().byte_len()];
-        signer.sign(&digest, &mut sig).unwrap();
-        manifest.extend_from_slice(&sig);
-
-        assert_eq!(manifest.len(), MANIFEST_LEN);
-
-        let manifest = Container::parse_and_verify(
-            Ram(&manifest),
-            &sha,
-            &mut rsa,
-            &OutOfMemory,
-        )
-        .unwrap();
-        assert_eq!(manifest.manifest_type(), ManifestType::Pfm);
-        assert_eq!(
-            manifest
-                .flash()
-                .read_direct(manifest.body(), &OutOfMemory, 1)
-                .unwrap(),
-            MANIFEST_CONTENTS
-        );
-    }
-
-    #[test]
-    fn parse_manifest_too_short() {
-        let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = make_rsa_engine();
-
-        let mut manifest = MANIFEST_HEADER.to_vec();
-        manifest.extend_from_slice(&MANIFEST_CONTENTS[1..]);
-
-        let mut digest = [0; 32];
-        sha.hash_contiguous(&manifest, &mut digest).unwrap();
-
-        let mut sig = vec![0; signer.pub_len().byte_len()];
-        signer.sign(&digest, &mut sig).unwrap();
-        manifest.extend_from_slice(&sig);
-
-        assert_eq!(manifest.len(), MANIFEST_LEN - 1);
-
-        assert!(Container::parse_and_verify(
-            Ram(&manifest),
-            &sha,
-            &mut rsa,
-            &OutOfMemory
-        )
-        .is_err());
-    }
-
-    #[test]
-    fn parse_manifest_bad_sig() {
-        let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = make_rsa_engine();
-
-        let mut manifest = MANIFEST_HEADER.to_vec();
-        manifest.extend_from_slice(MANIFEST_CONTENTS);
-
-        let mut digest = [0; 32];
-        sha.hash_contiguous(&manifest, &mut digest).unwrap();
-
-        let mut sig = vec![0; signer.pub_len().byte_len()];
-        signer.sign(&digest, &mut sig).unwrap();
-        // Flip a bit in the signature.
-        sig[0] ^= 1;
-        manifest.extend_from_slice(&sig);
-
-        assert_eq!(manifest.len(), MANIFEST_LEN);
-
-        assert!(matches!(
+        let container: Container<'_, Pfm<'_, Flash>, Flash> =
             Container::parse_and_verify(
-                Ram(&manifest),
+                &bytes,
                 &sha,
                 &mut rsa,
-                &OutOfMemory
-            ),
-            Err(Error::SignatureFailure)
-        ));
+                &OutOfMemory,
+                &OutOfMemory,
+            )
+            .unwrap();
+        assert_eq!(container.metadata().version_id, 42);
+
+        let toc = container.toc();
+        assert_eq!(toc.len(), 0);
+        assert!(toc.is_empty());
+        assert!(toc.entry(0).is_none());
+        assert_eq!(toc.entries().count(), 0);
     }
 
     #[test]
-    fn build_manifest() {
+    fn one_element() {
         let sha = ring::sha256::Builder::new();
-        let keypair =
-            ring::rsa::Keypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
-                .unwrap();
-        let pub_key = keypair.public();
-        let rsa_builder = ring::rsa::Builder::new();
-        let mut signer = rsa_builder.new_signer(keypair).unwrap();
-        let mut rsa = rsa_builder.new_engine(pub_key).unwrap();
+        let (mut rsa, mut signer) = make_rsa_engine();
 
-        let mut buf = vec![0; 1024];
-        let mut builder = Containerizer::new(&mut buf)
-            .unwrap()
-            .with_type(ManifestType::Pfm)
-            .unwrap()
-            .with_metadata(&Metadata {
-                version_id: 0x155aa,
-            })
+        #[rustfmt::skip]
+        let pfm: owned::Pfm = from_str(r#"{
+            "version_id": 42,
+            "elements": [{ "platform_id": "blah" }]
+        }"#).unwrap();
+        let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
+        type Flash = Ram<Vec<u8>>;
+
+        let container: Container<'_, Pfm<'_, Flash>, Flash> =
+            Container::parse_and_verify(
+                &bytes,
+                &sha,
+                &mut rsa,
+                &OutOfMemory,
+                &OutOfMemory,
+            )
             .unwrap();
-        builder.write_bytes(MANIFEST_CONTENTS).unwrap();
-        let manifest_bytes = builder.sign(&sha, &mut signer).unwrap();
+
+        let toc = container.toc();
+        assert_eq!(toc.len(), 1);
         assert_eq!(
-            &manifest_bytes[..HEADER_LEN],
-            &MANIFEST_HEADER[..HEADER_LEN]
+            toc.entries().map(TocEntry::index).collect::<Vec<_>>(),
+            vec![0]
         );
 
-        let manifest = Container::parse_and_verify(
-            Ram(manifest_bytes),
-            &sha,
-            &mut rsa,
-            &OutOfMemory,
-        )
-        .unwrap();
-        assert_eq!(manifest.manifest_type(), ManifestType::Pfm);
-        assert_eq!(manifest.metadata().version_id, 0x155aa);
-        assert_eq!(
-            manifest
-                .flash()
-                .read_direct(manifest.body(), &OutOfMemory, 1)
-                .unwrap(),
-            MANIFEST_CONTENTS
-        );
+        let first = toc.entry(0).unwrap();
+        assert_eq!(first.index(), 0);
+        assert_eq!(first.element_type(), pfm::ElementType::PlatformId);
+        assert!(first.parent().is_none());
+        assert!(first.hash().is_some());
+        assert_eq!(first.children().count(), 0);
     }
 
     #[test]
-    fn round_trip() {
+    fn with_child() {
         let sha = ring::sha256::Builder::new();
-        let keypair =
-            ring::rsa::Keypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
-                .unwrap();
-        let pub_key = keypair.public();
-        let rsa_builder = ring::rsa::Builder::new();
-        let mut signer = rsa_builder.new_signer(keypair).unwrap();
-        let mut rsa = rsa_builder.new_engine(pub_key).unwrap();
+        let (mut rsa, mut signer) = make_rsa_engine();
 
-        let mut manifest = MANIFEST_HEADER.to_vec();
-        manifest.extend_from_slice(MANIFEST_CONTENTS);
+        #[rustfmt::skip]
+        let pfm: owned::Pfm = from_str(r#"{
+            "version_id": 42,
+            "elements": [{
+                "platform_id": "blah",
+                "children": [{
+                    "platform_id": "blah2",
+                    "hashed": false
+                }]
+            }]
+        }"#).unwrap();
+        let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
+        type Flash = Ram<Vec<u8>>;
 
-        let mut digest = [0; 32];
-        sha.hash_contiguous(&manifest, &mut digest).unwrap();
-
-        let mut sig = vec![0; signer.pub_len().byte_len()];
-        signer.sign(&digest, &mut sig).unwrap();
-
-        manifest.extend_from_slice(&sig);
-        assert_eq!(manifest.len(), MANIFEST_LEN);
-
-        let parsed_manifest = Container::parse_and_verify(
-            Ram(&manifest),
-            &sha,
-            &mut rsa,
-            &OutOfMemory,
-        )
-        .unwrap();
-
-        let mut buf = vec![0; 512];
-        let new_manifest_bytes = parsed_manifest
-            .containerize(&sha, &mut signer, &mut buf)
+        let container: Container<'_, Pfm<'_, Flash>, Flash> =
+            Container::parse_and_verify(
+                &bytes,
+                &sha,
+                &mut rsa,
+                &OutOfMemory,
+                &OutOfMemory,
+            )
             .unwrap();
-        // Note that this assumes that the padding bytes are always 0xffff.
-        assert_eq!(&manifest[..], new_manifest_bytes);
+
+        let toc = container.toc();
+        assert_eq!(toc.len(), 2);
+        assert_eq!(
+            toc.entries().map(TocEntry::index).collect::<Vec<_>>(),
+            vec![0, 1]
+        );
+
+        let first = toc.entry(0).unwrap();
+        assert_eq!(first.index(), 0);
+        assert_eq!(first.element_type(), pfm::ElementType::PlatformId);
+        assert!(first.parent().is_none());
+        assert!(first.hash().is_some());
+
+        let children = first.children().collect::<Vec<_>>();
+        assert_eq!(children.len(), 1);
+        let second = children[0];
+        assert_eq!(second.index(), 1);
+        assert_eq!(second.element_type(), pfm::ElementType::PlatformId);
+        assert_eq!(second.parent().unwrap().index(), 0);
+        assert!(second.hash().is_none());
     }
+
+    // TODO: Write test that involve pre-baked manifests, as opposed to the
+    // dynamically built ones. We don't do this right now because there's a
+    // couple of details missing w.r.t making sure we match up with the
+    // specified format.
 }
