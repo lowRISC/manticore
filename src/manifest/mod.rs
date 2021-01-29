@@ -7,6 +7,74 @@
 //! Cerberus uses a number of signed "manifests" to describe both the physical
 //! configuration of a system it protects, and to describe policies on what
 //! firmware can run on those systems.
+//!
+//! # Wire Format
+//!
+//! On the wire (and in flash) every manifest has the following layout,
+//! expressed as a pseudo-Rust struct. Integers are encoded in little-endian
+//! order, and `_` indicates reserved fields or padding that should be set
+//! to 0.
+//! ```ignore
+//! struct Manifest {
+//!     // Overall header.
+//!     total_len: u16,
+//!     manifest_type: u16, // See `ManifestType`.
+//!     version_id: u32,
+//!     signature_len: u16,
+//!     signature_type: u8,
+//!     _: u8,
+//!
+//!     // Table-of-contents.
+//!     entry_count: u8,
+//!     hash_count: u8,
+//!     hash_type: u8,
+//!     _: u8,
+//!     toc: [TocEntry; self.entry_count],
+//!     hashes: [Hash<hash_type>; self.hash_count + 1],
+//!
+//!     body: [u8],
+//!
+//!     signature: [u8; self.signature_len],
+//! }
+//!
+//! struct TocEntry {
+//!     element_type: u8, // See `Manifest::ElementType`.
+//!     parent: u8,
+//!     format_version: u8,
+//!     hash_id: u8,
+//!     offset: u16,
+//!     length: u16,
+//! }
+//! ```
+//!
+//! Each manifest consists of a number of "elements", whose format is
+//! manifest-specific. The "table of contents" defines these elements; each
+//! entry includes:
+//! - The offset and length within the manifest corresponding to it.
+//! - The encoding, given by the type and the format version.
+//! - An optional parent index, referring to another element in the TOC
+//!   (no parent indicated by `0xff`).
+//! - An optional hash index, referring to a hash in the TOC's hash list.
+//!   (Again, no hash indicated by `0xff`).
+//!
+//! The final hash in the list of hashes is a hash of the whole TOC.
+//! For more information on how to interact with the `TOC`, see
+//! the [`Toc`](struct.Toc.html) type.
+//!
+//! # Parsing and Encoding APIs
+//!
+//! The `manticore::manifest` module provides an API for reading a manifest
+//! stored in remote flash with minimal memory overhead, allowing the caller
+//! to specify which arena various book-keeping information should be allocated
+//! in. The [`Container`] type is the entry-point for this functionality.
+//!
+//! This module also provides an "owned" API that eagerly parses the manifest
+//! into a tree based on his TOC. This requires the `std` feature, and is intended
+//! for use by tooling. The [`owned::Container`] type is the relevant entry
+//! point.
+//!
+//! [`Container`]: struct.Container.html
+//! [`owned::Container`]: owned/struct.Container.html
 
 use crate::crypto::rsa;
 use crate::crypto::sha256;
@@ -15,7 +83,13 @@ use crate::io;
 use crate::mem::OutOfMemory;
 use crate::protocol::wire::WireEnum;
 
-pub mod container;
+mod container;
+pub use container::Container;
+pub use container::Toc;
+pub use container::HashType;
+pub use container::Metadata;
+pub use container::TocEntry;
+
 #[cfg(feature = "std")]
 pub mod owned;
 pub mod pfm;

@@ -4,8 +4,11 @@
 
 //! Owned manifest containers.
 //!
-//! TODO(mcyoung): Document this module. This should be done in a followup
-//! after `manifest::container` is refactored.
+//! This module provides a heap-allocated manifest container, which represents
+//! elements as a tree structure. This module is intended for tooling to make
+//! building arbitrary manifests easy and straight-forward.
+//!
+//! When the `serde` feature is enabled, owned manifests can be de/serialized.
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -18,8 +21,8 @@ use crate::crypto::sha256;
 use crate::io::write::StdWrite;
 use crate::io::Read as _;
 use crate::io::Write as _;
-use crate::manifest::container::HashType;
-use crate::manifest::container::Metadata;
+use crate::manifest::HashType;
+use crate::manifest::Metadata;
 use crate::manifest::container::RawTocEntry;
 use crate::manifest::Error;
 use crate::manifest::ManifestType;

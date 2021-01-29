@@ -4,40 +4,7 @@
 
 //! Cerberus manifest containers.
 //!
-//! A "manifest container" is a frame around a Cerberus manifest that provides
-//! certain security properties:
-//! - Containers are signed, so that only the holder of a software signing key
-//!   can create new manifests.
-//! - Containers carry a monotinically increasing "version number", which the
-//!   signing authority should take care to bump for each new manifest.
-//!   Manticore components can refuse to load older manifest versions, as a
-//!   form of rollback-attack hardening.
-//!
-//! # Wire Format
-//!
-//! ```text
-//! struct Container {
-//!     /// Total length, including the header.
-//!     len: u16,
-//!     /// The "magic number", which determines the manifest type.
-//!     magic: u16,
-//!     /// The monotonic id.
-//!     id: u32,
-//!     /// The length of the signature.
-//!     sig_len: u16,
-//!     /// Alignment padding.
-//!     _: u16,
-//!     /// The manifest-specific body.
-//!     body: [u8; self.len - HEADER_LEN - self.sig_len],
-//!     /// The cryptographic signature, an RSA signature in PKCS 1.5
-//!     /// format. This is a signature of the hash of the above fields.
-//!     signature: [u8; self.sig_len],
-//! }
-//! ```
-//!
-//! This format is intended to be fully wire-compatible with Cerberus,
-//! although the magic number and the manifest body may contain payloads that
-//! are Manticore-specific.
+//! See the `manticore::manifest` documentation for more information.
 
 use core::marker::PhantomData;
 use core::mem;
