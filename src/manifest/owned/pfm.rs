@@ -13,10 +13,10 @@ use core::convert::TryInto;
 use crate::crypto::sha256;
 use crate::hardware::flash::Region;
 use crate::io::Read as _;
-use crate::manifest::HashType;
 use crate::manifest::owned;
 use crate::manifest::pfm::ElementType;
 use crate::manifest::Error;
+use crate::manifest::HashType;
 use crate::manifest::ManifestType;
 use crate::mem::misalign_of;
 
@@ -354,10 +354,10 @@ mod test {
     use super::*;
 
     use crate::crypto::ring::sha256;
-    use crate::manifest::container::test::make_rsa_engine;
-    use crate::manifest::Metadata;
+    use crate::crypto::testdata;
     use crate::manifest::owned;
     use crate::manifest::owned::Pfm;
+    use crate::manifest::Metadata;
 
     use pretty_assertions::assert_eq;
     use serde_json::from_str;
@@ -576,7 +576,7 @@ mod test {
             ],
         };
         let sha = sha256::Builder::new();
-        let (mut rsa, mut signer) = make_rsa_engine();
+        let (mut rsa, mut signer) = testdata::rsa();
 
         let bytes = pfm.sign(0x00, &sha, &mut signer).unwrap();
         let pfm2 = owned::Container::parse(&bytes, &sha, &mut rsa).unwrap();

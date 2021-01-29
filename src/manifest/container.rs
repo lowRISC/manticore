@@ -504,9 +504,6 @@ pub(crate) mod test {
     use super::*;
 
     use crate::crypto::ring;
-    use crate::crypto::rsa::Builder as _;
-    use crate::crypto::rsa::Keypair as _;
-    use crate::crypto::rsa::SignerBuilder as _;
     use crate::crypto::testdata;
     use crate::hardware::flash::Ram;
     use crate::manifest::owned;
@@ -516,17 +513,6 @@ pub(crate) mod test {
 
     use serde_json::from_str;
 
-    pub fn make_rsa_engine() -> (ring::rsa::Engine, ring::rsa::Signer) {
-        let keypair =
-            ring::rsa::Keypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8)
-                .unwrap();
-        let pub_key = keypair.public();
-        let rsa_builder = ring::rsa::Builder::new();
-        let rsa = rsa_builder.new_engine(pub_key).unwrap();
-        let signer = rsa_builder.new_signer(keypair).unwrap();
-        (rsa, signer)
-    }
-
     // NOTE: To effectively run these tests, we use PFM-from-JSON to generate
     // some of the tests, but they're intended to be independent of the actual
     // manifest type.
@@ -534,7 +520,7 @@ pub(crate) mod test {
     #[test]
     fn empty() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = make_rsa_engine();
+        let (mut rsa, mut signer) = testdata::rsa();
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
@@ -565,7 +551,7 @@ pub(crate) mod test {
     #[test]
     fn one_element() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = make_rsa_engine();
+        let (mut rsa, mut signer) = testdata::rsa();
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
@@ -603,7 +589,7 @@ pub(crate) mod test {
     #[test]
     fn with_child() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = make_rsa_engine();
+        let (mut rsa, mut signer) = testdata::rsa();
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
