@@ -6,12 +6,14 @@
 //!
 //! See [`owned::Pfm`](../type.Pfm.html).
 
+// TODO: Provide a more ergonomic way of specifying flags bytes.
+
 use core::convert::TryInto;
 
 use crate::crypto::sha256;
 use crate::hardware::flash::Region;
 use crate::io::Read as _;
-use crate::manifest::container::HashType;
+use crate::manifest::HashType;
 use crate::manifest::owned;
 use crate::manifest::pfm::ElementType;
 use crate::manifest::Error;
@@ -23,11 +25,11 @@ use crate::protocol::wire::WireEnum as _;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-///
-#[allow(missing_docs)]
+/// An owned PFM element.
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
+#[allow(missing_docs)]
 pub enum Element {
     FlashDevice {
         #[cfg_attr(
@@ -94,7 +96,7 @@ pub enum Element {
     },
 }
 
-///
+/// A read-write region.
 #[allow(missing_docs)]
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -110,7 +112,7 @@ pub struct Rw {
     pub region: Region,
 }
 
-///
+/// An image region.
 #[allow(missing_docs)]
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -353,7 +355,7 @@ mod test {
 
     use crate::crypto::ring::sha256;
     use crate::manifest::container::test::make_rsa_engine;
-    use crate::manifest::container::Metadata;
+    use crate::manifest::Metadata;
     use crate::manifest::owned;
     use crate::manifest::owned::Pfm;
 
