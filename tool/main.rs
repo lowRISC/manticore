@@ -6,26 +6,9 @@
 //! data types.
 
 #![deny(missing_docs)]
-// #![deny(warnings)]
-// #![deny(unused)]
+#![deny(warnings)]
+#![deny(unused)]
 #![deny(unsafe_code)]
-
-use manticore::crypto::ring;
-use manticore::crypto::rsa::Builder as _;
-use manticore::crypto::rsa::Keypair as _;
-use manticore::crypto::rsa::SignerBuilder as _;
-use manticore::io::write::StdWrite;
-use manticore::manifest::ManifestType;
-use manticore::mem::BumpArena;
-use manticore::protocol::firmware_version;
-use manticore::protocol::wire::FromWire;
-use manticore::protocol::wire::ToWire;
-use manticore::protocol::CommandType;
-use manticore::protocol::Header;
-
-use serde::de::Deserialize;
-
-use structopt::StructOpt;
 
 use std::fs;
 use std::fs::File;
@@ -34,6 +17,26 @@ use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
+
+use serde::de::Deserialize;
+
+use structopt::StructOpt;
+
+use manticore::crypto::ring;
+use manticore::crypto::rsa::Builder as _;
+use manticore::crypto::rsa::Keypair as _;
+use manticore::crypto::rsa::SignerBuilder as _;
+use manticore::io::write::StdWrite;
+use manticore::io::Read as _;
+use manticore::manifest::owned;
+use manticore::manifest::ManifestType;
+use manticore::mem::BumpArena;
+use manticore::protocol::firmware_version;
+use manticore::protocol::wire::FromWire;
+use manticore::protocol::wire::ToWire;
+use manticore::protocol::wire::WireEnum;
+use manticore::protocol::CommandType;
+use manticore::protocol::Header;
 
 /// Opens the given input and output files.
 ///
@@ -223,10 +226,6 @@ enum CliCommand {
         #[structopt(short = "t", long)]
         manifest_type: ManifestType,
 
-        /// The version to encode into the manifest container.
-        #[structopt(short = "v", long)]
-        manifest_version: u32,
-
         /// JSON file containing the manifest to sign; defaults to stdin.
         #[structopt(short = "i", long, parse(from_os_str))]
         input: Option<PathBuf>,
@@ -237,7 +236,7 @@ enum CliCommand {
     },
     /// Inspect an existing manifest.
     ShowManifest {
-        /// PKCS#8-encoded RSA public key to optionally verify the signature
+        /// PKCS#8-encoded RSA public key to optionally verify the signature.
         #[structopt(short = "k", long, parse(from_os_str))]
         key: Option<PathBuf>,
 
@@ -277,7 +276,6 @@ fn main() {
         CliCommand::SignManifest {
             key,
             manifest_type,
-            manifest_version,
             input,
             output,
         } => {
@@ -291,10 +289,19 @@ fn main() {
                 .expect("failed to create signing engine");
             let sha = ring::sha256::Builder::new();
 
-            let mut manifest_buf = vec![0; 0x2000];
+            let mut buf = Vec::new();
+            input.read_to_end(&mut buf).expect("failed to read file");
+            let manifest = match manifest_type {
+                ManifestType::Pfm => {
+                    let pfm: owned::Pfm = serde_json::from_slice(&buf)
+                        .expect("failed to parse PFM");
+                    pfm.sign(0x00, &sha, &mut signer)
+                        .expect("failed to sign PFM")
+                }
+            };
 
             output
-                .write_all(&manifest_buf)
+                .write_all(&manifest)
                 .expect("failed to write manifest");
         }
         CliCommand::ShowManifest {
@@ -305,7 +312,7 @@ fn main() {
         } => {
             let (mut input, output) = open_files(input, output);
 
-            let engine = key.map(|key| {
+            let mut engine = key.map(|key| {
                 let key = fs::read(key).expect("failed to open file");
                 let keypair = ring::rsa::Keypair::from_pkcs8(&key)
                     .expect("failed to parse key");
@@ -317,7 +324,37 @@ fn main() {
 
             let mut buf = Vec::new();
             input.read_to_end(&mut buf).expect("failed to read file");
-            let _ = buf;
+
+            let mut r = &buf[..];
+            let _ = r.read_le::<u16>().expect("input len < 4");
+            let manifest_type = r.read_le::<u16>().expect("input len < 4");
+
+            match ManifestType::from_wire_value(manifest_type) {
+                Some(ManifestType::Pfm) => {
+                    let parse = owned::Pfm::parse(&buf, &sha, engine.as_mut())
+                        .expect("failed to parse PFM");
+
+                    if parse.bad_signature {
+                        eprintln!("signature verification failed");
+                    }
+                    if parse.bad_toc_hash {
+                        eprintln!("TOC hash verification failed");
+                    }
+                    for idx in parse.bad_hashes {
+                        eprintln!("bad hash for toc entry {}", idx);
+                    }
+
+                    if pretty {
+                        serde_json::to_writer_pretty(output, &parse.container)
+                    } else {
+                        serde_json::to_writer(output, &parse.container)
+                    }
+                    .expect("failed to serialize PFM");
+                }
+                None => {
+                    panic!("unknown manifest type: 0x{:04x}", manifest_type)
+                }
+            }
         }
     }
 }

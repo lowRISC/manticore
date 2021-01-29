@@ -7,7 +7,6 @@
 use core::fmt::Binary;
 use core::fmt::LowerHex;
 use core::marker::PhantomData;
-use core::mem;
 
 #[cfg(feature = "std")]
 use std::ffi::CString;
@@ -116,7 +115,7 @@ where
     S: Serializer,
     X: LowerHex,
 {
-    s.serialize_str(&format!("0x{:1$x}", x, mem::size_of::<X>() / 4))
+    s.serialize_str(&format!("0x{:x}", x))
 }
 
 /// Serializes an integer as binary.
@@ -128,5 +127,5 @@ where
     S: Serializer,
     X: Binary,
 {
-    s.serialize_str(&format!("0b{:1$b}", x, mem::size_of::<X>() * 8))
+    s.serialize_str(&format!("0b{:b}", x))
 }

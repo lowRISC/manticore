@@ -147,7 +147,7 @@ impl<E: Element> Container<E> {
     pub fn parse(
         bytes: &[u8],
         sha: &impl sha256::Builder,
-        rsa: &mut impl rsa::Engine,
+        rsa: Option<&mut impl rsa::Engine>,
     ) -> Result<Parse<E>, Error> {
         let mut parse = Parse {
             container: Self {
@@ -226,7 +226,10 @@ impl<E: Element> Container<E> {
 
         let mut signed_hash = [0; 32];
         sha.hash_contiguous(&signed, &mut signed_hash)?;
-        parse.bad_signature = rsa.verify_signature(sig, &signed_hash).is_err();
+        if let Some(rsa) = rsa {
+            parse.bad_signature =
+                rsa.verify_signature(sig, &signed_hash).is_err();
+        }
 
         // Build a table of parent index -> element, to help us build the
         // tree of elements.
