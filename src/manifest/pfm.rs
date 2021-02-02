@@ -33,6 +33,7 @@ use crate::hardware::flash::Flash;
 use crate::hardware::flash::Region;
 use crate::io::Read as _;
 use crate::manifest::provenance;
+use crate::manifest::provenance::Provenance;
 use crate::manifest::Container;
 use crate::manifest::Error;
 use crate::manifest::HashType;
@@ -83,7 +84,10 @@ impl<F, P> Manifest for Pfm<'_, F, P> {
     }
 }
 
-impl<'pfm, F: Flash, P> Pfm<'pfm, F, P> {
+impl<'pfm, F: Flash, P> Pfm<'pfm, F, P>
+where
+    P: Provenance,
+{
     /// Creates a new PFM handle using the given `Container`.
     pub fn new(container: Container<'pfm, Self, F, P>) -> Self {
         Pfm { container }
@@ -124,11 +128,13 @@ impl<'pfm, F: Flash, P> Pfm<'pfm, F, P> {
 
         let id = &rest[..len];
 
-        if let Some(expected) = entry.hash() {
-            let mut hash = [0; 32];
-            sha.hash_contiguous(&data, &mut hash)?;
-            if &hash != expected {
-                return Err(Error::SignatureFailure);
+        if P::AUTHENTICATED {
+            if let Some(expected) = entry.hash() {
+                let mut hash = [0; 32];
+                sha.hash_contiguous(&data, &mut hash)?;
+                if &hash != expected {
+                    return Err(Error::SignatureFailure);
+                }
             }
         }
 
@@ -167,11 +173,13 @@ impl<'pfm, F: Flash, P> Pfm<'pfm, F, P> {
                 .read_direct(entry.region(), arena, 1)?;
         let blank_byte = data[0];
 
-        if let Some(expected) = entry.hash() {
-            let mut hash = [0; 32];
-            sha.hash_contiguous(&data, &mut hash)?;
-            if &hash != expected {
-                return Err(Error::SignatureFailure);
+        if P::AUTHENTICATED {
+            if let Some(expected) = entry.hash() {
+                let mut hash = [0; 32];
+                sha.hash_contiguous(&data, &mut hash)?;
+                if &hash != expected {
+                    return Err(Error::SignatureFailure);
+                }
             }
         }
 
@@ -245,7 +253,10 @@ pub struct AllowableFwEntry<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash, Provenance>>,
 }
 
-impl<'a, 'pfm, F: Flash, P> AllowableFwEntry<'a, 'pfm, F, P> {
+impl<'a, 'pfm, F: Flash, P> AllowableFwEntry<'a, 'pfm, F, P>
+where
+    P: Provenance,
+{
     /// Returns the `Toc` entry defining this element.
     pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
         self.entry
@@ -274,11 +285,13 @@ impl<'a, 'pfm, F: Flash, P> AllowableFwEntry<'a, 'pfm, F, P> {
         }
         let fw_id = &rest[..id_len];
 
-        if let Some(expected) = self.entry.hash() {
-            let mut hash = [0; 32];
-            sha.hash_contiguous(&data, &mut hash)?;
-            if &hash != expected {
-                return Err(Error::SignatureFailure);
+        if P::AUTHENTICATED {
+            if let Some(expected) = self.entry.hash() {
+                let mut hash = [0; 32];
+                sha.hash_contiguous(&data, &mut hash)?;
+                if &hash != expected {
+                    return Err(Error::SignatureFailure);
+                }
             }
         }
 
@@ -355,7 +368,10 @@ pub struct FwVersionEntry<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash, Provenance>>,
 }
 
-impl<'a, 'pfm, F: Flash, P> FwVersionEntry<'a, 'pfm, F, P> {
+impl<'a, 'pfm, F: Flash, P> FwVersionEntry<'a, 'pfm, F, P>
+where
+    P: Provenance,
+{
     /// Returns the `Toc` entry defining this element.
     pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
         self.entry
@@ -374,11 +390,13 @@ impl<'a, 'pfm, F: Flash, P> FwVersionEntry<'a, 'pfm, F, P> {
             arena,
             mem::align_of::<u32>(),
         )?;
-        if let Some(expected) = self.entry.hash() {
-            let mut hash = [0; 32];
-            sha.hash_contiguous(data, &mut hash)?;
-            if &hash != expected {
-                return Err(Error::SignatureFailure);
+        if P::AUTHENTICATED {
+            if let Some(expected) = self.entry.hash() {
+                let mut hash = [0; 32];
+                sha.hash_contiguous(data, &mut hash)?;
+                if &hash != expected {
+                    return Err(Error::SignatureFailure);
+                }
             }
         }
 

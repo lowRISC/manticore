@@ -187,13 +187,31 @@ pub trait Manifest {
 ///
 /// These types are only really intended to be used as type parameters.
 pub mod provenance {
+    /// A provenance. This trait can be used to write code that is generic
+    /// on provenances but which might choose to skip certain operations for
+    /// the `Adhoc` provenenace.
+    pub trait Provenance {
+        /// Whether this provenance represents an authenticated source,
+        /// i.e., whether it comes from a continuous chain of trust (via
+        /// hashes) to a signature.
+        const AUTHENTICATED: bool;
+    }
+
     /// The "signed" provenance, indicating a manifest that has been
     /// appropriately verified.
     #[derive(Copy, Clone, PartialEq, Eq, Debug)]
     pub enum Signed {}
 
+    impl Provenance for Signed {
+        const AUTHENTICATED: bool = true;
+    }
+
     /// The "ad-hoc" provenance, indicating a manifest that came from
     /// "somewhere else", such as `serde` or manual construction.
     #[derive(Copy, Clone, PartialEq, Eq, Debug)]
     pub enum Adhoc {}
+
+    impl Provenance for Adhoc {
+        const AUTHENTICATED: bool = false;
+    }
 }
