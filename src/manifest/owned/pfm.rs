@@ -10,15 +10,20 @@
 
 use core::convert::TryInto;
 
+use crate::crypto::ring::sha256::Builder as RingSha;
 use crate::crypto::sha256;
+use crate::hardware::flash::Flash;
 use crate::hardware::flash::Region;
-use crate::io::Read as _;
+use crate::manifest;
 use crate::manifest::owned;
 use crate::manifest::pfm::ElementType;
+use crate::manifest::provenance;
 use crate::manifest::Error;
 use crate::manifest::HashType;
 use crate::manifest::ManifestType;
 use crate::mem::misalign_of;
+use crate::mem::Arena as _;
+use crate::mem::BumpArena;
 
 use crate::protocol::wire::WireEnum as _;
 
@@ -143,110 +148,6 @@ impl owned::Element for Element {
         }
     }
 
-    fn from_bytes(ty: ElementType, mut bytes: &[u8]) -> Result<Self, Error> {
-        match ty {
-            ElementType::FlashDevice => {
-                let blank_byte = bytes.read_le::<u8>()?;
-                Ok(Self::FlashDevice { blank_byte })
-            }
-            ElementType::AllowableFw => {
-                let version_count = bytes.read_le::<u8>()?;
-                let id_len = bytes.read_le::<u8>()? as usize;
-                let flags = bytes.read_le::<u8>()?;
-                let _ = bytes.read_le::<u8>()?;
-
-                let mut firmware_id = vec![0; id_len];
-                bytes.read_bytes(&mut firmware_id)?;
-
-                Ok(Self::AllowableFw {
-                    version_count,
-                    firmware_id,
-                    flags,
-                })
-            }
-            ElementType::FwVersion => {
-                let img_count = bytes.read_le::<u8>()?;
-                let rw_count = bytes.read_le::<u8>()?;
-                let version_len = bytes.read_le::<u8>()? as usize;
-                let _ = bytes.read_le::<u8>()?;
-                let version_addr = bytes.read_le::<u32>()?;
-
-                let mut version_str = vec![0; version_len];
-                bytes.read_bytes(&mut version_str)?;
-
-                let misalign = misalign_of(version_str.len(), 4);
-                bytes = &bytes[misalign..];
-
-                let mut rw_regions = Vec::with_capacity(rw_count as usize);
-                for _ in 0..rw_count {
-                    let flags = bytes.read_le::<u8>()?;
-                    let _ = bytes.read_le::<u8>()?;
-                    let _ = bytes.read_le::<u8>()?;
-                    let _ = bytes.read_le::<u8>()?;
-
-                    let start_addr = bytes.read_le::<u32>()?;
-                    let end_addr = bytes.read_le::<u32>()?;
-                    if start_addr > end_addr {
-                        return Err(Error::OutOfRange);
-                    }
-                    let region = Region::new(start_addr, end_addr - start_addr);
-
-                    rw_regions.push(Rw { flags, region });
-                }
-
-                let mut image_regions = Vec::with_capacity(img_count as usize);
-                for _ in 0..img_count {
-                    let hash_type =
-                        HashType::from_wire_value(bytes.read_le::<u8>()?)
-                            .ok_or(Error::OutOfRange)?;
-                    let region_count = bytes.read_le::<u8>()?;
-                    let flags = bytes.read_le::<u8>()?;
-                    let _ = bytes.read_le::<u8>()?;
-
-                    let mut hash = [0; 32];
-                    bytes.read_bytes(&mut hash)?;
-
-                    let mut regions = Vec::with_capacity(region_count as usize);
-                    for _ in 0..region_count {
-                        let start_addr = bytes.read_le::<u32>()?;
-                        let end_addr = bytes.read_le::<u32>()?;
-                        if start_addr > end_addr {
-                            return Err(Error::OutOfRange);
-                        }
-
-                        let region =
-                            Region::new(start_addr, end_addr - start_addr);
-                        regions.push(region);
-                    }
-
-                    image_regions.push(Image {
-                        flags,
-                        hash_type,
-                        hash,
-                        regions,
-                    });
-                }
-
-                Ok(Self::FwVersion {
-                    version_addr,
-                    version_str,
-                    rw_regions,
-                    image_regions,
-                })
-            }
-            ElementType::PlatformId => {
-                let id_len = bytes.read_le::<u8>()? as usize;
-                let _ = bytes.read_le::<u8>()?;
-                let _ = bytes.read_le::<u8>()?;
-                let _ = bytes.read_le::<u8>()?;
-
-                let mut id = vec![0; id_len];
-                bytes.read_bytes(&mut id)?;
-                Ok(Self::PlatformId { platform_id: id })
-            }
-        }
-    }
-
     fn to_bytes(&self, padding_byte: u8) -> Result<Vec<u8>, Error> {
         match self {
             Self::FlashDevice { blank_byte } => {
@@ -346,6 +247,95 @@ impl owned::Element for Element {
                 Ok(bytes)
             }
         }
+    }
+}
+
+impl<'f, F: 'f + Flash> owned::FromUnowned<'f, F> for Element {
+    type Unowned = manifest::pfm::Pfm<'f, F, provenance::Adhoc>;
+
+    fn from_container(
+        container: manifest::Container<'f, Self::Unowned, F, provenance::Adhoc>,
+    ) -> Result<Vec<owned::Node<Self>>, Error> {
+        let mut arena = vec![0; 2048];
+        let mut arena = BumpArena::new(&mut arena);
+        let pfm = manifest::pfm::Pfm::new(container);
+        let sha = RingSha::new();
+        let mut nodes = Vec::new();
+
+        if let Some(id) = pfm.platform_id(&sha, &arena)? {
+            nodes.push(owned::Node {
+                element: Element::PlatformId {
+                    platform_id: id.id_string().to_vec(),
+                },
+                hashed: id.entry().hash().is_some(),
+                children: Vec::new(),
+            })
+        }
+        arena.reset();
+
+        if let Some(info) = pfm.flash_device_info(&sha, &arena)? {
+            nodes.push(owned::Node {
+                element: Element::FlashDevice {
+                    blank_byte: info.blank_byte(),
+                },
+                hashed: info.entry().hash().is_some(),
+                children: Vec::new(),
+            })
+        }
+        arena.reset();
+
+        for allowable_fw in pfm.allowable_fws() {
+            let allowable_fw = allowable_fw.read(&sha, &arena)?;
+
+            let mut node = owned::Node {
+                element: Element::AllowableFw {
+                    version_count: allowable_fw.firmware_count() as u8,
+                    firmware_id: allowable_fw.firmware_id().to_vec(),
+                    flags: allowable_fw.raw_flags(),
+                },
+                hashed: allowable_fw.entry().hash().is_some(),
+                children: Vec::new(),
+            };
+
+            for fw in allowable_fw.firmware_versions() {
+                let fw = fw.read(&sha, &arena)?;
+
+                let mut rw_regions = Vec::new();
+                for rw in fw.rw_regions() {
+                    rw_regions.push(Rw {
+                        flags: rw.raw_flags(),
+                        region: rw.region(),
+                    });
+                }
+
+                let mut image_regions = Vec::new();
+                for image in fw.image_regions() {
+                    image_regions.push(Image {
+                        flags: image.raw_flags(),
+                        hash_type: HashType::Sha256,
+                        hash: *image.image_hash(),
+                        regions: image.regions().collect(),
+                    });
+                }
+
+                let (version_region, version_str) = fw.version();
+                node.children.push(owned::Node {
+                    element: Element::FwVersion {
+                        version_addr: version_region.offset,
+                        version_str: version_str.to_vec(),
+                        rw_regions,
+                        image_regions,
+                    },
+                    hashed: fw.entry().hash().is_some(),
+                    children: Vec::new(),
+                });
+            }
+
+            nodes.push(node);
+            arena.reset();
+        }
+
+        Ok(nodes)
     }
 }
 

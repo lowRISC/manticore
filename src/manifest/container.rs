@@ -231,7 +231,7 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
             }
 
             if entry.parent_idx != 0xff
-                && self.hashes.len() <= entry.parent_idx as usize
+                && self.entries.len() <= entry.parent_idx as usize
             {
                 return false;
             }
@@ -324,42 +324,10 @@ impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Signed> {
         toc_arena: &'f impl Arena,
         verify_arena: &impl Arena,
     ) -> Result<Self, Error> {
-        let mut c = Self::parse_inner(flash, toc_arena)?;
+        let c = Self::parse_inner(flash, toc_arena)?;
 
-        let mut toc_hash = [0; 32];
-        let mut toc_hasher = sha.new_hasher()?;
-        let toc_header = &c.header.as_bytes()[12..];
-        toc_hasher.write(toc_header)?;
-        toc_hasher.write(c.toc().entries.as_bytes())?;
-        toc_hasher.write(c.toc().hashes.as_bytes())?;
-        toc_hasher.finish(&mut toc_hash)?;
-
-        let expected_hash_offset = mem::size_of::<RawHeader>()
-            + mem::size_of_val(c.toc().entries)
-            + mem::size_of_val(c.toc().hashes);
-        let mut expected_toc_hash = [0; 32];
-        flash.read(expected_hash_offset as u32, &mut expected_toc_hash)?;
-        if expected_toc_hash != toc_hash {
-            return Err(Error::SignatureFailure);
-        }
-
-        let mut bytes = [0u8; 16];
-        let signed_region = c.signed_region();
-        let mut r = FlashIo::new(&mut c.flash)?;
-        r.reslice(signed_region);
-
-        let mut hasher = sha.new_hasher()?;
-        while r.remaining_data() > 0 {
-            let to_read = r.remaining_data().min(16);
-            r.read_bytes(&mut bytes[..to_read])?;
-            hasher.write(&bytes[..to_read])?;
-        }
-
-        let mut digest = [0; 32];
-        hasher.finish(&mut digest)?;
-
-        let sig = c.flash.read_direct(c.signature_region(), verify_arena, 1)?;
-        rsa.verify_signature(sig, &digest)?;
+        c.verify_toc_hash(sha)?;
+        c.verify_signature(sha, rsa, verify_arena)?;
 
         Ok(c)
     }
@@ -392,6 +360,60 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
             toc: self.toc,
             _ph: PhantomData,
         }
+    }
+
+    /// Verifies the TOC hash for this `Container`.
+    pub(crate) fn verify_toc_hash(
+        &self,
+        sha: &impl sha256::Builder,
+    ) -> Result<(), Error> {
+        let mut toc_hash = [0; 32];
+        let mut toc_hasher = sha.new_hasher()?;
+        let toc_header = &self.header.as_bytes()[12..];
+        toc_hasher.write(toc_header)?;
+        toc_hasher.write(self.toc().entries.as_bytes())?;
+        toc_hasher.write(self.toc().hashes.as_bytes())?;
+        toc_hasher.finish(&mut toc_hash)?;
+
+        let expected_hash_offset = mem::size_of::<RawHeader>()
+            + mem::size_of_val(self.toc().entries)
+            + mem::size_of_val(self.toc().hashes);
+        let mut expected_toc_hash = [0; 32];
+        self.flash
+            .read(expected_hash_offset as u32, &mut expected_toc_hash)?;
+        if expected_toc_hash != toc_hash {
+            return Err(Error::SignatureFailure);
+        }
+        Ok(())
+    }
+
+    /// Verifies the signature for this `Container`.
+    pub(crate) fn verify_signature(
+        &self,
+        sha: &impl sha256::Builder,
+        rsa: &mut impl rsa::Engine,
+        verify_arena: &impl Arena,
+    ) -> Result<(), Error> {
+        let mut bytes = [0u8; 16];
+        let signed_region = self.signed_region();
+        let mut r = FlashIo::new(&self.flash)?;
+        r.reslice(signed_region);
+
+        let mut hasher = sha.new_hasher()?;
+        while r.remaining_data() > 0 {
+            let to_read = r.remaining_data().min(16);
+            r.read_bytes(&mut bytes[..to_read])?;
+            hasher.write(&bytes[..to_read])?;
+        }
+
+        let mut digest = [0; 32];
+        hasher.finish(&mut digest)?;
+
+        let sig =
+            self.flash
+                .read_direct(self.signature_region(), verify_arena, 1)?;
+        rsa.verify_signature(sig, &digest)?;
+        Ok(())
     }
 
     /// Performs a parse without verifying the signature, returning the
