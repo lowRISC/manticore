@@ -1,4 +1,3 @@
-// Copyright lowRISC contributors.
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -10,7 +9,6 @@
 //!
 //! When the `serde` feature is enabled, owned manifests can be de/serialized.
 
-use std::collections::HashMap;
 use std::convert::TryInto;
 use std::mem;
 
@@ -18,14 +16,19 @@ use zerocopy::AsBytes;
 
 use crate::crypto::rsa;
 use crate::crypto::sha256;
+use crate::hardware::flash::Flash;
+use crate::hardware::flash::Ram;
 use crate::io::write::StdWrite;
-use crate::io::Read as _;
 use crate::io::Write as _;
+use crate::manifest;
 use crate::manifest::container::RawTocEntry;
+use crate::manifest::provenance;
 use crate::manifest::Error;
 use crate::manifest::HashType;
+use crate::manifest::Manifest;
 use crate::manifest::ManifestType;
 use crate::manifest::Metadata;
+use crate::mem::OutOfMemory;
 use crate::protocol::wire::WireEnum;
 
 #[cfg(feature = "serde")]
@@ -37,7 +40,7 @@ pub mod pfm;
 ///
 /// This trait exists to allow [`owned::Container`] to be generic over
 /// different kinds of Cerberus manifest types. In general, users should
-/// not have to implement this type.
+/// not have to implement this trait.
 ///
 /// `Element::ElementType` and `Element::TYPE` are analogous to the same
 /// trait items from [`Manifest`].
@@ -57,13 +60,24 @@ pub trait Element: Sized {
     /// Returns the element type of a specific element.
     fn element_type(&self) -> Self::ElementType;
 
-    /// Attempts to construct an `Element` of the given type from encoded
-    /// `bytes`.
-    fn from_bytes(ty: Self::ElementType, bytes: &[u8]) -> Result<Self, Error>;
-
     /// Attempts to encode this `Element` into bytes, using the given
     /// padding byte as "filler".
     fn to_bytes(&self, padding_byte: u8) -> Result<Vec<u8>, Error>;
+}
+
+/// An "owned" manifest element that can be built from its unowned counterpart.
+///
+/// In general, users should not have to implement this trait.
+#[doc(hidden)]
+pub trait FromUnowned<'f, F: Flash>: Element {
+    /// The "unowned" type.
+    type Unowned: Manifest;
+
+    /// Walks a parsed container of this manifest type, building a tree of
+    /// elements along the way.
+    fn from_container(
+        container: manifest::Container<'f, Self::Unowned, F, provenance::Adhoc>,
+    ) -> Result<Vec<Node<Self>>, Error>;
 }
 
 /// A heap-allocated PFM.
@@ -148,7 +162,10 @@ impl<E: Element> Container<E> {
         bytes: &[u8],
         sha: &impl sha256::Builder,
         rsa: Option<&mut impl rsa::Engine>,
-    ) -> Result<Parse<E>, Error> {
+    ) -> Result<Parse<E>, Error>
+    where
+        E: for<'f> FromUnowned<'f, Ram<&'f [u8]>>,
+    {
         let mut parse = Parse {
             container: Self {
                 metadata: Metadata { version_id: 0 },
@@ -159,56 +176,32 @@ impl<E: Element> Container<E> {
             bad_hashes: Vec::new(),
         };
 
+        let ram = Ram(bytes);
+        let container =
+            manifest::Container::<'_, E::Unowned, _, provenance::Adhoc>::parse(
+                &ram,
+                &OutOfMemory,
+            )?;
         // TODO(#58): Right now we ignore a bunch of "implied" fields in the
         // manifest, but we may want to either reject failures, use them,
         // or simply report them.
-        let mut r = bytes;
-        let total_len = r.read_le::<u16>()?;
-        let _element_type = r.read_le::<u16>()?;
-        parse.container.metadata.version_id = r.read_le()?;
-        let sig_len = r.read_le::<u16>()?;
-        let _sig_type = r.read_le::<u8>()?;
-        let _ = r.read_le::<u8>()?;
 
-        let toc_start = bytes.len() - r.len();
-        let entry_count = r.read_le::<u8>()?;
-        let hash_count = r.read_le::<u8>()?;
-        let _hash_type = r.read_le::<u8>()?;
-        let _ = r.read_le::<u8>()?;
-
-        let mut toc = Vec::new();
-        for _ in 0..entry_count {
-            let mut entry = RawTocEntry::default();
-            r.read_bytes(entry.as_bytes_mut())?;
-            toc.push(entry);
+        parse.container.metadata = container.metadata();
+        parse.bad_toc_hash = container.verify_toc_hash(sha).is_err();
+        if let Some(rsa) = rsa {
+            parse.bad_signature =
+                container.verify_signature(sha, rsa, &OutOfMemory).is_err();
         }
 
-        let mut hashes = Vec::new();
-        for _ in 0..hash_count {
-            let mut hash = [0; 32];
-            r.read_bytes(&mut hash)?;
-            hashes.push(hash);
-        }
-        let toc_end = bytes.len() - r.len();
+        for (i, entry) in container.toc().entries().enumerate() {
+            let expected = match entry.hash() {
+                Some(h) => h,
+                None => continue,
+            };
 
-        let mut expected_toc_hash = [0; 32];
-        r.read_bytes(&mut expected_toc_hash)?;
-
-        let mut toc_hash = [0; 32];
-        let toc_bytes = &bytes[toc_start..toc_end];
-        sha.hash_contiguous(toc_bytes, &mut toc_hash)?;
-        parse.bad_toc_hash = toc_hash != expected_toc_hash;
-
-        for (i, entry) in toc.iter().enumerate() {
-            if entry.hash_idx == 0xff {
-                continue;
-            }
-            let expected = hashes
-                .get(entry.hash_idx as usize)
-                .ok_or(Error::OutOfRange)?;
-
-            let start = entry.offset as usize;
-            let end = start + entry.len as usize;
+            let region = entry.region();
+            let start = region.offset as usize;
+            let end = region.end() as usize;
             let bytes = bytes.get(start..end).ok_or(Error::OutOfRange)?;
 
             let mut hash = [0; 32];
@@ -218,65 +211,10 @@ impl<E: Element> Container<E> {
             }
         }
 
-        let sig_start =
-            total_len.checked_sub(sig_len).ok_or(Error::OutOfRange)? as usize;
-        let sig_end = total_len as usize;
-        let signed = bytes.get(..sig_start).ok_or(Error::OutOfRange)?;
-        let sig = bytes.get(sig_start..sig_end).ok_or(Error::OutOfRange)?;
-
-        let mut signed_hash = [0; 32];
-        sha.hash_contiguous(&signed, &mut signed_hash)?;
-        if let Some(rsa) = rsa {
-            parse.bad_signature =
-                rsa.verify_signature(sig, &signed_hash).is_err();
-        }
-
-        // Build a table of parent index -> element, to help us build the
-        // tree of elements.
-        let mut parents = HashMap::<usize, Vec<usize>>::new();
-        for (idx, entry) in toc.iter().enumerate() {
-            parents
-                .entry(entry.parent_idx as usize)
-                .or_default()
-                .push(idx);
-        }
-
-        build_tree(0xff, bytes, &toc, &parents, &mut parse.container.elements)?;
-        fn build_tree<E: Element>(
-            parent: usize,
-            bytes: &[u8],
-            toc: &[RawTocEntry],
-            parents: &HashMap<usize, Vec<usize>>,
-            elements: &mut Vec<Node<E>>,
-        ) -> Result<(), Error> {
-            for i in parents.get(&parent).as_deref().unwrap_or(&Vec::new()) {
-                let toc_entry = toc.get(*i).ok_or(Error::OutOfRange)?;
-                let ty = <E::ElementType as WireEnum>::from_wire_value(
-                    toc_entry.element_type,
-                )
-                .ok_or(Error::OutOfRange)?;
-
-                let start = toc_entry.offset as usize;
-                let end = start + toc_entry.len as usize;
-                let entry_bytes =
-                    bytes.get(start..end).ok_or(Error::OutOfRange)?;
-                let element = E::from_bytes(ty, entry_bytes)?;
-
-                let mut node = Node {
-                    element,
-                    children: Vec::new(),
-                    hashed: toc_entry.hash_idx != 0xff,
-                };
-
-                // FIXME: Cycle detection.
-                build_tree(*i, bytes, toc, parents, &mut node.children)?;
-                elements.push(node);
-            }
-            Ok(())
-        }
-
+        parse.container.elements = E::from_container(container)?;
         Ok(parse)
     }
+
     /// Signs this `Container` using the given cryptographic primitives.
     ///
     /// `padding_byte` is the byte inserted to pad each element to a

@@ -83,15 +83,17 @@ impl<F, P> Manifest for Pfm<'_, F, P> {
     }
 }
 
-impl<'pfm, F: Flash, P> Pfm<'pfm, F, P>
-where
-    P: Provenance,
-{
+impl<'pfm, F, P> Pfm<'pfm, F, P> {
     /// Creates a new PFM handle using the given `Container`.
     pub fn new(container: Container<'pfm, Self, F, P>) -> Self {
         Pfm { container }
     }
+}
 
+impl<'pfm, F: Flash, P> Pfm<'pfm, F, P>
+where
+    P: Provenance,
+{
     /// Extracts the Platform ID from this PFM, allocating it onto the provided
     /// arena. Returns `None` if the Platform ID is missing.
     ///
@@ -519,7 +521,12 @@ pub struct FwVersion<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     unparsed_image_regions: &'pfm [u8],
 }
 
-impl<'pfm, F, P> FwVersion<'_, 'pfm, F, P> {
+impl<'a, 'pfm, F, P> FwVersion<'a, 'pfm, F, P> {
+    /// Returns the `Toc` entry defining this element.
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
+        self.entry.entry
+    }
+
     /// Returns the flash region in which this `FwVersion`'s version string
     /// would be located, and the expected value of that region.
     pub fn version(&self) -> (Region, &'pfm [u8]) {
