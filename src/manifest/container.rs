@@ -386,7 +386,7 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
         let magic = r.read_le::<u16>()?;
         let id = r.read_le::<u32>()?;
         let sig_len = r.read_le::<u16>()? as usize;
-        // FIXME: Manticore currently ignores this value.
+        // TODO(#58): Manticore currently ignores this value.
         let _sig_type = r.read_le::<u8>()?;
         let _ = r.read_le::<u8>()?;
 
@@ -396,7 +396,7 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
         let hash_type = r.read_le::<u8>()?;
         let reserved = r.read_le::<u8>()?;
 
-        // FIXME: we don't deal with hash types that aren't SHA-256.
+        // TODO(#57): we don't deal with hash types that aren't SHA-256.
         if hash_type != HashType::Sha256.to_wire_value() {
             return Err(Error::OutOfRange);
         }
@@ -637,7 +637,7 @@ pub(crate) mod test {
         assert!(second.hash().is_none());
     }
 
-    // TODO: Write test that involve pre-baked manifests, as opposed to the
+    // TODO(#61): Write test that involve pre-baked manifests, as opposed to the
     // dynamically built ones. We don't do this right now because there's a
     // couple of details missing w.r.t making sure we match up with the
     // specified format.

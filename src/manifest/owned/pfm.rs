@@ -6,7 +6,7 @@
 //!
 //! See [`owned::Pfm`](../type.Pfm.html).
 
-// TODO: Provide a more ergonomic way of specifying flags bytes.
+// TODO(#60): Provide a more ergonomic way of specifying flags bytes.
 
 use core::convert::TryInto;
 

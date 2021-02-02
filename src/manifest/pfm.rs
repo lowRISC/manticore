@@ -260,7 +260,7 @@ impl<'a, 'pfm, F: Flash> AllowableFwEntry<'a, 'pfm, F> {
         let (header, rest) = data.split_at(4);
         let fw_count = header[0] as usize;
         let id_len = header[1] as usize;
-        // FIXME: Don't drop this on the ground.
+        // TODO(#58): Don't drop this on the ground.
         let _flags = header[2];
 
         if rest.len() < id_len {
@@ -418,7 +418,7 @@ impl<'a, 'pfm, F: Flash> FwVersionEntry<'a, 'pfm, F> {
                         Some(h) => h,
                         None => return Err(Error::OutOfRange),
                     };
-                // FIXME: we don't deal with hash types that aren't SHA-256.
+                // TODO(#57): we don't deal with hash types that aren't SHA-256.
                 if header.hash_type != HashType::Sha256.to_wire_value() {
                     return Err(Error::OutOfRange);
                 }

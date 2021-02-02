@@ -159,7 +159,7 @@ impl<E: Element> Container<E> {
             bad_hashes: Vec::new(),
         };
 
-        // FIXME: Right now we ignore a bunch of "implied" fields in the
+        // TODO(#58): Right now we ignore a bunch of "implied" fields in the
         // manifest, but we may want to either reject failures, use them,
         // or simply report them.
         let mut r = bytes;
@@ -333,7 +333,7 @@ impl<E: Element> Container<E> {
                     data.len().try_into().map_err(|_| Error::OutOfRange)?;
                 let entry = RawTocEntry {
                     element_type: node.element.element_type().to_wire_value(),
-                    format_version: 0, // FIXME.
+                    format_version: 0, // TODO(#59)
                     offset: *offset,
                     len,
                     parent_idx: parent_index,
