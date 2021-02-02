@@ -276,6 +276,25 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
     }
 }
 
+/// A `Container`'s raw header bits.
+///
+/// This struct includes the TOC header as well.
+#[derive(Copy, Clone, PartialEq, Eq, Default, Debug, AsBytes, FromBytes)]
+#[repr(C)]
+pub(crate) struct RawHeader {
+    pub total_len: u16,
+    pub manifest_type: u16,
+    pub version_id: u32,
+    pub sig_len: u16,
+    pub sig_ty: u8,
+    pub reserved1: u8,
+
+    pub entry_count: u8,
+    pub hash_count: u8,
+    pub hash_type: u8,
+    pub reserved2: u8,
+}
+
 /// A parsed, verified, manifest container.
 ///
 /// This type represents a generic, authenticated manifest. A value of this
@@ -284,16 +303,11 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
 ///
 /// See the [module documentation](index.html) for more information.
 pub struct Container<'f, M, F, Provenance = provenance::Signed> {
-    manifest_type: ManifestType,
-    metadata: Metadata,
+    header: &'f RawHeader,
     flash: &'f F,
     toc: Toc<'f, M>,
     _ph: PhantomData<Provenance>,
 }
-
-/// The length of the container header in bytes:
-/// two halves, a word, another half, and two bytes of padding.
-const HEADER_LEN: usize = 2 + 2 + 4 + 2 + 2;
 
 impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Signed> {
     /// Parses and verifies a `Container` using the provided cryptographic
@@ -310,11 +324,29 @@ impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Signed> {
         toc_arena: &'f impl Arena,
         verify_arena: &impl Arena,
     ) -> Result<Self, Error> {
-        let (mut c, sig, signed) = Self::parse_inner(flash, sha, toc_arena)?;
+        let mut c = Self::parse_inner(flash, toc_arena)?;
+
+        let mut toc_hash = [0; 32];
+        let mut toc_hasher = sha.new_hasher()?;
+        let toc_header = &c.header.as_bytes()[12..];
+        toc_hasher.write(toc_header)?;
+        toc_hasher.write(c.toc().entries.as_bytes())?;
+        toc_hasher.write(c.toc().hashes.as_bytes())?;
+        toc_hasher.finish(&mut toc_hash)?;
+
+        let expected_hash_offset = mem::size_of::<RawHeader>()
+            + mem::size_of_val(c.toc().entries)
+            + mem::size_of_val(c.toc().hashes);
+        let mut expected_toc_hash = [0; 32];
+        flash.read(expected_hash_offset as u32, &mut expected_toc_hash)?;
+        if expected_toc_hash != toc_hash {
+            return Err(Error::SignatureFailure);
+        }
 
         let mut bytes = [0u8; 16];
+        let signed_region = c.signed_region();
         let mut r = FlashIo::new(&mut c.flash)?;
-        r.reslice(signed);
+        r.reslice(signed_region);
 
         let mut hasher = sha.new_hasher()?;
         while r.remaining_data() > 0 {
@@ -326,7 +358,7 @@ impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Signed> {
         let mut digest = [0; 32];
         hasher.finish(&mut digest)?;
 
-        let sig = c.flash.read_direct(sig, verify_arena, 1)?;
+        let sig = c.flash.read_direct(c.signature_region(), verify_arena, 1)?;
         rsa.verify_signature(sig, &digest)?;
 
         Ok(c)
@@ -343,11 +375,9 @@ impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Adhoc> {
     #[inline]
     pub fn parse(
         flash: &'f F,
-        sha: &impl sha256::Builder,
         toc_arena: &'f impl Arena,
     ) -> Result<Self, Error> {
-        let (c, _, _) = Self::parse_inner(flash, sha, toc_arena)?;
-        Ok(c)
+        Self::parse_inner(flash, toc_arena)
     }
 }
 
@@ -357,8 +387,7 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     #[inline(always)]
     pub fn downgrade(self) -> Container<'f, M, F, provenance::Adhoc> {
         Container {
-            manifest_type: self.manifest_type,
-            metadata: self.metadata,
+            header: self.header,
             flash: self.flash,
             toc: self.toc,
             _ph: PhantomData,
@@ -369,71 +398,44 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     /// the necessary arguments to pass to `verify_signature()`, if that were
     /// necessary.
     fn parse_inner(
-        mut flash: &'f F,
-        sha: &impl sha256::Builder,
+        flash: &'f F,
         toc_arena: &'f impl Arena,
-    ) -> Result<(Self, Region, Region), Error> {
-        let flash_len = flash.size()? as usize;
+    ) -> Result<Self, Error> {
+        // TODO(#58): Manticore currently ignores header.sig_type.
+        let header = flash.read_object::<RawHeader>(0, toc_arena)?;
 
-        if HEADER_LEN > flash_len as usize {
+        if ManifestType::from_wire_value(header.manifest_type) != Some(M::TYPE)
+        {
             return Err(Error::OutOfRange);
         }
 
-        let mut r = FlashIo::new(&mut flash)?;
-
-        // Container header.
-        let len = r.read_le::<u16>()? as usize;
-        let magic = r.read_le::<u16>()?;
-        let id = r.read_le::<u32>()?;
-        let sig_len = r.read_le::<u16>()? as usize;
-        // TODO(#58): Manticore currently ignores this value.
-        let _sig_type = r.read_le::<u8>()?;
-        let _ = r.read_le::<u8>()?;
-
-        // TOC header.
-        let entry_count = r.read_le::<u8>()?;
-        let hash_count = r.read_le::<u8>()?;
-        let hash_type = r.read_le::<u8>()?;
-        let reserved = r.read_le::<u8>()?;
+        if header.sig_len > header.total_len {
+            return Err(Error::OutOfRange);
+        }
 
         // TODO(#57): we don't deal with hash types that aren't SHA-256.
-        if hash_type != HashType::Sha256.to_wire_value() {
+        if header.hash_type != HashType::Sha256.to_wire_value() {
             return Err(Error::OutOfRange);
         }
 
-        let mut cursor = r.cursor();
+        // Unused values are currently required to be zeroed by the spec.
+        if header.reserved1 != 0 || header.reserved2 != 0 {
+            return Err(Error::OutOfRange);
+        }
+
+        let mut cursor = mem::size_of::<RawHeader>() as u32;
         let entries = flash.read_slice::<RawTocEntry>(
             cursor,
-            entry_count as usize,
+            header.entry_count as usize,
             toc_arena,
         )?;
         cursor += mem::size_of_val(entries) as u32;
 
         let hashes = flash.read_slice::<sha256::Digest>(
             cursor,
-            hash_count as usize,
+            header.hash_count as usize,
             toc_arena,
         )?;
-        cursor += mem::size_of_val(hashes) as u32;
-
-        let mut toc_hash = [0; 32];
-        flash.read(cursor, &mut toc_hash)?;
-
-        let mut hasher = sha.new_hasher()?;
-
-        hasher.write(&[entry_count])?;
-        hasher.write(&[hash_count])?;
-        hasher.write(&[hash_type])?;
-        hasher.write(&[reserved])?;
-
-        hasher.write(entries.as_bytes())?;
-        hasher.write(hashes.as_bytes())?;
-
-        let mut hash = [0; 32];
-        hasher.finish(&mut hash)?;
-        if hash != toc_hash {
-            return Err(Error::SignatureFailure);
-        }
 
         let toc = Toc {
             entries,
@@ -444,29 +446,20 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
             return Err(Error::OutOfRange);
         }
 
-        // Compute the signature/signed regions for verification later on.
-        let sig_offset = len.checked_sub(sig_len).ok_or(Error::OutOfRange)?;
-        let sig = Region::new(sig_offset as u32, sig_len as u32);
-
-        let signed_len = sig_offset;
-        let signed = Region::new(0, signed_len as u32);
-
-        let container = Self {
-            manifest_type: ManifestType::from_wire_value(magic)
-                .ok_or(Error::OutOfRange)?,
-            metadata: Metadata { version_id: id },
+        Ok(Self {
+            header,
             flash,
             toc,
             _ph: PhantomData,
-        };
-        Ok((container, sig, signed))
+        })
     }
 
     /// Returns the [`ManifestType`] for this `Container`.
     ///
     /// [`ManifestType`]: ../enum.ManifestType.html
     pub fn manifest_type(&self) -> ManifestType {
-        self.manifest_type
+        ManifestType::from_wire_value(self.header.manifest_type)
+            .expect("verified in parse_inner()")
     }
 
     /// Checks whether this `Container` can replace `other`.
@@ -475,15 +468,17 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     /// - Be of the same type as `other`.
     /// - Have a greater or equal `id` number than `other`.
     pub fn can_replace(&self, other: &Self) -> bool {
-        self.manifest_type == other.manifest_type
-            && self.metadata.version_id >= other.metadata.version_id
+        self.header.manifest_type == other.header.manifest_type
+            && self.header.version_id >= other.header.version_id
     }
 
     /// Returns this `Container`'s [`Metadata`] value.
     ///
     /// [`Metadata`]: struct.Metadata.html
-    pub fn metadata(&self) -> &Metadata {
-        &self.metadata
+    pub fn metadata(&self) -> Metadata {
+        Metadata {
+            version_id: self.header.version_id,
+        }
     }
 
     /// Returns this `Container`'s [`Toc`].
@@ -496,6 +491,18 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     /// Returns the backing storage for this `Container`.
     pub fn flash(&self) -> &'f F {
         self.flash
+    }
+
+    /// Returns the region of flash containing the signed bytes of this
+    /// `Container`.
+    pub fn signed_region(&self) -> Region {
+        Region::new(0, (self.header.total_len - self.header.sig_len) as u32)
+    }
+
+    /// Returns the region of flash containing this `Container`'s signature.
+    pub fn signature_region(&self) -> Region {
+        let signed = self.signed_region();
+        Region::new(signed.len, self.header.sig_len as u32)
     }
 }
 
