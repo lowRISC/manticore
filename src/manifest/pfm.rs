@@ -21,7 +21,6 @@
 //!
 //! [`Pfm`]: struct.Pfm.html
 
-use core::marker::PhantomData;
 use core::mem;
 
 use zerocopy::AsBytes;
@@ -98,11 +97,11 @@ where
     ///
     /// This function will also verify the hash of the Platform ID, if one is
     /// present.
-    pub fn platform_id(
-        &self,
+    pub fn platform_id<'a>(
+        &'a self,
         sha: &impl sha256::Builder,
         arena: &'pfm impl Arena,
-    ) -> Result<Option<PlatformId<'pfm, P>>, Error> {
+    ) -> Result<Option<PlatformId<'a, 'pfm, F, P>>, Error> {
         let entry = match self
             .container
             .toc()
@@ -140,8 +139,8 @@ where
 
         Ok(Some(PlatformId {
             _data: data,
+            entry,
             id,
-            _ph: PhantomData,
         }))
     }
 
@@ -149,11 +148,11 @@ where
     ///
     /// This function will also verify the hash of the `FlashDeviceInfo` if one
     /// is present.
-    pub fn flash_device_info(
-        &self,
+    pub fn flash_device_info<'a>(
+        &'a self,
         sha: &impl sha256::Builder,
         arena: &'pfm impl Arena,
-    ) -> Result<Option<FlashDeviceInfo<'pfm, P>>, Error> {
+    ) -> Result<Option<FlashDeviceInfo<'a, 'pfm, F, P>>, Error> {
         let entry = match self
             .container
             .toc()
@@ -185,8 +184,8 @@ where
 
         Ok(Some(FlashDeviceInfo {
             _data: data,
+            entry,
             blank_byte,
-            _ph: PhantomData,
         }))
     }
 
@@ -206,13 +205,18 @@ where
 }
 
 /// An identifier for the platform a PFM is for.
-pub struct PlatformId<'pfm, Provenance = provenance::Signed> {
+pub struct PlatformId<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     _data: &'pfm [u8],
+    entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash, Provenance>>,
     id: &'pfm [u8],
-    _ph: PhantomData<fn() -> Provenance>,
 }
 
-impl<'pfm, P> PlatformId<'pfm, P> {
+impl<'a, 'pfm, F, P> PlatformId<'a, 'pfm, F, P> {
+    /// Returns the `Toc` entry defining this element.
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
+        self.entry
+    }
+
     /// Returns the byte-string identifier that represents the platform this
     /// PFM is for.
     pub fn id_string(&self) -> &'pfm [u8] {
@@ -224,13 +228,18 @@ impl<'pfm, P> PlatformId<'pfm, P> {
 ///
 /// Note that this is distinct from the flash device that the PFM itself is
 /// stored in.
-pub struct FlashDeviceInfo<'pfm, Provenance = provenance::Signed> {
+pub struct FlashDeviceInfo<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     _data: &'pfm [u8],
+    entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash, Provenance>>,
     blank_byte: u8,
-    _ph: PhantomData<fn() -> Provenance>,
 }
 
-impl<'pfm, P> FlashDeviceInfo<'pfm, P> {
+impl<'a, 'pfm, F, P> FlashDeviceInfo<'a, 'pfm, F, P> {
+    /// Returns the `Toc` entry defining this element.
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
+        self.entry
+    }
+
     /// Returns the "blank byte" for this `FlashDevice`.
     ///
     /// The "blank byte" is the byte value that unallocated regions in the
@@ -277,8 +286,7 @@ where
         let (header, rest) = data.split_at(4);
         let fw_count = header[0] as usize;
         let id_len = header[1] as usize;
-        // TODO(#58): Don't drop this on the ground.
-        let _flags = header[2];
+        let flags = header[2];
 
         if rest.len() < id_len {
             return Err(Error::OutOfRange);
@@ -300,6 +308,7 @@ where
             _data: data,
             fw_count,
             fw_id,
+            flags,
         })
     }
 }
@@ -317,6 +326,7 @@ pub struct AllowableFw<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     _data: &'pfm [u8],
     fw_count: usize,
     fw_id: &'pfm [u8],
+    flags: u8,
 }
 
 impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
@@ -337,6 +347,11 @@ impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
     /// Returns the firmware ID string for this element.
     pub fn firmware_id(&self) -> &'pfm [u8] {
         self.fw_id
+    }
+
+    /// Returns the raw encoded flags for this element.
+    pub fn raw_flags(&self) -> u8 {
+        self.flags
     }
 
     /// Returns an iterator over the `FwVersion` subelements of this `AllowableFw`.
@@ -608,6 +623,11 @@ impl RwRegion {
         RwFailurePolicy::from_wire_value(self.flags & 0b11)
     }
 
+    /// Returns the raw encoded flags for this element.
+    pub fn raw_flags(&self) -> u8 {
+        self.flags
+    }
+
     /// Returns the actual flash region described by this region.
     pub fn region(&self) -> Region {
         Region::new(self.start_addr, self.end_addr - self.start_addr)
@@ -647,6 +667,11 @@ impl FwRegion<'_> {
     /// when loading a new firmware update.
     pub fn must_validate_on_boot(&self) -> bool {
         (self.header.flags & 1) == 1
+    }
+
+    /// Returns the raw encoded flags for this element.
+    pub fn raw_flags(&self) -> u8 {
+        self.header.flags
     }
 
     /// Returns the hash that this region is expected to conform to.
