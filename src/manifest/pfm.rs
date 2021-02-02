@@ -21,6 +21,7 @@
 //!
 //! [`Pfm`]: struct.Pfm.html
 
+use core::marker::PhantomData;
 use core::mem;
 
 use zerocopy::AsBytes;
@@ -69,11 +70,11 @@ wire_enum! {
 /// using it to extract other portions of the PFM.
 ///
 /// This type only maintains the TOC in memory for book-keeping.
-pub struct Pfm<'pfm, Flash> {
-    container: Container<'pfm, Self, Flash, provenance::Signed>,
+pub struct Pfm<'pfm, Flash, Provenance = provenance::Signed> {
+    container: Container<'pfm, Self, Flash, Provenance>,
 }
 
-impl<F> Manifest for Pfm<'_, F> {
+impl<F, P> Manifest for Pfm<'_, F, P> {
     type ElementType = ElementType;
     const TYPE: ManifestType = ManifestType::Pfm;
 
@@ -82,11 +83,9 @@ impl<F> Manifest for Pfm<'_, F> {
     }
 }
 
-impl<'pfm, F: Flash> Pfm<'pfm, F> {
+impl<'pfm, F: Flash, P> Pfm<'pfm, F, P> {
     /// Creates a new PFM handle using the given `Container`.
-    pub fn new(
-        container: Container<'pfm, Self, F, provenance::Signed>,
-    ) -> Self {
+    pub fn new(container: Container<'pfm, Self, F, P>) -> Self {
         Pfm { container }
     }
 
@@ -99,7 +98,7 @@ impl<'pfm, F: Flash> Pfm<'pfm, F> {
         &self,
         sha: &impl sha256::Builder,
         arena: &'pfm impl Arena,
-    ) -> Result<Option<PlatformId<'pfm>>, Error> {
+    ) -> Result<Option<PlatformId<'pfm, P>>, Error> {
         let entry = match self
             .container
             .toc()
@@ -133,7 +132,11 @@ impl<'pfm, F: Flash> Pfm<'pfm, F> {
             }
         }
 
-        Ok(Some(PlatformId { _data: data, id }))
+        Ok(Some(PlatformId {
+            _data: data,
+            id,
+            _ph: PhantomData,
+        }))
     }
 
     /// Extracts the `FlashDeviceInfo` element from this PFM.
@@ -144,7 +147,7 @@ impl<'pfm, F: Flash> Pfm<'pfm, F> {
         &self,
         sha: &impl sha256::Builder,
         arena: &'pfm impl Arena,
-    ) -> Result<Option<FlashDeviceInfo<'pfm>>, Error> {
+    ) -> Result<Option<FlashDeviceInfo<'pfm, P>>, Error> {
         let entry = match self
             .container
             .toc()
@@ -175,6 +178,7 @@ impl<'pfm, F: Flash> Pfm<'pfm, F> {
         Ok(Some(FlashDeviceInfo {
             _data: data,
             blank_byte,
+            _ph: PhantomData,
         }))
     }
 
@@ -184,7 +188,7 @@ impl<'pfm, F: Flash> Pfm<'pfm, F> {
     /// allowing the user to lazily select which entries to read from flash.
     pub fn allowable_fws(
         &self,
-    ) -> impl Iterator<Item = AllowableFwEntry<'_, 'pfm, F>> + '_ {
+    ) -> impl Iterator<Item = AllowableFwEntry<'_, 'pfm, F, P>> + '_ {
         self.container
             .toc()
             .entries()
@@ -194,12 +198,13 @@ impl<'pfm, F: Flash> Pfm<'pfm, F> {
 }
 
 /// An identifier for the platform a PFM is for.
-pub struct PlatformId<'pfm> {
+pub struct PlatformId<'pfm, Provenance = provenance::Signed> {
     _data: &'pfm [u8],
     id: &'pfm [u8],
+    _ph: PhantomData<fn() -> Provenance>,
 }
 
-impl<'pfm> PlatformId<'pfm> {
+impl<'pfm, P> PlatformId<'pfm, P> {
     /// Returns the byte-string identifier that represents the platform this
     /// PFM is for.
     pub fn id_string(&self) -> &'pfm [u8] {
@@ -211,12 +216,13 @@ impl<'pfm> PlatformId<'pfm> {
 ///
 /// Note that this is distinct from the flash device that the PFM itself is
 /// stored in.
-pub struct FlashDeviceInfo<'pfm> {
+pub struct FlashDeviceInfo<'pfm, Provenance = provenance::Signed> {
     _data: &'pfm [u8],
     blank_byte: u8,
+    _ph: PhantomData<fn() -> Provenance>,
 }
 
-impl<'pfm> FlashDeviceInfo<'pfm> {
+impl<'pfm, P> FlashDeviceInfo<'pfm, P> {
     /// Returns the "blank byte" for this `FlashDevice`.
     ///
     /// The "blank byte" is the byte value that unallocated regions in the
@@ -234,14 +240,14 @@ impl<'pfm> FlashDeviceInfo<'pfm> {
 ///
 /// [`AllowableFw`]: struct.AllowableFw.html
 /// [`Pfm::allowable_firmware()`]: struct.Pfm.html#method.allowable_firmware
-pub struct AllowableFwEntry<'a, 'pfm, Flash> {
-    pfm: &'a Pfm<'pfm, Flash>,
-    entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash>>,
+pub struct AllowableFwEntry<'a, 'pfm, Flash, Provenance = provenance::Signed> {
+    pfm: &'a Pfm<'pfm, Flash, Provenance>,
+    entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash, Provenance>>,
 }
 
-impl<'a, 'pfm, F: Flash> AllowableFwEntry<'a, 'pfm, F> {
+impl<'a, 'pfm, F: Flash, P> AllowableFwEntry<'a, 'pfm, F, P> {
     /// Returns the `Toc` entry defining this element.
-    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F>> {
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
         self.entry
     }
 
@@ -251,7 +257,7 @@ impl<'a, 'pfm, F: Flash> AllowableFwEntry<'a, 'pfm, F> {
         self,
         sha: &impl sha256::Builder,
         arena: &'pfm impl Arena,
-    ) -> Result<AllowableFw<'a, 'pfm, F>, Error> {
+    ) -> Result<AllowableFw<'a, 'pfm, F, P>, Error> {
         let data = self.pfm.container.flash().read_direct(
             self.entry.region(),
             arena,
@@ -293,16 +299,16 @@ impl<'a, 'pfm, F: Flash> AllowableFwEntry<'a, 'pfm, F> {
 ///
 /// [`Pfm::allowable_firmware()`]: struct.Pfm.html#method.allowable_firmware
 /// [`AllowableFwEntry::read()`]: struct.AllowableFwEntry.html#method.read
-pub struct AllowableFw<'a, 'pfm, Flash> {
-    entry: AllowableFwEntry<'a, 'pfm, Flash>,
+pub struct AllowableFw<'a, 'pfm, Flash, Provenance = provenance::Signed> {
+    entry: AllowableFwEntry<'a, 'pfm, Flash, Provenance>,
     _data: &'pfm [u8],
     fw_count: usize,
     fw_id: &'pfm [u8],
 }
 
-impl<'a, 'pfm, F: Flash> AllowableFw<'a, 'pfm, F> {
+impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
     /// Returns the `Toc` entry defining this element.
-    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F>> {
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
         self.entry.entry
     }
 
@@ -326,7 +332,7 @@ impl<'a, 'pfm, F: Flash> AllowableFw<'a, 'pfm, F> {
     /// allowing the user to lazily select which entries to read from flash.
     pub fn firmware_versions(
         &self,
-    ) -> impl Iterator<Item = FwVersionEntry<'_, 'pfm, F>> + '_ {
+    ) -> impl Iterator<Item = FwVersionEntry<'_, 'pfm, F, P>> + '_ {
         self.entry()
             .children()
             .filter(|e| e.element_type() == ElementType::FwVersion)
@@ -344,14 +350,14 @@ impl<'a, 'pfm, F: Flash> AllowableFw<'a, 'pfm, F> {
 ///
 /// [`FwVersion`]: struct.FwVersion.html
 /// [`AllowableFw::firmware_versions()`]: struct.AllowableFw.html#method.firmware_versions
-pub struct FwVersionEntry<'a, 'pfm, Flash> {
-    version: &'a AllowableFw<'a, 'pfm, Flash>,
-    entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash>>,
+pub struct FwVersionEntry<'a, 'pfm, Flash, Provenance = provenance::Signed> {
+    version: &'a AllowableFw<'a, 'pfm, Flash, Provenance>,
+    entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash, Provenance>>,
 }
 
-impl<'a, 'pfm, F: Flash> FwVersionEntry<'a, 'pfm, F> {
+impl<'a, 'pfm, F: Flash, P> FwVersionEntry<'a, 'pfm, F, P> {
     /// Returns the `Toc` entry defining this element.
-    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F>> {
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
         self.entry
     }
 
@@ -361,7 +367,7 @@ impl<'a, 'pfm, F: Flash> FwVersionEntry<'a, 'pfm, F> {
         self,
         sha: &impl sha256::Builder,
         arena: &'pfm impl Arena,
-    ) -> Result<FwVersion<'a, 'pfm, F>, Error> {
+    ) -> Result<FwVersion<'a, 'pfm, F, P>, Error> {
         #[rustfmt::skip]
         let data = self.version.entry.pfm.container.flash().read_direct(
             self.entry.region(),
@@ -468,9 +474,9 @@ impl<'a, 'pfm, F: Flash> FwVersionEntry<'a, 'pfm, F> {
 ///
 /// [`AllowableFw::firmware_versions()`]: struct.AllowableFw.html#method.firmware_versions
 /// [`FwVersion::read()`]: struct.FwVersion.html#method.read
-pub struct FwVersion<'a, 'pfm, Flash> {
+pub struct FwVersion<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     #[allow(unused)]
-    entry: FwVersionEntry<'a, 'pfm, Flash>,
+    entry: FwVersionEntry<'a, 'pfm, Flash, Provenance>,
     _data: &'pfm [u8],
     version_addr: u32,
     version_str: &'pfm [u8],
@@ -480,7 +486,7 @@ pub struct FwVersion<'a, 'pfm, Flash> {
     unparsed_image_regions: &'pfm [u8],
 }
 
-impl<'pfm, F> FwVersion<'_, 'pfm, F> {
+impl<'pfm, F, P> FwVersion<'_, 'pfm, F, P> {
     /// Returns the flash region in which this `FwVersion`'s version string
     /// would be located, and the expected value of that region.
     pub fn version(&self) -> (Region, &'pfm [u8]) {
