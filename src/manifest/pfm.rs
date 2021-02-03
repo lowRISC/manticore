@@ -499,9 +499,12 @@ where
             .into_slice();
 
         for rw in rw_regions {
-            if rw.start_addr > rw.end_addr {
-                return Err(Error::OutOfRange);
-            }
+            // NOTE: We only construct a region to check that the start and end
+            // addresses are in a valid range.
+            let _ = Region::from_start_and_limit(rw.start_addr, rw.end_addr)
+                .ok_or(Error::BadRange {
+                    toc_index: self.entry.index(),
+                })?;
         }
 
         let image_region_offsets =
@@ -541,9 +544,10 @@ where
                 })?;
 
                 for r in &*ranges {
-                    if r.start_addr > r.end_addr {
-                        return Err(Error::OutOfRange);
-                    }
+                    Region::from_start_and_limit(r.start_addr, r.end_addr)
+                        .ok_or(Error::BadRange {
+                            toc_index: self.entry.index(),
+                        })?;
                 }
 
                 if i != header.image_count - 1 {
@@ -702,7 +706,8 @@ impl RwRegion {
 
     /// Returns the actual flash region described by this region.
     pub fn region(&self) -> Region {
-        Region::new(self.start_addr, self.end_addr - self.start_addr)
+        Region::from_start_and_limit(self.start_addr, self.end_addr)
+            .expect("already checked in `read()`")
     }
 }
 
@@ -760,10 +765,10 @@ impl FwRegion<'_> {
     /// Returns the `idx`th flash region in this image region, if there is one.
     pub fn region(&self, idx: usize) -> Option<Region> {
         let range = self.ranges.get(idx)?;
-        Some(Region::new(
-            range.start_addr,
-            range.end_addr - range.start_addr,
-        ))
+        Some(
+            Region::from_start_and_limit(range.start_addr, range.end_addr)
+                .expect("already checked in `read()`"),
+        )
     }
 
     /// Returns an iterator over the flash regions that make up this image

@@ -553,6 +553,18 @@ impl Region {
         Self::new(0, mem::size_of::<T>() as u32)
     }
 
+    /// Returns a `Region` with the given start and limit.
+    ///
+    /// The length is computed as `limit - start + 1`. Any overflow in
+    /// this operation will cause `None` to be returned.
+    ///
+    /// Note that the due to overflow restrictions, the region starting at
+    /// `0x0000_0000` and ending at `0xffff_ffff` cannot be represented.
+    pub fn from_start_and_limit(start: u32, limit: u32) -> Option<Self> {
+        let len = limit.checked_sub(start)?.checked_add(1)?;
+        Some(Self::new(start, len))
+    }
+
     /// Returns a `Region` big enough to hold a `[T]` with the given number of
     /// elements.
     ///
@@ -564,6 +576,18 @@ impl Region {
     /// Returns the end address of `self`, pointing one past the end of it.
     pub fn end(self) -> u32 {
         self.offset.saturating_add(self.len)
+    }
+
+    /// Represents `self` as a start and a limit: an inclusive range of
+    /// addresses.
+    ///
+    /// Returns `None` if `len == 0`, or if any overflow occurs due to the
+    /// length being too large.
+    pub fn start_and_limit(self) -> Option<(u32, u32)> {
+        Some((
+            self.offset,
+            self.offset.checked_add(self.len)?.checked_sub(1)?,
+        ))
     }
 
     /// Returns a new `Region` that comes immediately after `self`, with the

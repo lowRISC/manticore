@@ -161,6 +161,15 @@ pub enum Error {
         toc_index: usize,
     },
 
+    /// Indicates a bad range was found while parsing a particular element.
+    ///
+    /// This indicates that the given range, given as a start and an end, would
+    /// have had negative length.
+    BadRange {
+        /// The index of the bad entry.
+        toc_index: usize,
+    },
+
     /// Indicates that some assumption about a manifest's alignment (internal
     /// or overall) was violated.
     Unaligned,

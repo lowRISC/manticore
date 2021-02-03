@@ -206,8 +206,9 @@ impl owned::Element for Element {
                     header[0] = rw.flags;
                     bytes.extend_from_slice(&header);
 
-                    bytes.extend_from_slice(&rw.region.offset.to_le_bytes());
-                    let end = rw.region.offset + rw.region.len;
+                    let (start, end) =
+                        rw.region.start_and_limit().ok_or(Error::OutOfRange)?;
+                    bytes.extend_from_slice(&start.to_le_bytes());
                     bytes.extend_from_slice(&end.to_le_bytes());
                 }
 
@@ -225,8 +226,10 @@ impl owned::Element for Element {
                     ]);
                     bytes.extend_from_slice(&image.hash);
                     for region in &image.regions {
-                        bytes.extend_from_slice(&region.offset.to_le_bytes());
-                        let end = region.offset + region.len;
+                        let (start, end) = region
+                            .start_and_limit()
+                            .ok_or(Error::OutOfRange)?;
+                        bytes.extend_from_slice(&start.to_le_bytes());
                         bytes.extend_from_slice(&end.to_le_bytes());
                     }
                 }
