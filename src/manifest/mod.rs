@@ -154,6 +154,13 @@ pub enum Error {
         toc_index: usize,
     },
 
+    /// Indicates that parsing of a particular element failed because it was
+    /// below the minimum length.
+    TooShort {
+        /// The index of the bad entry.
+        toc_index: usize,
+    },
+
     /// Indicates that some assumption about a manifest's alignment (internal
     /// or overall) was violated.
     Unaligned,
@@ -161,6 +168,10 @@ pub enum Error {
     /// Indicates that a manifest contained a signature type not supported by
     /// the hash engine being used.
     UnsupportedHashType(HashType),
+
+    /// Indicates that the signature length is incompatible with either the
+    /// given manifest length or the signature algorithm.
+    BadSignatureLen,
 
     /// Indicates that a signature operation failed for some reason.
     SignatureFailure,
