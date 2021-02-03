@@ -30,7 +30,6 @@ use zerocopy::LayoutVerified;
 use crate::crypto::sha256;
 use crate::hardware::flash::Flash;
 use crate::hardware::flash::Region;
-use crate::io::Read as _;
 use crate::manifest::provenance;
 use crate::manifest::provenance::Provenance;
 use crate::manifest::Container;
@@ -118,12 +117,25 @@ where
             self.container
                 .flash()
                 .read_direct(entry.region(), arena, 1)?;
-        let (header, rest) = data.split_at(4);
-        let len = header[0] as usize;
-        if rest.len() < len {
-            return Err(Error::OutOfRange);
-        }
 
+        #[derive(FromBytes)]
+        #[repr(C)]
+        struct PlatformIdHeader {
+            len: u8,
+            _unused: [u8; 3],
+        }
+        let (header, rest) =
+            LayoutVerified::<_, PlatformIdHeader>::new_from_prefix(data)
+                .ok_or(Error::TooShort {
+                    toc_index: entry.index(),
+                })?;
+
+        let len = header.len as usize;
+        if rest.len() < len {
+            return Err(Error::TooShort {
+                toc_index: entry.index(),
+            });
+        }
         let id = &rest[..len];
 
         if P::AUTHENTICATED {
@@ -168,7 +180,18 @@ where
             self.container
                 .flash()
                 .read_direct(entry.region(), arena, 1)?;
-        let blank_byte = data[0];
+
+        #[derive(FromBytes)]
+        #[repr(C)]
+        pub struct FlashDeviceHeader {
+            blank_byte: u8,
+            _unused: [u8; 3],
+        }
+        let (header, _) =
+            LayoutVerified::<_, FlashDeviceHeader>::new_from_prefix(data)
+                .ok_or(Error::TooShort {
+                    toc_index: entry.index(),
+                })?;
 
         if P::AUTHENTICATED {
             if let Some(expected) = entry.hash() {
@@ -185,7 +208,7 @@ where
         Ok(Some(FlashDeviceInfo {
             _data: data,
             entry,
-            blank_byte,
+            blank_byte: header.blank_byte,
         }))
     }
 
@@ -283,13 +306,26 @@ where
             arena,
             1,
         )?;
-        let (header, rest) = data.split_at(4);
-        let fw_count = header[0] as usize;
-        let id_len = header[1] as usize;
-        let flags = header[2];
 
+        #[derive(FromBytes)]
+        #[repr(C)]
+        struct AllowableFwHeader {
+            fw_count: u8,
+            id_len: u8,
+            flags: u8,
+            _unused: u8,
+        }
+        let (header, rest) =
+            LayoutVerified::<_, AllowableFwHeader>::new_from_prefix(data)
+                .ok_or(Error::TooShort {
+                    toc_index: self.entry.index(),
+                })?;
+
+        let id_len = header.id_len as usize;
         if rest.len() < id_len {
-            return Err(Error::OutOfRange);
+            return Err(Error::TooShort {
+                toc_index: self.entry.index(),
+            });
         }
         let fw_id = &rest[..id_len];
 
@@ -308,9 +344,9 @@ where
         Ok(AllowableFw {
             entry: self,
             _data: data,
-            fw_count,
+            fw_count: header.fw_count,
             fw_id,
-            flags,
+            flags: header.flags,
         })
     }
 }
@@ -326,7 +362,7 @@ where
 pub struct AllowableFw<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     entry: AllowableFwEntry<'a, 'pfm, Flash, Provenance>,
     _data: &'pfm [u8],
-    fw_count: usize,
+    fw_count: u8,
     fw_id: &'pfm [u8],
     flags: u8,
 }
@@ -343,7 +379,7 @@ impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
     /// Note that this may be inconsistent with the number of children actually
     /// encoded in the PFM.
     pub fn firmware_count(&self) -> usize {
-        self.fw_count
+        self.fw_count as usize
     }
 
     /// Returns the firmware ID string for this element.
@@ -419,77 +455,102 @@ where
             }
         }
 
-        let mut buf = data;
-        let image_count = buf.read_le::<u8>()? as usize;
-        let rw_count = buf.read_le::<u8>()? as usize;
-        let version_len = buf.read_le::<u8>()? as usize;
-        let _ = buf.read_le::<u8>()?;
-        let version_addr = buf.read_le::<u32>()?;
-
-        if buf.len() < version_len {
-            return Err(Error::OutOfRange);
+        #[derive(FromBytes)]
+        #[repr(C)]
+        struct FwVersionHeader {
+            image_count: u8,
+            rw_count: u8,
+            version_len: u8,
+            _unused: u8,
+            version_addr: u32,
         }
-        let (version_str, mut buf) = buf.split_at(version_len);
+        let (header, rest) =
+            LayoutVerified::<_, FwVersionHeader>::new_from_prefix(data).ok_or(
+                Error::TooShort {
+                    toc_index: self.entry.index(),
+                },
+            )?;
+
+        if rest.len() < header.version_len as usize {
+            return Err(Error::TooShort {
+                toc_index: self.entry.index(),
+            });
+        }
+        let (version_str, mut buf) = rest.split_at(header.version_len as usize);
 
         // Align back to 4-byte boundary.
-        buf = &buf[misalign_of(buf.as_ptr() as usize, 4)..];
+        buf = buf.get(misalign_of(buf.as_ptr() as usize, 4)..).ok_or(
+            Error::TooShort {
+                toc_index: self.entry.index(),
+            },
+        )?;
 
-        let rw_len = mem::size_of::<RwRegion>() * rw_count;
+        let rw_len = mem::size_of::<RwRegion>() * header.rw_count as usize;
+        if buf.len() < rw_len {
+            return Err(Error::TooShort {
+                toc_index: self.entry.index(),
+            });
+        }
         let (rw_bytes, unparsed_image_regions) = buf.split_at(rw_len);
         // NOTE: This cannot panic, since it checks for alignment (4-byte) and
         // size, which have already been explicitly checked above.
         let rw_regions = LayoutVerified::<_, [RwRegion]>::new_slice(rw_bytes)
             .unwrap()
             .into_slice();
+
         for rw in rw_regions {
             if rw.start_addr > rw.end_addr {
                 return Err(Error::OutOfRange);
             }
         }
 
-        let image_region_offsets = arena.alloc_slice::<u32>(image_count)?;
-        if image_count > 0 {
+        let image_region_offsets =
+            arena.alloc_slice::<u32>(header.image_count as usize)?;
+        if header.image_count > 0 {
             // FIXME: we don't need to actually track this "first" offset.
             image_region_offsets[0] = 0;
-            for i in 0..image_count {
-                let rest =
-                    &unparsed_image_regions[image_region_offsets[i] as usize..];
-                let (header, rest) =
-                    match LayoutVerified::<_, FwRegionHeader>::new_from_prefix(
-                        rest,
-                    ) {
-                        Some(h) => h,
-                        None => return Err(Error::OutOfRange),
-                    };
+            for i in 0..header.image_count {
+                let rest = &unparsed_image_regions
+                    [image_region_offsets[i as usize] as usize..];
+
+                let (img_header, rest) =
+                    LayoutVerified::<_, FwRegionHeader>::new_from_prefix(rest)
+                        .ok_or(Error::TooShort {
+                            toc_index: self.entry.index(),
+                        })?;
+
                 // TODO(#57): we don't deal with hash types that aren't SHA-256.
-                match HashType::from_wire_value(header.hash_type) {
+                match HashType::from_wire_value(img_header.hash_type) {
                     Some(HashType::Sha256) => {}
                     Some(h) => return Err(Error::UnsupportedHashType(h)),
                     None => return Err(Error::OutOfRange),
                 }
 
-                let ranges_len = header.region_count as usize
+                let ranges_len = img_header.region_count as usize
                     * mem::size_of::<FwRegionRange>();
                 if rest.len() < ranges_len {
-                    return Err(Error::OutOfRange);
+                    return Err(Error::TooShort {
+                        toc_index: self.entry.index(),
+                    });
                 }
-                let ranges =
-                    match LayoutVerified::<_, [FwRegionRange]>::new_slice(
-                        &rest[..ranges_len],
-                    ) {
-                        Some(h) => h,
-                        None => return Err(Error::OutOfRange),
-                    };
+                let ranges = LayoutVerified::<_, [FwRegionRange]>::new_slice(
+                    &rest[..ranges_len],
+                )
+                .ok_or(Error::TooShort {
+                    toc_index: self.entry.index(),
+                })?;
+
                 for r in &*ranges {
                     if r.start_addr > r.end_addr {
                         return Err(Error::OutOfRange);
                     }
                 }
 
-                if i != image_count - 1 {
-                    image_region_offsets[i + 1] = image_region_offsets[i]
-                        + ranges_len as u32
-                        + mem::size_of::<FwRegionHeader>() as u32;
+                if i != header.image_count - 1 {
+                    image_region_offsets[(i + 1) as usize] =
+                        image_region_offsets[i as usize]
+                            + ranges_len as u32
+                            + mem::size_of::<FwRegionHeader>() as u32;
                 }
             }
         }
@@ -497,7 +558,7 @@ where
         Ok(FwVersion {
             entry: self,
             _data: data,
-            version_addr,
+            version_addr: header.version_addr,
             version_str,
             rw_regions,
             image_region_offsets,
