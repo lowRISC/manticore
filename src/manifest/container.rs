@@ -59,8 +59,8 @@ wire_enum! {
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub enum HashType: u8 {
       Sha256 = 0b000,
-      // Sha384 = 0b001,
-      // Sha512 = 0b010,
+      Sha384 = 0b001,
+      Sha512 = 0b010,
     }
 }
 
@@ -211,33 +211,32 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
     /// - Every type/version pair is well-known.
     ///
     /// Returns true if the invariants are upheld.
-    fn check_invariants(&self) -> bool {
-        for entry in self.entries {
+    fn check_invariants(&self) -> Result<(), Error> {
+        for (i, entry) in self.entries.iter().enumerate() {
             match <M::ElementType as WireEnum>::from_wire_value(
                 entry.element_type,
             ) {
-                Some(e) => {
-                    if entry.format_version < M::min_version(e) {
-                        return false;
-                    }
+                Some(e) if entry.format_version < M::min_version(e) => {
+                    return Err(Error::OutOfRange)
                 }
-                None => return false,
+                None => return Err(Error::OutOfRange),
+                _ => {}
             }
 
             if entry.hash_idx != 0xff
                 && self.hashes.len() <= entry.hash_idx as usize
             {
-                return false;
+                return Err(Error::BadHashIndex { toc_index: i });
             }
 
             if entry.parent_idx != 0xff
                 && self.entries.len() <= entry.parent_idx as usize
             {
-                return false;
+                return Err(Error::BadParent { toc_index: i });
             }
         }
 
-        true
+        Ok(())
     }
 
     /// Returns the number of entries in this `Toc`.
@@ -382,7 +381,7 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
         self.flash
             .read(expected_hash_offset as u32, &mut expected_toc_hash)?;
         if expected_toc_hash != toc_hash {
-            return Err(Error::SignatureFailure);
+            return Err(Error::BadTocHash);
         }
         Ok(())
     }
@@ -428,7 +427,7 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
 
         if ManifestType::from_wire_value(header.manifest_type) != Some(M::TYPE)
         {
-            return Err(Error::OutOfRange);
+            return Err(Error::BadMagic(header.manifest_type));
         }
 
         if header.sig_len > header.total_len {
@@ -436,8 +435,10 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
         }
 
         // TODO(#57): we don't deal with hash types that aren't SHA-256.
-        if header.hash_type != HashType::Sha256.to_wire_value() {
-            return Err(Error::OutOfRange);
+        match HashType::from_wire_value(header.hash_type) {
+            Some(HashType::Sha256) => {}
+            Some(h) => return Err(Error::UnsupportedHashType(h)),
+            None => return Err(Error::OutOfRange),
         }
 
         // Unused values are currently required to be zeroed by the spec.
@@ -464,9 +465,7 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
             hashes,
             _ph: PhantomData,
         };
-        if !toc.check_invariants() {
-            return Err(Error::OutOfRange);
-        }
+        toc.check_invariants()?;
 
         Ok(Self {
             header,

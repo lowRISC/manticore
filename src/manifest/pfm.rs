@@ -113,9 +113,6 @@ where
             Some(x) => x,
             None => return Ok(None),
         };
-        if entry.region().len < 4 {
-            return Err(Error::OutOfRange);
-        }
 
         let data =
             self.container
@@ -134,7 +131,9 @@ where
                 let mut hash = [0; 32];
                 sha.hash_contiguous(&data, &mut hash)?;
                 if &hash != expected {
-                    return Err(Error::SignatureFailure);
+                    return Err(Error::BadElementHash {
+                        toc_index: entry.index(),
+                    });
                 }
             }
         }
@@ -164,9 +163,6 @@ where
             Some(x) => x,
             None => return Ok(None),
         };
-        if entry.region().len < 4 {
-            return Err(Error::OutOfRange);
-        }
 
         let data =
             self.container
@@ -179,7 +175,9 @@ where
                 let mut hash = [0; 32];
                 sha.hash_contiguous(&data, &mut hash)?;
                 if &hash != expected {
-                    return Err(Error::SignatureFailure);
+                    return Err(Error::BadElementHash {
+                        toc_index: entry.index(),
+                    });
                 }
             }
         }
@@ -300,7 +298,9 @@ where
                 let mut hash = [0; 32];
                 sha.hash_contiguous(&data, &mut hash)?;
                 if &hash != expected {
-                    return Err(Error::SignatureFailure);
+                    return Err(Error::BadElementHash {
+                        toc_index: self.entry.index(),
+                    });
                 }
             }
         }
@@ -412,7 +412,9 @@ where
                 let mut hash = [0; 32];
                 sha.hash_contiguous(data, &mut hash)?;
                 if &hash != expected {
-                    return Err(Error::SignatureFailure);
+                    return Err(Error::BadElementHash {
+                        toc_index: self.entry.index(),
+                    });
                 }
             }
         }
@@ -460,8 +462,10 @@ where
                         None => return Err(Error::OutOfRange),
                     };
                 // TODO(#57): we don't deal with hash types that aren't SHA-256.
-                if header.hash_type != HashType::Sha256.to_wire_value() {
-                    return Err(Error::OutOfRange);
+                match HashType::from_wire_value(header.hash_type) {
+                    Some(HashType::Sha256) => {}
+                    Some(h) => return Err(Error::UnsupportedHashType(h)),
+                    None => return Err(Error::OutOfRange),
                 }
 
                 let ranges_len = header.region_count as usize
