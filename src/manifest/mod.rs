@@ -114,17 +114,54 @@ pub enum Error {
     ///
     /// [`io`]: ../io/index.html
     Io(io::Error),
+
     /// Indicates that an error occured in a [`flash`] type.
     ///
     /// [`flash`]: ../hardware/flash/html
     Flash(flash::Error),
+
     /// Indicates that an arena ran out of memory.
     OutOfMemory,
+
     /// Indicates that a value was out of its expected range.
     OutOfRange,
+
+    /// Indicates that a manifest's magic value did not match the
+    /// expected one for this manifest type.
+    ///
+    /// Contains the bad value found.
+    BadMagic(u16),
+
+    /// Indicates that the overall TOC hash did not match the actual value.
+    BadTocHash,
+
+    /// Indicates that a TOC entry in the manifest had an invalid parent.
+    BadParent {
+        /// The index of the bad entry.
+        toc_index: usize,
+    },
+
+    /// Indicates that a TOC entry in the manifest had an out-of-range
+    /// hash index.
+    BadHashIndex {
+        /// The index of the bad entry.
+        toc_index: usize,
+    },
+
+    /// Indicates that a TOC entry's hash did not match the actual value.
+    BadElementHash {
+        /// The index of the bad entry.
+        toc_index: usize,
+    },
+
     /// Indicates that some assumption about a manifest's alignment (internal
     /// or overall) was violated.
     Unaligned,
+
+    /// Indicates that a manifest contained a signature type not supported by
+    /// the hash engine being used.
+    UnsupportedHashType(HashType),
+
     /// Indicates that a signature operation failed for some reason.
     SignatureFailure,
 }
