@@ -103,9 +103,8 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
     }
 
     /// Returns the type of the element this entry refers to.
-    pub fn element_type(self) -> M::ElementType {
+    pub fn element_type(self) -> Option<M::ElementType> {
         <M::ElementType as WireEnum>::from_wire_value(self.raw().element_type)
-            .expect("previously verified by check_invariants()")
     }
 
     /// Returns the format version of this TOC entry.
@@ -149,7 +148,7 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
     /// Returns an iterator over all of this entry's children.
     pub fn children(self) -> impl Iterator<Item = TocEntry<'entry, 'toc, M>> {
         let mut index = self.index() + 1;
-        std::iter::from_fn(move || loop {
+        core::iter::from_fn(move || loop {
             let entry = self.toc.entry(index)?;
             if entry.raw().element_type == self.raw().element_type {
                 // We've seen another element of the same type, so there's no
@@ -228,16 +227,6 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
     /// Returns true if the invariants are upheld.
     fn check_invariants(&self) -> Result<(), Error> {
         for (i, entry) in self.entries.iter().enumerate() {
-            match <M::ElementType as WireEnum>::from_wire_value(
-                entry.element_type,
-            ) {
-                Some(e) if entry.format_version < M::min_version(e) => {
-                    return Err(Error::OutOfRange)
-                }
-                None => return Err(Error::OutOfRange),
-                _ => {}
-            }
-
             if entry.hash_idx != 0xff
                 && self.hashes.len() <= entry.hash_idx as usize
             {
@@ -296,6 +285,18 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
             toc: self,
             index: i,
         })
+    }
+
+    /// Returns the first element of the given type in this `Toc`.
+    ///
+    /// This function should be used to discover "singleton" entries, entries
+    /// such that only the very first appearance thereof in a TOC is used, with
+    /// the rest ignored.
+    pub fn singleton(&self, ty: M::ElementType) -> Option<TocEntry<'_, 'toc, M>>
+    where
+        M::ElementType: PartialEq,
+    {
+        self.entries().find(move |e| e.element_type() == Some(ty))
     }
 }
 
@@ -632,7 +633,7 @@ pub(crate) mod test {
 
         let first = toc.entry(0).unwrap();
         assert_eq!(first.index(), 0);
-        assert_eq!(first.element_type(), pfm::ElementType::PlatformId);
+        assert_eq!(first.element_type().unwrap(), pfm::ElementType::PlatformId);
         assert!(first.parent().is_none());
         assert!(first.hash().is_some());
         assert_eq!(first.children().count(), 0);
@@ -676,7 +677,7 @@ pub(crate) mod test {
 
         let first = toc.entry(0).unwrap();
         assert_eq!(first.index(), 0);
-        assert_eq!(first.element_type(), pfm::ElementType::PlatformId);
+        assert_eq!(first.element_type().unwrap(), pfm::ElementType::PlatformId);
         assert!(first.parent().is_none());
         assert!(first.hash().is_some());
 
@@ -684,7 +685,10 @@ pub(crate) mod test {
         assert_eq!(children.len(), 1);
         let second = children[0];
         assert_eq!(second.index(), 1);
-        assert_eq!(second.element_type(), pfm::ElementType::FlashDevice);
+        assert_eq!(
+            second.element_type().unwrap(),
+            pfm::ElementType::FlashDevice
+        );
         assert_eq!(second.parent().unwrap().index(), 0);
         assert!(second.hash().is_none());
     }
