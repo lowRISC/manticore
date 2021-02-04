@@ -94,6 +94,9 @@ pub use container::TocEntry;
 pub mod owned;
 pub mod pfm;
 
+#[cfg(test)]
+mod testdata;
+
 wire_enum! {
     /// A Cerberus manifest type.
     ///

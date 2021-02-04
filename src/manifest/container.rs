@@ -692,9 +692,4 @@ pub(crate) mod test {
         assert_eq!(second.parent().unwrap().index(), 0);
         assert!(second.hash().is_none());
     }
-
-    // TODO(#61): Write test that involve pre-baked manifests, as opposed to the
-    // dynamically built ones. We don't do this right now because there's a
-    // couple of details missing w.r.t making sure we match up with the
-    // specified format.
 }
