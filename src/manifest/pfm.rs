@@ -103,15 +103,14 @@ where
         sha: &impl sha256::Builder,
         arena: &'pfm impl Arena,
     ) -> Result<Option<PlatformId<'a, 'pfm, F, P>>, Error> {
-        let entry = match self
-            .container
-            .toc()
-            .entries()
-            .find(|e| e.element_type() == ElementType::PlatformId)
-        {
-            Some(x) => x,
-            None => return Ok(None),
-        };
+        let entry =
+            match self.container.toc().singleton(ElementType::PlatformId) {
+                Some(x) => x,
+                None => return Ok(None),
+            };
+        if entry.region().len < 4 {
+            return Err(Error::OutOfRange);
+        }
 
         let data =
             self.container
@@ -166,15 +165,14 @@ where
         sha: &impl sha256::Builder,
         arena: &'pfm impl Arena,
     ) -> Result<Option<FlashDeviceInfo<'a, 'pfm, F, P>>, Error> {
-        let entry = match self
-            .container
-            .toc()
-            .entries()
-            .find(|e| e.element_type() == ElementType::FlashDevice)
-        {
-            Some(x) => x,
-            None => return Ok(None),
-        };
+        let entry =
+            match self.container.toc().singleton(ElementType::FlashDevice) {
+                Some(x) => x,
+                None => return Ok(None),
+            };
+        if entry.region().len < 4 {
+            return Err(Error::OutOfRange);
+        }
 
         let data =
             self.container
@@ -222,7 +220,7 @@ where
         self.container
             .toc()
             .entries()
-            .filter(|e| e.element_type() == ElementType::AllowableFw)
+            .filter(|e| e.element_type() == Some(ElementType::AllowableFw))
             .map(move |entry| AllowableFwEntry { pfm: self, entry })
     }
 }
@@ -401,7 +399,7 @@ impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
     ) -> impl Iterator<Item = FwVersionEntry<'_, 'pfm, F, P>> + '_ {
         self.entry()
             .children()
-            .filter(|e| e.element_type() == ElementType::FwVersion)
+            .filter(|e| e.element_type() == Some(ElementType::FwVersion))
             .map(move |entry| FwVersionEntry {
                 version: self,
                 entry,
