@@ -182,6 +182,9 @@ pub enum Error {
     /// given manifest length or the signature algorithm.
     BadSignatureLen,
 
+    /// Indicates that an error occured inside of a hashing engine.
+    HashingError(sha256::Error),
+
     /// Indicates that a signature operation failed for some reason.
     SignatureFailure,
 }
@@ -211,8 +214,8 @@ impl<E> From<rsa::Error<E>> for Error {
 }
 
 impl<E> From<sha256::Error<E>> for Error {
-    fn from(_: sha256::Error<E>) -> Self {
-        Self::SignatureFailure
+    fn from(e: sha256::Error<E>) -> Self {
+        Self::HashingError(e.erased())
     }
 }
 
