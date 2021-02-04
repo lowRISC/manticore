@@ -126,11 +126,15 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
     pub fn parent(self) -> Option<Self> {
         match self.raw().parent_type {
             0xff => None,
-            x => Some(
-                self.toc
-                    .entry(x as usize)
-                    .expect("previously verified by check_invariants()"),
-            ),
+            parent_type => {
+                for i in (0..self.index()).rev() {
+                    let e = self.toc.entry(i).expect("obviously in range");
+                    if e.raw().element_type == parent_type {
+                        return Some(e);
+                    }
+                }
+                unreachable!("previously verified by check_invariants()")
+            }
         }
     }
 
@@ -144,9 +148,20 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
 
     /// Returns an iterator over all of this entry's children.
     pub fn children(self) -> impl Iterator<Item = TocEntry<'entry, 'toc, M>> {
-        self.toc
-            .entries()
-            .filter(move |e| self.index == e.raw().parent_type as usize)
+        let mut index = self.index() + 1;
+        std::iter::from_fn(move || loop {
+            let entry = self.toc.entry(index)?;
+            if entry.raw().element_type == self.raw().element_type {
+                // We've seen another element of the same type, so there's no
+                // children with this element type that can follow.
+                return None;
+            }
+
+            index += 1;
+            if entry.raw().parent_type == self.raw().element_type {
+                return Some(entry);
+            }
+        })
     }
 }
 
@@ -229,10 +244,19 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
                 return Err(Error::BadHashIndex { toc_index: i });
             }
 
-            if entry.parent_type != 0xff
-                && self.entries.len() <= entry.parent_type as usize
-            {
-                return Err(Error::BadParent { toc_index: i });
+            // NOTE: Unfortunately, this check is necessarilly quadratic
+            // in the TOC size.
+            if entry.parent_type != 0xff {
+                let mut has_parent = false;
+                for e in &self.entries[..i] {
+                    if e.element_type == entry.parent_type {
+                        has_parent = true;
+                        break;
+                    }
+                }
+                if !has_parent {
+                    return Err(Error::BadParent { toc_index: i });
+                }
             }
         }
 
@@ -625,7 +649,7 @@ pub(crate) mod test {
             "elements": [{
                 "platform_id": "blah",
                 "children": [{
-                    "platform_id": "blah2",
+                    "blank_byte": "0x55",
                     "hashed": false
                 }]
             }]
@@ -660,7 +684,7 @@ pub(crate) mod test {
         assert_eq!(children.len(), 1);
         let second = children[0];
         assert_eq!(second.index(), 1);
-        assert_eq!(second.element_type(), pfm::ElementType::PlatformId);
+        assert_eq!(second.element_type(), pfm::ElementType::FlashDevice);
         assert_eq!(second.parent().unwrap().index(), 0);
         assert!(second.hash().is_none());
     }

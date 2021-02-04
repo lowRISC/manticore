@@ -297,7 +297,7 @@ impl<E: Element> Container<E> {
         fn encode_elements<E: Element>(
             nodes: &[Node<E>],
             padding_byte: u8,
-            parent_index: u8,
+            parent_type: u8,
             index: &mut u8,
             hash_index: &mut u8,
             offset: &mut u16,
@@ -316,16 +316,18 @@ impl<E: Element> Container<E> {
                 }
 
                 let data = node.element.to_bytes(padding_byte)?;
-                let len: u16 = data
+                let len = data
                     .len()
                     .try_into()
                     .map_err(|_| EncodingError::OutOfSpace)?;
+
+                let element_type = node.element.element_type().to_wire_value();
                 let entry = RawTocEntry {
-                    element_type: node.element.element_type().to_wire_value(),
+                    element_type,
                     format_version: 0, // TODO(#59)
                     offset: *offset,
                     len,
-                    parent_type: parent_index,
+                    parent_type,
                     hash_idx: if node.hashed { *hash_index } else { 0xff },
                 };
 
@@ -340,11 +342,10 @@ impl<E: Element> Container<E> {
 
                 out.push((entry, data));
 
-                let this_index = *index - 1;
                 encode_elements(
                     &node.children,
                     padding_byte,
-                    this_index,
+                    element_type,
                     index,
                     hash_index,
                     offset,
