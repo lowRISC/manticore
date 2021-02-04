@@ -47,19 +47,19 @@ use crate::protocol::wire::WireEnum as _;
 wire_enum! {
     /// A PFM element type.
     pub enum ElementType: u8 {
+      /// A bytestring identifier for the platform that this PFM describes.
+      PlatformId = 0x01,
+
       /// A `FlashDevice` defines global information pertinent to the entire
       /// flash device a particular PFM describes.
-      FlashDevice = 0x00,
+      FlashDevice = 0x10,
 
       /// A list of firmware versions (i.e., contents of flash) allowed by
       /// policy on the flash device a particular PFM describes.
-      AllowableFw = 0x01,
+      AllowableFw = 0x11,
 
       /// A firmware version, as a subelement of an `AllowableFw`.
-      FwVersion = 0x02,
-
-      /// A bytestring identifier for the platform that this PFM describes.
-      PlatformId = 0x03,
+      FwVersion = 0x12,
     }
 }
 
