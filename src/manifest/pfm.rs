@@ -783,10 +783,11 @@ mod test {
 
     use crate::crypto::ring;
     use crate::crypto::sha256::Builder as _;
-    use crate::crypto::testdata;
+    use crate::crypto::testdata::rsa as test_rsa;
     use crate::hardware::flash::Ram;
     use crate::io::Write as _;
     use crate::manifest::owned;
+    use crate::manifest::testdata;
     use crate::manifest::ManifestType;
     use crate::manifest::Metadata;
     use crate::mem::BumpArena;
@@ -797,7 +798,7 @@ mod test {
     #[test]
     fn empty() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = testdata::rsa();
+        let (mut rsa, mut signer) = test_rsa();
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
@@ -824,7 +825,7 @@ mod test {
     #[test]
     fn platform_id() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = testdata::rsa();
+        let (mut rsa, mut signer) = test_rsa();
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
@@ -850,7 +851,7 @@ mod test {
     #[test]
     fn fw_versions() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = testdata::rsa();
+        let (mut rsa, mut signer) = test_rsa();
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
@@ -964,5 +965,66 @@ mod test {
         assert_eq!(imgs[1].region(0), Some(Region::new(0x20000, 0x800)));
         assert_eq!(imgs[1].region(1), Some(Region::new(0x28000, 0x1000)));
         assert!(imgs[1].region(2).is_none());
+    }
+
+    #[test]
+    fn baked_pfm1() {
+        let sha = ring::sha256::Builder::new();
+        let (mut rsa, mut signer) = test_rsa();
+        let mut arena = vec![0; 1024];
+        let arena = BumpArena::new(&mut arena);
+
+        let bytes = Ram(testdata::PFM_RSA1);
+        // NOTE: Manticore and Cerberus currently have inconsistent signing
+        // schemes, so we disable signature verification (for now).
+        /*let container = Container::parse_and_verify(
+            &bytes,
+            &sha,
+            &mut rsa,
+            &arena,
+            &OutOfMemory,
+        )
+        .unwrap();*/
+        let container = Container::parse(&bytes, &arena).unwrap();
+        let pfm = Pfm::new(container);
+
+        let device =
+            pfm.flash_device_info(&sha, &OutOfMemory).unwrap().unwrap();
+        assert_eq!(device.blank_byte(), 0xff);
+
+        let mut allowed_fws = pfm.allowable_fws().map(Some).collect::<Vec<_>>();
+        assert_eq!(allowed_fws.len(), 1);
+
+        let allowed = allowed_fws[0]
+            .take()
+            .unwrap()
+            .read(&sha, &OutOfMemory)
+            .unwrap();
+        assert_eq!(allowed.firmware_id(), b"Firmware");
+
+        let mut arena = [0; 256];
+        let arena = BumpArena::new(&mut arena);
+        let mut versions =
+            allowed.firmware_versions().map(Some).collect::<Vec<_>>();
+        assert_eq!(allowed_fws.len(), 1);
+
+        let fw = versions[0].take().unwrap().read(&sha, &arena).unwrap();
+        assert_eq!(
+            fw.version(),
+            (Region::new(0x12345, 7), b"Testing".as_ref())
+        );
+        assert_eq!(fw.rw_count(), 1);
+        assert_eq!(fw.image_count(), 1);
+
+        let rws = fw.rw_regions().collect::<Vec<_>>();
+        assert_eq!(rws.len(), 1);
+        assert_eq!(rws[0].region(), Region::new(0x200_0000, 0x200_0000));
+
+        let imgs = fw.image_regions().collect::<Vec<_>>();
+        assert_eq!(imgs.len(), 1);
+
+        assert_eq!(imgs[0].region_count(), 1);
+        assert_eq!(imgs[0].region(0), Some(Region::new(0x0, 0x200_0000)));
+        assert!(imgs[0].region(1).is_none());
     }
 }
