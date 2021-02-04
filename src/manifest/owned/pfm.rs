@@ -16,6 +16,7 @@ use crate::hardware::flash::Flash;
 use crate::hardware::flash::Region;
 use crate::manifest;
 use crate::manifest::owned;
+use crate::manifest::owned::EncodingError;
 use crate::manifest::pfm::ElementType;
 use crate::manifest::provenance;
 use crate::manifest::Error;
@@ -148,7 +149,7 @@ impl owned::Element for Element {
         }
     }
 
-    fn to_bytes(&self, padding_byte: u8) -> Result<Vec<u8>, Error> {
+    fn to_bytes(&self, padding_byte: u8) -> Result<Vec<u8>, EncodingError> {
         match self {
             Self::FlashDevice { blank_byte } => {
                 let mut bytes = vec![padding_byte; 4];
@@ -160,10 +161,10 @@ impl owned::Element for Element {
                 firmware_id,
                 flags,
             } => {
-                let id_len: u8 = firmware_id
-                    .len()
-                    .try_into()
-                    .map_err(|_| Error::OutOfRange)?;
+                let id_len: u8 =
+                    firmware_id.len().try_into().map_err(|_| {
+                        EncodingError::StringTooLong(firmware_id.clone())
+                    })?;
                 let mut bytes =
                     vec![*version_count, id_len, *flags, padding_byte];
 
@@ -183,15 +184,15 @@ impl owned::Element for Element {
                 let rw_len: u8 = rw_regions
                     .len()
                     .try_into()
-                    .map_err(|_| Error::OutOfRange)?;
+                    .map_err(|_| EncodingError::TooManyElements)?;
                 let img_len: u8 = image_regions
                     .len()
                     .try_into()
-                    .map_err(|_| Error::OutOfRange)?;
-                let version_len: u8 = version_str
-                    .len()
-                    .try_into()
-                    .map_err(|_| Error::OutOfRange)?;
+                    .map_err(|_| EncodingError::TooManyElements)?;
+                let version_len: u8 =
+                    version_str.len().try_into().map_err(|_| {
+                        EncodingError::StringTooLong(version_str.clone())
+                    })?;
                 let mut bytes =
                     vec![img_len, rw_len, version_len, padding_byte];
                 bytes.extend_from_slice(&version_addr.to_le_bytes());
@@ -206,8 +207,10 @@ impl owned::Element for Element {
                     header[0] = rw.flags;
                     bytes.extend_from_slice(&header);
 
-                    let (start, end) =
-                        rw.region.start_and_limit().ok_or(Error::OutOfRange)?;
+                    let (start, end) = rw
+                        .region
+                        .start_and_limit()
+                        .ok_or(EncodingError::EmptyRegion)?;
                     bytes.extend_from_slice(&start.to_le_bytes());
                     bytes.extend_from_slice(&end.to_le_bytes());
                 }
@@ -217,7 +220,7 @@ impl owned::Element for Element {
                         .regions
                         .len()
                         .try_into()
-                        .map_err(|_| Error::OutOfRange)?;
+                        .map_err(|_| EncodingError::TooManyElements)?;
                     bytes.extend_from_slice(&[
                         image.hash_type.to_wire_value(),
                         reg_len,
@@ -228,7 +231,7 @@ impl owned::Element for Element {
                     for region in &image.regions {
                         let (start, end) = region
                             .start_and_limit()
-                            .ok_or(Error::OutOfRange)?;
+                            .ok_or(EncodingError::EmptyRegion)?;
                         bytes.extend_from_slice(&start.to_le_bytes());
                         bytes.extend_from_slice(&end.to_le_bytes());
                     }
@@ -237,8 +240,10 @@ impl owned::Element for Element {
                 Ok(bytes)
             }
             Self::PlatformId { platform_id: id } => {
-                let id_len: u8 =
-                    id.len().try_into().map_err(|_| Error::OutOfRange)?;
+                let id_len: u8 = id
+                    .len()
+                    .try_into()
+                    .map_err(|_| EncodingError::StringTooLong(id.clone()))?;
                 let mut bytes = vec![padding_byte; 4];
                 bytes[0] = id_len;
 

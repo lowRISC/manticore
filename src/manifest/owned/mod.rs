@@ -62,7 +62,7 @@ pub trait Element: Sized {
 
     /// Attempts to encode this `Element` into bytes, using the given
     /// padding byte as "filler".
-    fn to_bytes(&self, padding_byte: u8) -> Result<Vec<u8>, Error>;
+    fn to_bytes(&self, padding_byte: u8) -> Result<Vec<u8>, EncodingError>;
 }
 
 /// An "owned" manifest element that can be built from its unowned counterpart.
@@ -152,6 +152,47 @@ pub struct Parse<E> {
     pub bad_hashes: Vec<usize>,
 }
 
+/// An error returned by an encoding operation.
+#[derive(Clone, Debug)]
+pub enum EncodingError {
+    /// Indicates that the manifest had more elements than could be encoded,
+    /// due to hard limits in the manifest format.
+    ///
+    /// This error may refer too top-level elements in the manifest itself,
+    /// or a variable-length portion of a manifest element.
+    TooManyElements,
+
+    /// Indicates that the manifest would simply be unable to fit the necessary
+    /// data (i.e., a length overflowed 16 bits).
+    OutOfSpace,
+
+    /// Indicates that a byte string to encode was too long.
+    ///
+    /// The bad string is included in the error.
+    StringTooLong(Vec<u8>),
+
+    /// Indicates a range was empty when it shouldn't have been.
+    EmptyRegion,
+
+    /// Indicates an error while computing a hash.
+    HashError(sha256::Error),
+
+    /// Indicates an error while computing an RSA signature.
+    RsaError(rsa::Error),
+}
+
+impl<E> From<sha256::Error<E>> for EncodingError {
+    fn from(e: sha256::Error<E>) -> Self {
+        Self::HashError(e.erased())
+    }
+}
+
+impl<E> From<rsa::Error<E>> for EncodingError {
+    fn from(e: rsa::Error<E>) -> Self {
+        Self::RsaError(e.erased())
+    }
+}
+
 impl<E: Element> Container<E> {
     /// Parses a `Container` out of `bytes`.
     ///
@@ -202,7 +243,9 @@ impl<E: Element> Container<E> {
             let region = entry.region();
             let start = region.offset as usize;
             let end = region.end() as usize;
-            let bytes = bytes.get(start..end).ok_or(Error::OutOfRange)?;
+            let bytes = bytes
+                .get(start..end)
+                .ok_or(Error::TooShort { toc_index: i })?;
 
             let mut hash = [0; 32];
             sha.hash_contiguous(bytes, &mut hash)?;
@@ -224,15 +267,17 @@ impl<E: Element> Container<E> {
         padding_byte: u8,
         sha: &impl sha256::Builder,
         rsa: &mut impl rsa::Signer,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>, EncodingError> {
         let mut bytes = Vec::new();
         let mut w = StdWrite(&mut bytes);
-        w.write_le(0u16)?; // To be filled in later.
-        w.write_le(E::TYPE.to_wire_value())?;
-        w.write_le(self.metadata.version_id)?;
-        w.write_le(rsa.pub_len().byte_len() as u16)?;
-        w.write_le(0u8)?; // Should be sig_type.
-        w.write_le(padding_byte)?;
+
+        // NOTE: because we're writing to a vector, none of these can fail.
+        let _ = w.write_le(0u16); // To be filled in later.
+        let _ = w.write_le(E::TYPE.to_wire_value());
+        let _ = w.write_le(self.metadata.version_id);
+        let _ = w.write_le(rsa.pub_len().byte_len() as u16);
+        let _ = w.write_le(0u8); // Should be sig_type.
+        let _ = w.write_le(padding_byte);
 
         let mut index = 0;
         let mut hash_index = 0;
@@ -257,18 +302,24 @@ impl<E: Element> Container<E> {
             hash_index: &mut u8,
             offset: &mut u16,
             out: &mut Vec<(RawTocEntry, Vec<u8>)>,
-        ) -> Result<(), Error> {
+        ) -> Result<(), EncodingError> {
             for node in nodes {
+                // We've run out of hash slots, so this manifest is
+                // unencodeable.
                 if node.hashed && *hash_index == 0xff {
-                    return Err(Error::OutOfRange);
+                    return Err(EncodingError::TooManyElements);
                 }
+
+                // Same here: we've run out of parent indices.
                 if !node.children.is_empty() && *index == 0xff {
-                    return Err(Error::OutOfRange);
+                    return Err(EncodingError::TooManyElements);
                 }
 
                 let data = node.element.to_bytes(padding_byte)?;
-                let len =
-                    data.len().try_into().map_err(|_| Error::OutOfRange)?;
+                let len: u16 = data
+                    .len()
+                    .try_into()
+                    .map_err(|_| EncodingError::OutOfSpace)?;
                 let entry = RawTocEntry {
                     element_type: node.element.element_type().to_wire_value(),
                     format_version: 0, // TODO(#59)
@@ -278,8 +329,11 @@ impl<E: Element> Container<E> {
                     hash_idx: if node.hashed { *hash_index } else { 0xff },
                 };
 
-                *index = index.checked_add(1).ok_or(Error::OutOfRange)?;
-                *offset = offset.checked_add(len).ok_or(Error::OutOfRange)?;
+                *index = index
+                    .checked_add(1)
+                    .ok_or(EncodingError::TooManyElements)?;
+                *offset =
+                    offset.checked_add(len).ok_or(EncodingError::OutOfSpace)?;
                 if node.hashed {
                     *hash_index += 1;
                 }
@@ -314,14 +368,15 @@ impl<E: Element> Container<E> {
             + toc.len()
             + encoded.len() * mem::size_of::<RawTocEntry>()
             + (hash_index as usize + 1) * mem::size_of::<sha256::Digest>();
-        let header_len: u16 =
-            header_len.try_into().map_err(|_| Error::OutOfRange)?;
+        let header_len: u16 = header_len
+            .try_into()
+            .map_err(|_| EncodingError::OutOfSpace)?;
 
         for (entry, data) in &mut encoded {
             entry.offset = entry
                 .offset
                 .checked_add(header_len)
-                .ok_or(Error::OutOfRange)?;
+                .ok_or(EncodingError::OutOfSpace)?;
             toc.extend_from_slice(entry.as_bytes());
 
             if entry.hash_idx != 0xff {
@@ -342,7 +397,7 @@ impl<E: Element> Container<E> {
 
         let total_len: u16 = (bytes.len() + rsa.pub_len().byte_len())
             .try_into()
-            .map_err(|_| Error::OutOfRange)?;
+            .map_err(|_| EncodingError::OutOfSpace)?;
         bytes[0..2].copy_from_slice(&total_len.to_le_bytes());
 
         let mut signed = [0; 32];
