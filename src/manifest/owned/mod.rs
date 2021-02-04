@@ -325,7 +325,7 @@ impl<E: Element> Container<E> {
                     format_version: 0, // TODO(#59)
                     offset: *offset,
                     len,
-                    parent_idx: parent_index,
+                    parent_type: parent_index,
                     hash_idx: if node.hashed { *hash_index } else { 0xff },
                 };
 

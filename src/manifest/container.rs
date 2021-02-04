@@ -69,11 +69,11 @@ wire_enum! {
 #[repr(C)]
 pub(crate) struct RawTocEntry {
     pub element_type: u8,
+    pub parent_type: u8,
     pub format_version: u8,
+    pub hash_idx: u8,
     pub offset: u16,
     pub len: u16,
-    pub parent_idx: u8,
-    pub hash_idx: u8,
 }
 
 /// An entry to a manifest's table of contents.
@@ -124,7 +124,7 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
 
     /// Returns this entry's parent, if it has one.
     pub fn parent(self) -> Option<Self> {
-        match self.raw().parent_idx {
+        match self.raw().parent_type {
             0xff => None,
             x => Some(
                 self.toc
@@ -146,7 +146,7 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
     pub fn children(self) -> impl Iterator<Item = TocEntry<'entry, 'toc, M>> {
         self.toc
             .entries()
-            .filter(move |e| self.index == e.raw().parent_idx as usize)
+            .filter(move |e| self.index == e.raw().parent_type as usize)
     }
 }
 
@@ -229,8 +229,8 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
                 return Err(Error::BadHashIndex { toc_index: i });
             }
 
-            if entry.parent_idx != 0xff
-                && self.entries.len() <= entry.parent_idx as usize
+            if entry.parent_type != 0xff
+                && self.entries.len() <= entry.parent_type as usize
             {
                 return Err(Error::BadParent { toc_index: i });
             }
