@@ -89,6 +89,8 @@ impl Manifest for Pfm {
     fn min_version(_: ElementType) -> u8 {
         0
     }
+
+    type Guarded = ();
 }
 
 impl<'f, F: 'f + Flash, P> Parse<'f, F, P> for Pfm {
@@ -123,7 +125,6 @@ impl<'f, F: 'f + Flash, P> Parse<'f, F, P> for Pfm {
         Ok(())
     }
 
-    type Guarded = ();
     fn validate(
         _manifest: &Self::Parsed,
         _when: ValidationTime,
