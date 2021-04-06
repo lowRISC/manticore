@@ -71,12 +71,17 @@ pub trait Element: Sized {
 #[doc(hidden)]
 pub trait FromUnowned<'f, F: Flash>: Element {
     /// The "unowned" type.
-    type Unowned: Manifest;
+    type Manifest: Manifest;
 
     /// Walks a parsed container of this manifest type, building a tree of
     /// elements along the way.
     fn from_container(
-        container: manifest::Container<'f, Self::Unowned, F, provenance::Adhoc>,
+        container: manifest::Container<
+            'f,
+            Self::Manifest,
+            F,
+            provenance::Adhoc,
+        >,
     ) -> Result<Vec<Node<Self>>, Error>;
 }
 
@@ -218,11 +223,12 @@ impl<E: Element> Container<E> {
         };
 
         let ram = Ram(bytes);
-        let container =
-            manifest::Container::<'_, E::Unowned, _, provenance::Adhoc>::parse(
-                &ram,
-                &OutOfMemory,
-            )?;
+        let container = manifest::Container::<
+            '_,
+            E::Manifest,
+            _,
+            provenance::Adhoc,
+        >::parse(&ram, &OutOfMemory)?;
         // TODO(#58): Right now we ignore a bunch of "implied" fields in the
         // manifest, but we may want to either reject failures, use them,
         // or simply report them.
