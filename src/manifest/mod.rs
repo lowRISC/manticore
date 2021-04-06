@@ -224,10 +224,15 @@ impl<E> From<sha256::Error<E>> for Error {
 
 /// A manifest type.
 ///
-/// All manifest types implement this trait, which tracks type information
-/// about a particular manifest type (e.g., the PFM) that can be used by shared
-/// generic code.
-pub trait Manifest {
+/// A type that implements this trait is not itself a "parsed" instance of the
+/// manifest. Rather, it is a sort of marker type that records static
+/// information about the manifest type.
+///
+/// For example [`pfm::Pfm`] implements `Manifest`, but is not an instantiable
+/// type. When projected through [`Parse`] with a specific [`Flash`] type,
+/// [`Parse::Parsed`] is [`pfm::ParsedPfm<...>`] with appropriate choices for
+/// the type parameters.
+pub trait Manifest: Sized {
     /// A `WireEnum` representing the different kinds of valid element types
     /// for a Manifest that Manticore understands.
     type ElementType: WireEnum<Wire = u8>;
@@ -240,6 +245,70 @@ pub trait Manifest {
     /// Manticore. All manifest elements must be future-compatible, so knowing
     /// a "maximum version" is not necessary.
     fn min_version(ty: Self::ElementType) -> u8;
+}
+
+/// A moment in which a [`Parse`]able manifest is validated.
+///
+/// Some manifests may choose to skip parts of the validation process on
+/// startup; this enum is used to indicate when validation is occurring to
+/// [`Parse::validate()`].
+pub enum ValidationTime {
+    /// Indicates "startup", i.e., a manifest already present in device flash
+    /// is being parsed. Some integrations may choose to skip validation at
+    /// this stage.
+    Startup,
+    /// Indicates "activation", i.e., when a manifest that came from the
+    /// outside world is about to replace the current one. All checks are
+    /// performed at this time.
+    Activation,
+}
+
+/// A subtrait of [`Manifest`] that describes how to parse a manifest from a
+/// specific [`Container`] specialization.
+///
+/// Users of this trait should, given `M: Manifest` and a flash type `MyFlash`
+/// in a function signature, include a further bound of
+/// `M: Parse<'f, MyFlash, ...>` to obtain the appropriate specialized parsing
+/// function.
+pub trait Parse<'f, Flash, Provenance>: Manifest {
+    /// The actual type the parsing operation produces.
+    type Parsed: ParsedManifest;
+
+    /// Parses a manifest of this type out of `container`.
+    fn parse(
+        container: Container<'f, Self, Flash, Provenance>,
+    ) -> Result<Self::Parsed, Error>;
+
+    /// Copies the serialized contents of `manifest` to `dest`.
+    ///
+    /// `dest` may be an altogether different flash type from the one
+    /// `manifest` originated from.
+    fn copy_to<F: flash::Flash>(
+        manifest: &Self::Parsed,
+        dest: &mut F,
+    ) -> Result<(), Error>;
+
+    /// The type of data this manifest guards.
+    type Guarded;
+    /// Validates that `manifest` is "valid"; that is, whatever state of
+    /// the system this manifest protects is consistent with the manifest's
+    /// expectation.
+    ///
+    /// Some manifests may not have anything interesting to do here; in that
+    /// case `Self::Guarded` should be `()` and this function should do
+    /// nothing.
+    fn validate(
+        manifest: &Self::Parsed,
+        when: ValidationTime,
+        args: &Self::Guarded,
+    ) -> Result<(), Error>;
+}
+
+/// A trait for providing a reverse mapping from a [`Parse::Parsed`] type back
+/// to the [`Manifest`] marker type.
+pub trait ParsedManifest: Sized {
+    /// The [`Manifest`] type associated with this manifest.
+    type Manifest: Manifest;
 }
 
 /// Manifest provenances.

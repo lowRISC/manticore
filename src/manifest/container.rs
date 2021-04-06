@@ -583,15 +583,14 @@ pub(crate) mod test {
         let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
         type Flash = Ram<Vec<u8>>;
 
-        let container: Container<'_, Pfm<'_, Flash>, Flash> =
-            Container::parse_and_verify(
-                &bytes,
-                &sha,
-                &mut rsa,
-                &OutOfMemory,
-                &OutOfMemory,
-            )
-            .unwrap();
+        let container: Container<'_, Pfm, Flash> = Container::parse_and_verify(
+            &bytes,
+            &sha,
+            &mut rsa,
+            &OutOfMemory,
+            &OutOfMemory,
+        )
+        .unwrap();
         assert_eq!(container.metadata().version_id, 42);
 
         let toc = container.toc();
@@ -614,15 +613,14 @@ pub(crate) mod test {
         let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
         type Flash = Ram<Vec<u8>>;
 
-        let container: Container<'_, Pfm<'_, Flash>, Flash> =
-            Container::parse_and_verify(
-                &bytes,
-                &sha,
-                &mut rsa,
-                &OutOfMemory,
-                &OutOfMemory,
-            )
-            .unwrap();
+        let container: Container<'_, Pfm, Flash> = Container::parse_and_verify(
+            &bytes,
+            &sha,
+            &mut rsa,
+            &OutOfMemory,
+            &OutOfMemory,
+        )
+        .unwrap();
 
         let toc = container.toc();
         assert_eq!(toc.len(), 1);
@@ -658,15 +656,14 @@ pub(crate) mod test {
         let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
         type Flash = Ram<Vec<u8>>;
 
-        let container: Container<'_, Pfm<'_, Flash>, Flash> =
-            Container::parse_and_verify(
-                &bytes,
-                &sha,
-                &mut rsa,
-                &OutOfMemory,
-                &OutOfMemory,
-            )
-            .unwrap();
+        let container: Container<'_, Pfm, Flash> = Container::parse_and_verify(
+            &bytes,
+            &sha,
+            &mut rsa,
+            &OutOfMemory,
+            &OutOfMemory,
+        )
+        .unwrap();
 
         let toc = container.toc();
         assert_eq!(toc.len(), 2);

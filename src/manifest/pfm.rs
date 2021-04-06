@@ -17,9 +17,9 @@
 //! ensuring that all data read from flash is protected by the original
 //! signature check.
 //!
-//! The [`Pfm`] type is the entry-point for this module.
+//! The [`ParsedPfm`] type is the entry-point for this module.
 //!
-//! [`Pfm`]: struct.Pfm.html
+//! [`ParsedPfm`]: struct.ParsedPfm.html
 
 use core::mem;
 
@@ -37,7 +37,10 @@ use crate::manifest::Error;
 use crate::manifest::HashType;
 use crate::manifest::Manifest;
 use crate::manifest::ManifestType;
+use crate::manifest::Parse;
+use crate::manifest::ParsedManifest;
 use crate::manifest::TocEntry;
+use crate::manifest::ValidationTime;
 use crate::mem::misalign_of;
 use crate::mem::Arena;
 
@@ -69,11 +72,17 @@ wire_enum! {
 /// using it to extract other portions of the PFM.
 ///
 /// This type only maintains the TOC in memory for book-keeping.
-pub struct Pfm<'pfm, Flash, Provenance = provenance::Signed> {
-    container: Container<'pfm, Self, Flash, Provenance>,
+pub struct ParsedPfm<'pfm, Flash, Provenance = provenance::Signed> {
+    container: Container<'pfm, Pfm, Flash, Provenance>,
 }
 
-impl<F, P> Manifest for Pfm<'_, F, P> {
+/// A [`Manifest`] implementation mapping onto [`ParsedPfm`], for use in generic
+/// contexts.
+///
+/// See [`Manifest`] and [`Parse`].
+pub enum Pfm {}
+
+impl Manifest for Pfm {
     type ElementType = ElementType;
     const TYPE: ManifestType = ManifestType::Pfm;
 
@@ -82,14 +91,60 @@ impl<F, P> Manifest for Pfm<'_, F, P> {
     }
 }
 
-impl<'pfm, F, P> Pfm<'pfm, F, P> {
-    /// Creates a new PFM handle using the given `Container`.
-    pub fn new(container: Container<'pfm, Self, F, P>) -> Self {
-        Pfm { container }
+impl<'f, F: 'f + Flash, P> Parse<'f, F, P> for Pfm {
+    type Parsed = ParsedPfm<'f, F, P>;
+
+    fn parse(
+        container: Container<'f, Self, F, P>,
+    ) -> Result<Self::Parsed, Error> {
+        Ok(ParsedPfm::new(container))
+    }
+
+    fn copy_to<F2: Flash>(
+        manifest: &Self::Parsed,
+        dest: &mut F2,
+    ) -> Result<(), Error> {
+        let src = manifest.container.flash();
+        let len = src.size()? as usize;
+        let mut bytes_left = len;
+
+        let mut buf = [0; 32];
+        while bytes_left > 0 {
+            let bytes_to_copy = bytes_left.min(buf.len());
+            let buf = &mut buf[..bytes_to_copy];
+
+            let offset = (len - bytes_left) as u32;
+            src.read(offset, buf)?;
+            dest.program(offset, buf)?;
+
+            bytes_left -= bytes_to_copy;
+        }
+        dest.flush()?;
+        Ok(())
+    }
+
+    type Guarded = ();
+    fn validate(
+        _manifest: &Self::Parsed,
+        _when: ValidationTime,
+        _args: &Self::Guarded,
+    ) -> Result<(), Error> {
+        Ok(())
     }
 }
 
-impl<'pfm, F: Flash, P> Pfm<'pfm, F, P>
+impl<F, P> ParsedManifest for ParsedPfm<'_, F, P> {
+    type Manifest = Pfm;
+}
+
+impl<'pfm, F, P> ParsedPfm<'pfm, F, P> {
+    /// Creates a new PFM handle using the given `Container`.
+    pub fn new(container: Container<'pfm, Pfm, F, P>) -> Self {
+        ParsedPfm { container }
+    }
+}
+
+impl<'pfm, F: Flash, P> ParsedPfm<'pfm, F, P>
 where
     P: Provenance,
 {
@@ -102,7 +157,7 @@ where
         &'a self,
         sha: &impl sha256::Builder,
         arena: &'pfm impl Arena,
-    ) -> Result<Option<PlatformId<'a, 'pfm, F, P>>, Error> {
+    ) -> Result<Option<PlatformId<'a, 'pfm>>, Error> {
         let entry =
             match self.container.toc().singleton(ElementType::PlatformId) {
                 Some(x) => x,
@@ -164,7 +219,7 @@ where
         &'a self,
         sha: &impl sha256::Builder,
         arena: &'pfm impl Arena,
-    ) -> Result<Option<FlashDeviceInfo<'a, 'pfm, F, P>>, Error> {
+    ) -> Result<Option<FlashDeviceInfo<'a, 'pfm>>, Error> {
         let entry =
             match self.container.toc().singleton(ElementType::FlashDevice) {
                 Some(x) => x,
@@ -226,15 +281,15 @@ where
 }
 
 /// An identifier for the platform a PFM is for.
-pub struct PlatformId<'a, 'pfm, Flash, Provenance = provenance::Signed> {
+pub struct PlatformId<'a, 'pfm> {
     _data: &'pfm [u8],
-    entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash, Provenance>>,
+    entry: TocEntry<'a, 'pfm, Pfm>,
     id: &'pfm [u8],
 }
 
-impl<'a, 'pfm, F, P> PlatformId<'a, 'pfm, F, P> {
+impl<'a, 'pfm> PlatformId<'a, 'pfm> {
     /// Returns the `Toc` entry defining this element.
-    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm> {
         self.entry
     }
 
@@ -249,15 +304,15 @@ impl<'a, 'pfm, F, P> PlatformId<'a, 'pfm, F, P> {
 ///
 /// Note that this is distinct from the flash device that the PFM itself is
 /// stored in.
-pub struct FlashDeviceInfo<'a, 'pfm, Flash, Provenance = provenance::Signed> {
+pub struct FlashDeviceInfo<'a, 'pfm> {
     _data: &'pfm [u8],
-    entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash, Provenance>>,
+    entry: TocEntry<'a, 'pfm, Pfm>,
     blank_byte: u8,
 }
 
-impl<'a, 'pfm, F, P> FlashDeviceInfo<'a, 'pfm, F, P> {
+impl<'a, 'pfm> FlashDeviceInfo<'a, 'pfm> {
     /// Returns the `Toc` entry defining this element.
-    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm> {
         self.entry
     }
 
@@ -274,13 +329,13 @@ impl<'a, 'pfm, F, P> FlashDeviceInfo<'a, 'pfm, F, P> {
 /// An "allowable firmware" element entry in a PFM's `Toc`.
 ///
 /// This type allows for lazily reading the [`AllowableFw`] described by this
-/// entry, as obtained from [`Pfm::allowable_firmware()`].
+/// entry, as obtained from [`ParsedPfm::allowable_firmware()`].
 ///
 /// [`AllowableFw`]: struct.AllowableFw.html
-/// [`Pfm::allowable_firmware()`]: struct.Pfm.html#method.allowable_firmware
+/// [`ParsedPfm::allowable_firmware()`]: struct.ParsedPfm.html#method.allowable_firmware
 pub struct AllowableFwEntry<'a, 'pfm, Flash, Provenance = provenance::Signed> {
-    pfm: &'a Pfm<'pfm, Flash, Provenance>,
-    entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash, Provenance>>,
+    pfm: &'a ParsedPfm<'pfm, Flash, Provenance>,
+    entry: TocEntry<'a, 'pfm, Pfm>,
 }
 
 impl<'a, 'pfm, F: Flash, P> AllowableFwEntry<'a, 'pfm, F, P>
@@ -288,7 +343,7 @@ where
     P: Provenance,
 {
     /// Returns the `Toc` entry defining this element.
-    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm> {
         self.entry
     }
 
@@ -352,10 +407,10 @@ where
 /// An "allowable firmware" element from a PFM, describing how platform
 /// firmware is expected to be laid out in memory.
 ///
-/// To obtain a value of this type, see [`Pfm::allowable_firmware()`] and
+/// To obtain a value of this type, see [`ParsedPfm::allowable_firmware()`] and
 /// [`AllowableFwEntry::read()`].
 ///
-/// [`Pfm::allowable_firmware()`]: struct.Pfm.html#method.allowable_firmware
+/// [`ParsedPfm::allowable_firmware()`]: struct.ParsedPfm.html#method.allowable_firmware
 /// [`AllowableFwEntry::read()`]: struct.AllowableFwEntry.html#method.read
 pub struct AllowableFw<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     entry: AllowableFwEntry<'a, 'pfm, Flash, Provenance>,
@@ -367,7 +422,7 @@ pub struct AllowableFw<'a, 'pfm, Flash, Provenance = provenance::Signed> {
 
 impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
     /// Returns the `Toc` entry defining this element.
-    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm> {
         self.entry.entry
     }
 
@@ -416,7 +471,7 @@ impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
 /// [`AllowableFw::firmware_versions()`]: struct.AllowableFw.html#method.firmware_versions
 pub struct FwVersionEntry<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     version: &'a AllowableFw<'a, 'pfm, Flash, Provenance>,
-    entry: TocEntry<'a, 'pfm, Pfm<'pfm, Flash, Provenance>>,
+    entry: TocEntry<'a, 'pfm, Pfm>,
 }
 
 impl<'a, 'pfm, F: Flash, P> FwVersionEntry<'a, 'pfm, F, P>
@@ -424,7 +479,7 @@ where
     P: Provenance,
 {
     /// Returns the `Toc` entry defining this element.
-    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm> {
         self.entry
     }
 
@@ -590,7 +645,7 @@ pub struct FwVersion<'a, 'pfm, Flash, Provenance = provenance::Signed> {
 
 impl<'a, 'pfm, F, P> FwVersion<'a, 'pfm, F, P> {
     /// Returns the `Toc` entry defining this element.
-    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm<'pfm, F, P>> {
+    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm> {
         self.entry.entry
     }
 
@@ -815,7 +870,7 @@ mod test {
             &OutOfMemory,
         )
         .unwrap();
-        let pfm = Pfm::new(container);
+        let pfm = ParsedPfm::new(container);
 
         assert!(pfm.platform_id(&sha, &OutOfMemory).unwrap().is_none());
         assert!(pfm.flash_device_info(&sha, &OutOfMemory).unwrap().is_none());
@@ -842,7 +897,7 @@ mod test {
             &OutOfMemory,
         )
         .unwrap();
-        let pfm = Pfm::new(container);
+        let pfm = ParsedPfm::new(container);
 
         let id = pfm.platform_id(&sha, &OutOfMemory).unwrap().unwrap();
         assert_eq!(id.id_string(), b"my pfm");
@@ -917,7 +972,7 @@ mod test {
             &OutOfMemory,
         )
         .unwrap();
-        let pfm = Pfm::new(container);
+        let pfm = ParsedPfm::new(container);
 
         let device =
             pfm.flash_device_info(&sha, &OutOfMemory).unwrap().unwrap();
@@ -986,7 +1041,7 @@ mod test {
         )
         .unwrap();*/
         let container = Container::parse(&bytes, &arena).unwrap();
-        let pfm = Pfm::new(container);
+        let pfm = ParsedPfm::new(container);
 
         let device =
             pfm.flash_device_info(&sha, &OutOfMemory).unwrap().unwrap();

@@ -259,14 +259,19 @@ impl owned::Element for Element {
 }
 
 impl<'f, F: 'f + Flash> owned::FromUnowned<'f, F> for Element {
-    type Unowned = manifest::pfm::Pfm<'f, F, provenance::Adhoc>;
+    type Manifest = manifest::pfm::Pfm;
 
     fn from_container(
-        container: manifest::Container<'f, Self::Unowned, F, provenance::Adhoc>,
+        container: manifest::Container<
+            'f,
+            Self::Manifest,
+            F,
+            provenance::Adhoc,
+        >,
     ) -> Result<Vec<owned::Node<Self>>, Error> {
         let mut arena = vec![0; 2048];
         let mut arena = BumpArena::new(&mut arena);
-        let pfm = manifest::pfm::Pfm::new(container);
+        let pfm = manifest::pfm::ParsedPfm::new(container);
         let sha = RingSha::new();
         let mut nodes = Vec::new();
 
