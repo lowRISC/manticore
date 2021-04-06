@@ -13,7 +13,7 @@
 #   https://help.github.com/en/articles/about-code-owners
 
 # Default Owners
-*                   @mcy @gkelly @moidx
+*                   @mcy @cfrantz @moidx
 
 # License related files
 LICENSE*            @asb
