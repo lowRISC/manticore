@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Implementations of [`crypto::sha256`] based on `ring`.
-//!
-//! [`crypto::sha256`]: ../../sha256/index.html
 
 use core::convert::Infallible;
 
@@ -12,9 +10,10 @@ use ring::digest;
 
 use crate::crypto::sha256;
 
+#[cfg(doc)]
+use crate::crypto;
+
 /// A `ring`-based [`sha256::Builder`].
-///
-/// [`sha256::Builder`]: ../../sha256/trait.Builder.html
 pub struct Builder {
     _priv: (),
 }
@@ -44,10 +43,7 @@ impl sha256::Builder for Builder {
 
 /// A `ring`-based [`sha256::Hasher`].
 ///
-/// See [`ring::sha256::Builder`].
-///
-/// [`sha256::Hasher`]: ../../sha256/trait.Hasher.html
-/// [`ring::sha256::Builder`]: struct.Builder.html
+/// See [`Builder`].
 pub struct Hasher {
     ctx: digest::Context,
 }

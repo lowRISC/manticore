@@ -14,8 +14,6 @@
 //!
 //! These semantics mean that the inverse operation to a sequence of writes
 //! is a sequence of reads in the same order.
-//!
-//! [`BitBuf`]: struct.BitBuf.html
 
 use crate::io;
 

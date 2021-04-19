@@ -43,8 +43,6 @@ impl<'a> Command<'a> for FirmwareVersion {
 }
 
 /// The [`FirmwareVersion`] request.
-///
-/// [`FirmwareVersion`]: enum.FirmwareVersion.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -78,8 +76,6 @@ impl<'a> ToWire for FirmwareVersionRequest {
 
 make_fuzz_safe! {
     /// The [`FirmwareVersion`] response.
-    ///
-    /// [`FirmwareVersion`]: enum.FirmwareVersion.html
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct FirmwareVersionResponse<'a> as FVRWrap {

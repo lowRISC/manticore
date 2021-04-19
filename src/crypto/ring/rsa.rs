@@ -2,11 +2,9 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Implementations of [`crypto::sha256`] based on `ring`.
+//! Implementations of [`crypto::rsa`] based on `ring`.
 //!
-//! Requires the `std` feature flag to be enabled,
-//!
-//! [`crypto::sha256`]: ../../sha256/index.html
+//! Requires the `std` feature flag to be enabled.
 
 use ring::error::Unspecified;
 use ring::signature::KeyPair as _;
@@ -14,9 +12,10 @@ use ring::signature::RsaPublicKeyComponents;
 
 use crate::crypto::rsa;
 
+#[cfg(doc)]
+use crate::crypto;
+
 /// A `ring`-based [`rsa::PublicKey`].
-///
-/// [`rsa::PublicKey`]: ../../rsa/trait.PublicKey.html
 #[derive(Clone)]
 pub struct PublicKey {
     key: RsaPublicKeyComponents<Box<[u8]>>,
@@ -29,8 +28,6 @@ impl PublicKey {
     ///
     /// Returns `None` if the key modulus is not of one of the sanctioned sizes
     /// in [`rsa::ModulusLength`].
-    ///
-    /// [`rsa::ModulusLength`]: ../../rsa/enum.ModulusLength.html
     pub fn new(modulus: Box<[u8]>, exponent: Box<[u8]>) -> Option<Self> {
         rsa::ModulusLength::from_byte_len(modulus.len()).map(|_| Self {
             key: RsaPublicKeyComponents {
@@ -49,8 +46,6 @@ impl rsa::PublicKey for PublicKey {
 }
 
 /// A `ring`-based [`rsa::Keypair`].
-///
-/// [`rsa::Keypair`]: ../../rsa/trait.Keypair.html
 pub struct Keypair {
     keypair: ring::signature::RsaKeyPair,
 }
@@ -60,8 +55,6 @@ impl Keypair {
     ///
     /// This function will return `None` if parsing fails or if it is not one
     /// of the sanctioned sizes in [`rsa::ModulusLength`].
-    ///
-    /// [`rsa::ModulusLength`]: ../../rsa/enum.ModulusLength.html
     pub fn from_pkcs8(pkcs8: &[u8]) -> Option<Self> {
         let keypair = ring::signature::RsaKeyPair::from_pkcs8(pkcs8).unwrap();
         rsa::ModulusLength::from_byte_len(keypair.public_modulus_len())
@@ -97,9 +90,6 @@ impl rsa::Keypair for Keypair {
 }
 
 /// A `ring`-based [`rsa::Builder`] and [`rsa::SignerBuilder`].
-///
-/// [`rsa::Builder`]: ../../rsa/trait.Builder.html
-/// [`rsa::SignerBuilder`]: ../../rsa/trait.SignerBuilder.html
 pub struct Builder {
     _priv: (),
 }
@@ -144,8 +134,6 @@ impl rsa::SignerBuilder for Builder {
 }
 
 /// A `ring`-based [`rsa::Engine`].
-///
-/// [`rsa::Engine`]: ../../rsa/trait.Engine.html
 pub struct Engine {
     key: PublicKey,
 }
@@ -168,8 +156,6 @@ impl rsa::Engine for Engine {
 }
 
 /// A `ring`-based [`rsa::Signer`].
-///
-/// [`rsa::Signer`]: ../../rsa/trait.Signer.html
 pub struct Signer {
     keypair: Keypair,
 }

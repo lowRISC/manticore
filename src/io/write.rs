@@ -3,9 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Provides the [`Write`] trait, analogous to [`std::io::Write`].
-//!
-//! [`Write`]: trait.Write.html
-//! [`std::io::Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
 
 use core::mem;
 
@@ -20,10 +17,6 @@ use crate::io::endian::LeInt;
 /// [`std::io::Write`] provides approximately a superset of `Write`, with
 /// more detailed errors. [`StdWrite`] provides an implementation of
 /// `Write` in terms of [`std::io::Write`].
-///
-/// [`StdWrite`]: trait.StdWrite.html
-/// [`std::io::Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
-/// [`write_bytes()`]: trait.Write.html#tymethod.write_bytes
 pub trait Write {
     /// Attempt to write `buf` exactly to `self`.
     ///
@@ -69,20 +62,21 @@ impl Write for &'_ mut [u8] {
     }
 }
 
+// This allows us to refer to types via the `manticore` prefix in the
+// doc comments below, which is useful for clarity between `std` and
+// `manticore` IO traits.
+#[cfg(doc)]
+use crate as manticore;
+
 /// Converts a [`std::io::Write`] into a [`manticore::io::Write`].
 ///
-/// [`write_bytes()`] is implemented by simply calling [`write()`] repeatedly
-/// until every byte is written; [`manticore::io::Write`] should be implemented
-/// directly if possible.
+/// [`manticore::io::Write::write_bytes()`] is implemented by simply calling
+/// [`std::io::Write::write()`] repeatedly until every byte is written;
+/// [`manticore::io::Write`] should be implemented directly if possible.
 ///
 /// This type is provided instead of implementing [`manticore::io::Write`]
 /// directly for every [`std::io::Write`] due to trait coherence issues
 /// involving the blanket impl on `&mut _`.
-///
-/// [`std::io::Write`]: https://doc.rust-lang.org/std/io/trait.Write.html
-/// [`manticore::io::Write`]: trait.Write.html
-/// [`write_bytes()`]: trait.Write.html#tymethod.write_bytes
-/// [`write()`]: https://doc.rust-lang.org/std/io/trait.Write.html#tymethod.write
 #[cfg(feature = "std")]
 pub struct StdWrite<W>(pub W);
 

@@ -72,9 +72,6 @@
 //! into a tree based on his TOC. This requires the `std` feature, and is intended
 //! for use by tooling. The [`owned::Container`] type is the relevant entry
 //! point.
-//!
-//! [`Container`]: struct.Container.html
-//! [`owned::Container`]: owned/struct.Container.html
 
 use crate::crypto::rsa;
 use crate::crypto::sha256;
@@ -82,6 +79,9 @@ use crate::hardware::flash;
 use crate::io;
 use crate::mem::OutOfMemory;
 use crate::protocol::wire::WireEnum;
+
+#[cfg(doc)]
+use flash::Flash;
 
 mod container;
 pub use container::Container;
@@ -114,13 +114,9 @@ wire_enum! {
 #[derive(Clone, Copy, Debug)]
 pub enum Error {
     /// Indicates an error in a low-level [`io`] type.
-    ///
-    /// [`io`]: ../io/index.html
     Io(io::Error),
 
     /// Indicates that an error occured in a [`flash`] type.
-    ///
-    /// [`flash`]: ../hardware/flash/html
     Flash(flash::Error),
 
     /// Indicates that an arena ran out of memory.

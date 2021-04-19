@@ -9,8 +9,6 @@
 //! that can be transactionally read or written. Such a "device" can range
 //! from a simple Rust slice to a remote SPI flash device (or even a subregion of
 //! it!).
-//!
-//! [`Flash`]: trait.Flash.html
 
 #![allow(unsafe_code)]
 
@@ -35,8 +33,6 @@ use crate::mem::OutOfMemory;
 ///
 /// All of these errors are non-retryable; a [`Flash`] implementation should
 /// block until the operation succeeds.
-///
-/// [`Flash`]: trait.Flash.html
 #[derive(Copy, Clone, Debug)]
 pub enum Error {
     /// Indicates that an operation failed because the requested
@@ -287,8 +283,6 @@ impl<'flash, F: Flash> FlashExt<'flash> for &'flash F {
 ///
 /// For the purposes of this type, "RAM-backed" means that `AsRef<[u8]>`
 /// is implemented.
-///
-/// [`Flash`]: traits.Flash.html
 #[derive(Copy, Clone)]
 pub struct Ram<Bytes>(pub Bytes);
 
@@ -345,8 +339,6 @@ unsafe impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
 ///
 /// For the purposes of this type, "RAM-backed" means that `AsRef<[u8]>`
 /// and `AsMut<[u8]>` are implemented.
-///
-/// [`Flash`]: traits.Flash.html
 #[derive(Copy, Clone)]
 pub struct RamMut<Bytes>(pub Bytes);
 
@@ -406,13 +398,12 @@ unsafe impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
     }
 }
 
+#[cfg(doc)]
+use crate::io::{Read, Write};
+
 /// A [`Read`]/[`Write`] implementation for operating on a [`Flash`] serially.
 ///
 /// `FlashIo` also actas as an `Iterator` over the serial bytes in the [`Flash`].
-///
-/// [`Read`]: ../../io/read/trait.Read.html
-/// [`Write`]: ../../io/write/trait.Write.html
-/// [`Flash`]: trait.Flash.html
 #[derive(Copy, Clone)]
 pub struct FlashIo<F> {
     flash: F,
@@ -512,8 +503,6 @@ impl<F: Flash> io::Write for FlashIo<F> {
 ///
 /// A `Region` needs to be interpreted with respect to a [`Flash`]
 /// implementation; it is otherwise a dumb pointer-length pair.
-///
-/// [`Flash`]: trait.Flash.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, AsBytes, FromBytes)]
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

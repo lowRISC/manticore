@@ -6,10 +6,9 @@
 //! variant when `std` is unavailable.
 //!
 //! See [`Cow`].
-//!
-//! [`std::borrow::Cow`]: https://doc.rust-lang.org/std/borrow/enum.Cow.html
-//! [`Owned`]: https://doc.rust-lang.org/std/borrow/enum.Cow.html#variant.Owned
-//! [`Cow`]: struct.Cow.html
+
+#[cfg(doc)]
+use std::borrow::Cow::Owned;
 
 /// A clone-on-write smart pointer, usable even when allocation is unavailable.
 ///
@@ -19,8 +18,6 @@
 ///
 /// When `std` is disabled, any APIs of [`std::borrow::Cow`] that would require
 /// allocation are unavailable.
-///
-/// [`std::borrow::Cow`]: https://doc.rust-lang.org/std/borrow/enum.Cow.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg(not(feature = "inject-alloc"))]
 pub enum Cow<'a, B>
@@ -55,7 +52,5 @@ where
 ///
 /// When `std` is disabled, any APIs of [`std::borrow::Cow`] that would require
 /// allocation are unavailable.
-///
-/// [`std::borrow::Cow`]: https://doc.rust-lang.org/std/borrow/enum.Cow.html
 #[cfg(feature = "inject-alloc")]
 pub type Cow<'a, B> = std::borrow::Cow<'a, B>;

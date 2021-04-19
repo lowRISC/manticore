@@ -31,19 +31,16 @@
 //! let msg_bytes = cursor.take_consumed_bytes();
 //! assert_ne!(msg_bytes.len(), 0);
 //! ```
-//!
-//! [`Cursor`]: struct.Cursor.html
-//! [`Write`]: ../trait.Write.html
-//! [`ToWire`]: ../../protocol/wire/trait.ToWire.html
 
 use core::mem;
 
 use crate::io;
 use crate::io::Write;
 
+#[cfg(doc)]
+use crate::{io::Error, protocol::wire::ToWire};
+
 /// A position for using with [`Cursor::seek()`].
-///
-/// [`Cursor::seek()`]: struct.Cursor.html#method.seek
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SeekPos {
     /// Seek absolutely, from the start of the buffer.
@@ -108,7 +105,6 @@ impl<'a> Cursor<'a> {
     /// Returns [`Error::BufferExhausted`] when attempting to seek beyond the end
     /// of the buffer.
     ///
-    /// [`Error::BufferExhausted`]: enum.Error.html#variant.BufferExhausted
     ///
     /// # Example
     /// ```

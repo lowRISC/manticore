@@ -40,8 +40,6 @@ impl<'a> Command<'a> for RequestCounter {
 }
 
 /// The [`RequestCounter`] request.
-///
-/// [`RequestCounter`]: enum.RequestCounter.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -67,8 +65,6 @@ impl<'a> ToWire for RequestCounterRequest {
 }
 
 /// The [`RequestCounter`] response.
-///
-/// [`RequestCounter`]: enum.RequestCounter.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

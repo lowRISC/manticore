@@ -18,8 +18,6 @@
 //! signature check.
 //!
 //! The [`ParsedPfm`] type is the entry-point for this module.
-//!
-//! [`ParsedPfm`]: struct.ParsedPfm.html
 
 use core::mem;
 
@@ -329,10 +327,7 @@ impl<'a, 'pfm> FlashDeviceInfo<'a, 'pfm> {
 /// An "allowable firmware" element entry in a PFM's `Toc`.
 ///
 /// This type allows for lazily reading the [`AllowableFw`] described by this
-/// entry, as obtained from [`ParsedPfm::allowable_firmware()`].
-///
-/// [`AllowableFw`]: struct.AllowableFw.html
-/// [`ParsedPfm::allowable_firmware()`]: struct.ParsedPfm.html#method.allowable_firmware
+/// entry, as obtained from [`ParsedPfm::allowable_fws()`].
 pub struct AllowableFwEntry<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     pfm: &'a ParsedPfm<'pfm, Flash, Provenance>,
     entry: TocEntry<'a, 'pfm, Pfm>,
@@ -407,11 +402,8 @@ where
 /// An "allowable firmware" element from a PFM, describing how platform
 /// firmware is expected to be laid out in memory.
 ///
-/// To obtain a value of this type, see [`ParsedPfm::allowable_firmware()`] and
+/// To obtain a value of this type, see [`ParsedPfm::allowable_fws()`] and
 /// [`AllowableFwEntry::read()`].
-///
-/// [`ParsedPfm::allowable_firmware()`]: struct.ParsedPfm.html#method.allowable_firmware
-/// [`AllowableFwEntry::read()`]: struct.AllowableFwEntry.html#method.read
 pub struct AllowableFw<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     entry: AllowableFwEntry<'a, 'pfm, Flash, Provenance>,
     _data: &'pfm [u8],
@@ -465,10 +457,7 @@ impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
 /// A "firmware version" element entry in a PFM's `Toc`.
 ///
 /// This type allows for lazily reading the [`FwVersion`] described by this
-/// entry, as obtained from [`AlloawbleFw::firmware_versions()`].
-///
-/// [`FwVersion`]: struct.FwVersion.html
-/// [`AllowableFw::firmware_versions()`]: struct.AllowableFw.html#method.firmware_versions
+/// entry, as obtained from [`AllowableFw::firmware_versions()`].
 pub struct FwVersionEntry<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     version: &'a AllowableFw<'a, 'pfm, Flash, Provenance>,
     entry: TocEntry<'a, 'pfm, Pfm>,
@@ -626,11 +615,8 @@ where
 
 /// A "firmware version" element from a PFM.
 ///
-/// To obtain a value of this type, see [`AwllowableFw::firmware_versions()`] and
+/// To obtain a value of this type, see [`AllowableFw::firmware_versions()`] and
 /// [`FwVersionEntry::read()`].
-///
-/// [`AllowableFw::firmware_versions()`]: struct.AllowableFw.html#method.firmware_versions
-/// [`FwVersion::read()`]: struct.FwVersion.html#method.read
 pub struct FwVersion<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     #[allow(unused)]
     entry: FwVersionEntry<'a, 'pfm, Flash, Provenance>,
@@ -735,8 +721,6 @@ wire_enum! {
 ///
 /// This region is not hashed or protected in any way, and both reads and
 /// writes to it are permitted; it is effectively a scratch area.
-///
-/// [`FwVersion`]: struct.FwVersion.html
 #[derive(FromBytes, AsBytes)]
 #[repr(C)]
 pub struct RwRegion {
@@ -768,8 +752,6 @@ impl RwRegion {
 ///
 /// This region is protected by a hash, and only reads to it are permitted.
 /// Currently, Manticore only supports SHA-256 hashes here.
-///
-/// [`FwVersion`]: struct.FwVersion.html
 pub struct FwRegion<'a> {
     header: &'a FwRegionHeader,
     ranges: &'a [FwRegionRange],

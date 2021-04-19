@@ -44,9 +44,6 @@ pub mod pfm;
 ///
 /// `Element::ElementType` and `Element::TYPE` are analogous to the same
 /// trait items from [`Manifest`].
-///
-/// [`owned::Container`]: struct.Container.html
-/// [`Manifest`]: ../trait.Manifest.html
 #[doc(hidden)]
 pub trait Element: Sized {
     /// A `WireEnum` representing the different kinds of valid element types
@@ -87,9 +84,7 @@ pub trait FromUnowned<'f, F: Flash>: Element {
 
 /// A heap-allocated PFM.
 ///
-/// See [`manicore::manifest::pfm`] for lazy parsing out of flash.
-///
-/// [`manticore::manifest::pfm`]: ../pfm/index.html
+/// See [`manifest::pfm`] for lazy parsing out of flash.
 pub type Pfm = Container<self::pfm::Element>;
 
 /// A heap-allocated Cerberus manifest, represented as a tree structure.
@@ -141,8 +136,6 @@ pub struct Node<E> {
 /// A parsing result.
 ///
 /// See [`Container::parse()`].
-///
-/// [`Container::parse()`]: struct.Container.html#method.parse
 pub struct Parse<E> {
     /// The container resulting from the parse.
     pub container: Container<E>,

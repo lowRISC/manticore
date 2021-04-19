@@ -58,8 +58,6 @@ wire_enum! {
 }
 
 /// The [`ResetCounter`] request.
-///
-/// [`ResetCounter`]: enum.ResetCounter.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -97,8 +95,6 @@ impl<'a> ToWire for ResetCounterRequest {
 }
 
 /// The [`ResetCounter`] response.
-///
-/// [`ResetCounter`]: enum.ResetCounter.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
