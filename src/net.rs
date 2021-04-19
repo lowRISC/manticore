@@ -12,8 +12,6 @@
 //! For example, if an integration wished to recieve requests from a "host"
 //! device over a SPI line, it tie up all the necessary implementation
 //! details into a [`HostPort`] implementation.
-//!
-//! [`HostPort`]: trait.HostPort.html
 
 #![allow(missing_docs)]
 
@@ -60,7 +58,7 @@ impl From<io::Error> for Error {
 /// know how to speak the physical layer and assemble messages out of that
 /// physical layer's packets.
 ///
-/// `HostPort` uses the traits [`HostRequest`] and [`HostReply`] to describe
+/// `HostPort` uses the traits [`HostRequest`] and [`HostResponse`] to describe
 /// a generic state machine, where a request is processed and replied to.
 /// ```
 /// # use manticore::net::*;
@@ -119,10 +117,6 @@ impl From<io::Error> for Error {
 /// Implementing this trait in a way that makes the borrow checker happy is
 /// non-trivial, so [`InMemHost`] is also a useful example of how to build the
 /// required "Russian nesting dolls" of trait objects.
-///
-/// [`HostRequest`]: trait.HostRequest.html
-/// [`HostResponse`]: trait.HostResponse.html
-/// [`InMemHost`]: struct.InMemHost.html
 pub trait HostPort {
     /// Receives an incomming message from a connected host device.
     ///
@@ -133,8 +127,6 @@ pub trait HostPort {
     ///
     /// When a request begins, this function returns a [`HostRequest`], which
     /// can be used to respond to the request.
-    ///
-    /// [`HostRequest`]: trait.HostRequest.html
     fn receive(&mut self) -> Result<&mut dyn HostRequest, Error>;
 }
 assert_obj_safe!(HostPort);
@@ -158,8 +150,6 @@ pub trait HostRequest {
     /// Calling this function performs sufficient transport-level operations to
     /// begin a response, before handing off actually composing the payload to
     /// the caller via the returned [`HostResponse`].
-    ///
-    /// [`HostResponse`]: trait.HostResponse.html
     fn reply(&mut self, header: Header)
         -> Result<&mut dyn HostResponse, Error>;
 }
@@ -236,7 +226,6 @@ pub trait DeviceResponse {
 /// This type is both useful for testing, and as a demonstration of how to use
 /// a [`HostPort`] and its associated traits.
 ///
-/// [`HostPort`]: trait.HostPort.html
 ///
 /// # Example
 /// ```

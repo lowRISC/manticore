@@ -3,9 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Provides the [`Read`] trait, analogous to [`std::io::Read`].
-//!
-//! [`Read`]: trait.Read.html
-//! [`std::io::Read`]: https://doc.rust-lang.org/std/io/trait.Read.html
 
 use core::mem;
 
@@ -23,8 +20,6 @@ use crate::io::endian::LeInt;
 /// The recommended way to use a [`std::io::Read`] with a `manticore` API is to
 /// use `read_to_end(&mut buf)` and to then pass `&mut buf[..]` into
 /// `manticore`. We hope to remove this restriction in the future.
-///
-/// [`std::io::Read`]: https://doc.rust-lang.org/std/io/trait.Read.html
 pub trait Read {
     /// Reads exactly `n` bytes from `self`.
     fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), io::Error>;

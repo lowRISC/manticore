@@ -41,7 +41,6 @@
 //! spoken over MCTP, and, as such, does not use the same header as Cerberus.
 //!
 //! [`wire` module]: wire/index.html
-//! [`serde`]: https://serde.rs
 
 // This is required due to the make_fuzz_safe! macro.
 #![allow(unused_parens)]
@@ -96,16 +95,11 @@ pub use request_counter::RequestCounter;
 /// This trait is not implemented by any of the request or response types, but
 /// is intead implemented by uninhabited types that represent pairs of requests
 /// and responses, for use in generic programming.
-///
-/// [`CommandType`]: enum.CommandType.html
-/// [`Error`]: struct.Error.html
 pub trait Command<'req> {
     /// The unique request type for this `Command`.
     type Req: Request<'req>;
     /// The response type for this `Command`, which will either be unique or
     /// [`Error`].
-    ///
-    /// [`Error`]: struct.Error.html
     type Resp: Response<'req>;
 }
 
@@ -114,8 +108,6 @@ pub trait Command<'req> {
 /// See [`Command`](trait.Command.html).
 pub trait Request<'req>: FromWire<'req> + ToWire {
     /// The unique [`CommandType`] for this `Request`.
-    ///
-    /// [`CommandType`]: enum.CommandType.html
     const TYPE: CommandType;
 }
 
@@ -124,8 +116,6 @@ pub trait Request<'req>: FromWire<'req> + ToWire {
 /// See [`Command`](trait.Command.html).
 pub trait Response<'req>: FromWire<'req> + ToWire {
     /// The unique [`CommandType`] for this `Response`.
-    ///
-    /// [`CommandType`]: enum.CommandType.html
     const TYPE: CommandType;
 }
 
@@ -230,8 +220,6 @@ impl From<u8> for CommandType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Header {
     /// The [`CommandType`] for a request.
-    ///
-    /// [`CommandType`]: enum.CommandType.html
     pub command: CommandType,
     /// The "request bit", for interpreting whether the body is the
     /// request or response variant of a command.
@@ -289,16 +277,12 @@ wire_enum! {
     pub enum ErrorCode: u8 {
         /// Represents a successful operation; this "error" code is used to
         /// turn an [`Error`] into an ACK.
-        ///
-        /// [`Error`]: struct.Error.html
         Ok = 0x00,
         /// Indicates that the device is "busy", usually meaning that other
         /// commands are being serviced.
         Busy = 0x03,
         /// Indicates an unspecified, vendor-defined error, which may include
         /// extra data in an [`Error`].
-        ///
-        /// [`Error`]: struct.Error.html
         Unspecified = 0x04,
     }
 }
@@ -310,8 +294,6 @@ wire_enum! {
 ///
 /// This command corresponds to [`CommandType::Error`] and does not have a
 /// request counterpart.
-///
-/// [`CommandType::Error`]: enum.CommandType.html#variant.Error
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Error {
@@ -324,8 +306,6 @@ pub struct Error {
 impl Error {
     /// Creates an "ACK" response, consisting of an `Error` with an
     /// [`ErrorCode::Ok`] code.
-    ///
-    /// [`ErrorCode::Ok`]: enum.ErrorCode.html#variant.Ok
     pub fn new_ack() -> Self {
         Self {
             code: ErrorCode::Ok,

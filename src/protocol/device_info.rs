@@ -49,8 +49,6 @@ wire_enum! {
 }
 
 /// The [`DeviceInfo`] request.
-///
-/// [`DeviceInfo`]: enum.DeviceInfo.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -82,8 +80,6 @@ impl<'a> ToWire for DeviceInfoRequest {
 
 make_fuzz_safe! {
     /// The [`DeviceInfo`] response.
-    ///
-    /// [`DeviceInfo`]: enum.DeviceInfo.html
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct DeviceInfoResponse<'a> as DIRWrap {

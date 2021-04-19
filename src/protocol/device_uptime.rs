@@ -46,8 +46,6 @@ impl<'a> Command<'a> for DeviceUptime {
 }
 
 /// The [`DeviceUptime`] request.
-///
-/// [`DeviceUptime`]: enum.DeviceUptime.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -78,8 +76,6 @@ impl<'a> ToWire for DeviceUptimeRequest {
 }
 
 /// The [`DeviceUptime`] response.
-///
-/// [`DeviceUptime`]: enum.DeviceUptime.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

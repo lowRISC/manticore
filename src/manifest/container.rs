@@ -34,8 +34,6 @@ use serde::{Deserialize, Serialize};
 ///
 /// This struct describes metadata attached to every manifest, which makes up
 /// part of the signed component.
-///
-/// [`Comtainer`]: struct.Container.html
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Metadata {
@@ -53,8 +51,6 @@ wire_enum! {
     ///
     /// Note that we currently only support the SHA-256 variant, even though
     /// Cerberus permits SHA-384 and SHA-512 as well.
-    ///
-    /// [`Toc`]: struct.Toc.html
     #[allow(missing_docs)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub enum HashType: u8 {
@@ -207,11 +203,7 @@ impl<M> Copy for TocEntry<'_, '_, M> {}
 /// out of flash.
 ///
 /// It is not possible to construct a `Toc` directly; it must be parsed out of
-/// a valid [`Pfm`].
-///
-/// [`TocEntry`]: struct.TocEntry.html
-/// [`HashType`]: enum.HashType.html
-/// [`Pfm`]: struct.Pfm.html
+/// a valid [`Manifest`].
 pub struct Toc<'toc, M> {
     entries: &'toc [RawTocEntry],
     hashes: &'toc [sha256::Digest],
@@ -361,9 +353,7 @@ impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Adhoc> {
     /// Parses a `Container` without verifying the signature.
     ///
     /// The value returned by this function cannot be used for trusted
-    /// operations. See [`parse_and_verify()`].
-    ///
-    /// [`parse_and_verify()`]: struct.Container.html#method.parse_and_verify
+    /// operations. See [`Container::parse_and_verify()`].
     #[inline]
     pub fn parse(
         flash: &'f F,
@@ -501,8 +491,6 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     }
 
     /// Returns the [`ManifestType`] for this `Container`.
-    ///
-    /// [`ManifestType`]: ../enum.ManifestType.html
     pub fn manifest_type(&self) -> ManifestType {
         ManifestType::from_wire_value(self.header.manifest_type)
             .expect("verified in parse_inner()")
@@ -519,8 +507,6 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     }
 
     /// Returns this `Container`'s [`Metadata`] value.
-    ///
-    /// [`Metadata`]: struct.Metadata.html
     pub fn metadata(&self) -> Metadata {
         Metadata {
             version_id: self.header.version_id,
@@ -528,8 +514,6 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     }
 
     /// Returns this `Container`'s [`Toc`].
-    ///
-    /// [`Toc`]: struct.Toc.html
     pub fn toc(&self) -> &Toc<'f, M> {
         &self.toc
     }

@@ -7,8 +7,6 @@
 //! These functions and traits are mostly intended for manipulating byte
 //! buffers, but they could be implemented on other types that provide a
 //! read/write interface.
-//!
-//! [`std::io`]: https://doc.rust-lang.org/std/io/index.html
 
 pub mod bit_buf;
 pub mod cursor;

@@ -36,7 +36,6 @@
 //! by the `ring` feature flag; some opeartions require `std` as well.
 //!
 //! [`ring` module]: ring/index.html
-//! [`ring`]: https://github.com/briansmith/ring
 
 pub mod rsa;
 pub mod sha256;

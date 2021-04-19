@@ -8,10 +8,6 @@
 //! to the core traits in the [`serde`] library. Rather than representing a
 //! generically serializeable type, they represent types that can be converted
 //! to and from Cerberus's wire format, which has a unique, ad-hoc data model.
-//!
-//! [`FromWire`]: trait.FromWire.html
-//! [`ToWire`]: trait.ToWire.html
-//! [`serde`]: https://serde.rs
 
 use core::fmt;
 
@@ -38,8 +34,6 @@ pub trait FromWire<'wire>: Sized {
 #[derive(Clone, Copy, Debug)]
 pub enum FromWireError {
     /// Indicates that something went wrong in an `io` operation.
-    ///
-    /// [`io`]: ../../io/index.html
     Io(io::Error),
 
     /// Indicates that the arena used to allocate dynamic portions of the
@@ -73,8 +67,6 @@ pub trait ToWire: Sized {
 #[derive(Clone, Copy, Debug)]
 pub enum ToWireError {
     /// Indicates that something went wrong in an [`io`] operation.
-    ///
-    /// [`io`]: ../../io/index.html
     Io(io::Error),
 }
 

@@ -47,8 +47,6 @@ impl Command<'_> for DeviceCapabilities {
 }
 
 /// The [`DeviceCapabilities`] request.
-///
-/// [`DeviceCapabilities`]: enum.DeviceCapabilities.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -78,8 +76,6 @@ impl ToWire for DeviceCapabilitiesRequest {
 }
 
 /// The [`DeviceCapabilities`] response.
-///
-/// [`DeviceCapabilities`]: enum.DeviceCapabilities.html
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

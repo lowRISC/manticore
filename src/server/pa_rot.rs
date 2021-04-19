@@ -19,8 +19,6 @@ use crate::server::Error;
 use crate::server::handler::prelude::*;
 
 /// Options struct for initializing a [`PaRot`].
-///
-/// [`PaRot`]: struct.PaRot.html
 pub struct Options<'a, Identity, Reset, Rsa> {
     /// A handle to the "hardware identity" of the device.
     pub identity: &'a Identity,

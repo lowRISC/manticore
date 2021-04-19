@@ -27,8 +27,6 @@ use crate::mem::align_to;
 /// Additionally, `OutOfMemory` implements [`Arena`] itself, acting as the
 /// "trivial" no-memory-was-provided arena. This is particularly useful for
 /// when it is known that no memory will ever be allocated on the arena.
-///
-/// [`Arena`]: trait.Arena.html
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OutOfMemory;
 
@@ -70,8 +68,6 @@ unsafe impl Arena for OutOfMemory {
 /// `alloc_aligned()` is required to return memory with certain size and
 /// alignment guarantees. While it itself is a safe function, unsafe code
 /// is permitted to rely on these guarantees.
-///
-/// [`BumpArena`]: struct.BumpArena.html
 pub unsafe trait Arena {
     /// Allocates `len` bytes of `align`-a`igned memory from this arena.
     ///
@@ -97,8 +93,6 @@ pub unsafe trait Arena {
     /// This function is permitted to panic under catastrophic failure
     /// conditions, such as completely running out of program memory.
     /// Implementations must advertize whether they panic.
-    ///
-    /// [`ArenaExt`]: trait.ArenaExt.html
     fn alloc_aligned(
         &self,
         len: usize,
@@ -197,7 +191,6 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
 
 /// A bump-allocating [`Arena`] that is backed by a byte slice.
 ///
-/// [`Arena`]: trait.Arena.html
 ///
 /// # Examples
 /// ```
