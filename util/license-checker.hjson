@@ -8,5 +8,29 @@
     Licensed under the Apache License, Version 2.0, see LICENSE for details.
     SPDX-License-Identifier: Apache-2.0
     ''',
-  exclude_paths: []
+  exclude_paths: [
+    // Binary test files.
+    '*.pem',
+    '*.pk1',
+    '*.pk8',
+    '*.bin',
+
+    // This file's *exact contents* are used for a test.
+    'src/crypto/testdata/plain.txt',
+
+    // Uncommented formats.
+    '*.md',
+    '*.json',
+    '.gitignore',
+    '**/.gitignore',
+    '.github/CODEOWNERS',
+
+    // Copyright-related files that don't need a header.
+    'CLA',
+    'LICENSE',
+
+    // This is a template for part of a file, so a license
+    // header doesn't make much sense.
+    'util/fuzz_job.yml.tpl',
+  ],
 }
