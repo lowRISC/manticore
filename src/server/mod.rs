@@ -14,3 +14,4 @@ pub use handler::Error;
 
 pub mod options;
 pub mod pa_rot;
+mod rot;
