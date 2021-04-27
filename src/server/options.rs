@@ -7,9 +7,12 @@
 use crate::protocol::capabilities;
 use crate::protocol::device_id;
 #[cfg(doc)]
+use crate::server::ac_rot::AcRot;
+#[cfg(doc)]
 use crate::server::pa_rot::PaRot;
 
-/// Options struct for initialising a [`PaRot`].
+/// Options struct for initialising a [`PaRot`]
+/// and [`AcRot`].
 pub struct Options<'a, Identity, Reset, Rsa> {
     /// A handle to the "hardware identity" of the device.
     pub identity: &'a Identity,
