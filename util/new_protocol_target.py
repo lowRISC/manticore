@@ -116,7 +116,7 @@ def main():
     renames = {'to_wire_fuzz_safe': 'to_wire'}
     for template_name in args.target_templates:
       template = read_file(os.path.join(
-          util_dir, '{}.rs.template'.format(template_name)))
+          util_dir, '{}.rs.tpl'.format(template_name)))
 
       if template_name in renames:
         template_name = renames[template_name]
@@ -126,7 +126,7 @@ def main():
 
       add_target(fuzz_dir, name, src)
   elif args.subcommand == 'ci':
-    template_path = os.path.join(util_dir, 'fuzz_job.yml.template')
+    template_path = os.path.join(util_dir, 'fuzz_job.yml.tpl')
     template = read_file(template_path)
     job = template.format(message_type=args.message_type, command=command)
 
