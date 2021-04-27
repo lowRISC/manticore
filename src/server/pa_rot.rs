@@ -12,31 +12,10 @@ use crate::hardware;
 use crate::mem::Arena;
 use crate::net;
 use crate::protocol;
-use crate::protocol::capabilities;
-use crate::protocol::device_id;
+use crate::server::options::Options;
 use crate::server::Error;
 
 use crate::server::handler::prelude::*;
-
-/// Options struct for initializing a [`PaRot`].
-pub struct Options<'a, Identity, Reset, Rsa> {
-    /// A handle to the "hardware identity" of the device.
-    pub identity: &'a Identity,
-    /// A handle for looking up reset-related information for the current
-    /// device.
-    pub reset: &'a Reset,
-
-    /// A handle to an RSA engine builder.
-    pub rsa: &'a Rsa,
-
-    /// This device's silicon identifier.
-    pub device_id: device_id::DeviceIdentifier,
-    /// Integration-provided description of the device's networking
-    /// capabilities.
-    pub networking: capabilities::Networking,
-    /// Integration-provided "acceptable timeout" lengths.
-    pub timeouts: capabilities::Timeouts,
-}
 
 /// A PA-RoT, or "Platform Root of Trust", server.
 ///
@@ -203,6 +182,7 @@ mod test {
     use crate::mem::BumpArena;
     use crate::net::DevicePort;
     use crate::protocol::capabilities::*;
+    use crate::protocol::device_id;
     use crate::protocol::wire::FromWire;
     use crate::protocol::wire::ToWire;
     use crate::protocol::Header;
