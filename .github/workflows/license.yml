@@ -1,0 +1,17 @@
+name: Check Licenses
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  check-license:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install python deps
+      run: pip3 install --user hjson tabulate
+    - name: Check license headers
+      run: ./util/license-checker.py -v --config util/license-checker.hjson
