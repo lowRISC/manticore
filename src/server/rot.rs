@@ -13,6 +13,7 @@ use crate::mem::Arena;
 use crate::net;
 use crate::protocol;
 use crate::server::options::Options;
+use crate::server::response::Respond;
 use crate::server::Error;
 
 use crate::server::handler::prelude::*;
@@ -45,12 +46,15 @@ where
             err_count: 0,
         }
     }
+}
 
-    /// Process a single incoming request.
-    ///
-    /// The request message will be read from `req`, while the response
-    /// message will be written to `resp`.
-    pub fn process_request<'req>(
+impl<'a, Identity, Reset, Rsa> Respond for Rot<'a, Identity, Reset, Rsa>
+where
+    Identity: hardware::Identity,
+    Reset: hardware::Reset,
+    Rsa: rsa::Builder,
+{
+    fn process_request<'req>(
         &mut self,
         host_port: &mut dyn net::HostPort,
         arena: &'req impl Arena,
