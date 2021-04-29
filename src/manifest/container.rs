@@ -12,9 +12,9 @@ use core::mem;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 
-use crate::crypto::rsa;
 use crate::crypto::sha256;
 use crate::crypto::sha256::Hasher as _;
+use crate::crypto::sig;
 use crate::hardware::flash::Flash;
 use crate::hardware::flash::FlashExt as _;
 use crate::hardware::flash::FlashIo;
@@ -336,14 +336,14 @@ impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Signed> {
     pub fn parse_and_verify(
         flash: &'f F,
         sha: &impl sha256::Builder,
-        rsa: &mut impl rsa::Engine,
+        sig_verify: &mut impl sig::Verify,
         toc_arena: &'f impl Arena,
         verify_arena: &impl Arena,
     ) -> Result<Self, Error> {
         let c = Self::parse_inner(flash, toc_arena)?;
 
         c.verify_toc_hash(sha)?;
-        c.verify_signature(sha, rsa, verify_arena)?;
+        c.verify_signature(sha, sig_verify, verify_arena)?;
 
         Ok(c)
     }
@@ -405,7 +405,7 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     pub(crate) fn verify_signature(
         &self,
         sha: &impl sha256::Builder,
-        rsa: &mut impl rsa::Engine,
+        sig_verify: &mut impl sig::Verify,
         verify_arena: &impl Arena,
     ) -> Result<(), Error> {
         let mut bytes = [0u8; 16];
@@ -426,7 +426,7 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
         let sig =
             self.flash
                 .read_direct(self.signature_region(), verify_arena, 1)?;
-        rsa.verify_signature(sig, &digest)?;
+        sig_verify.verify(sig, &digest)?;
         Ok(())
     }
 

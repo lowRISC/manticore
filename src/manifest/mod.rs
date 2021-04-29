@@ -73,8 +73,8 @@
 //! for use by tooling. The [`owned::Container`] type is the relevant entry
 //! point.
 
-use crate::crypto::rsa;
 use crate::crypto::sha256;
+use crate::crypto::sig;
 use crate::hardware::flash;
 use crate::io;
 use crate::mem::OutOfMemory;
@@ -206,8 +206,8 @@ impl From<OutOfMemory> for Error {
     }
 }
 
-impl<E> From<rsa::Error<E>> for Error {
-    fn from(_: rsa::Error<E>) -> Self {
+impl<E> From<sig::Error<E>> for Error {
+    fn from(_: sig::Error<E>) -> Self {
         Self::SignatureFailure
     }
 }

@@ -10,8 +10,7 @@
 
 use crate::crypto::ring;
 use crate::crypto::rsa::Builder as _;
-use crate::crypto::rsa::Keypair as _;
-use crate::crypto::rsa::SignerBuilder as _;
+use crate::crypto::rsa::KeyPair as _;
 
 /// A plaintext string.
 pub const PLAIN_TEXT: &[u8] = include_bytes!("plain.txt");
@@ -39,11 +38,11 @@ pub const RSA_2048_SHA256_SIG_PKCS1: &[u8] =
     include_bytes!("rsa_2048_sha256_sig.pk1");
 
 /// Generates an RSA engine and signer out of test-only data.
-pub fn rsa() -> (ring::rsa::Engine, ring::rsa::Signer) {
-    let keypair = ring::rsa::Keypair::from_pkcs8(RSA_2048_PRIV_PKCS8).unwrap();
+pub fn rsa() -> (ring::rsa::Verify256, ring::rsa::Sign256) {
+    let keypair = ring::rsa::KeyPair::from_pkcs8(RSA_2048_PRIV_PKCS8).unwrap();
     let pub_key = keypair.public();
     let rsa_builder = ring::rsa::Builder::new();
-    let rsa = rsa_builder.new_engine(pub_key).unwrap();
+    let rsa = rsa_builder.new_verifier(pub_key).unwrap();
     let signer = rsa_builder.new_signer(keypair).unwrap();
     (rsa, signer)
 }

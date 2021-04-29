@@ -53,7 +53,7 @@ impl<'a, Identity, Reset, Rsa> PaRot<'a, Identity, Reset, Rsa>
 where
     Identity: hardware::Identity,
     Reset: hardware::Reset,
-    Rsa: rsa::Builder,
+    Rsa: rsa::Builder<rsa::RsaPkcs1Sha256>,
 {
     /// Create a new `PaRot` with the given `Options`.
     pub fn new(opts: Options<'a, Identity, Reset, Rsa>) -> Self {
