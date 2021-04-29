@@ -15,8 +15,8 @@ use std::mem;
 
 use zerocopy::AsBytes;
 
-use crate::crypto::rsa;
 use crate::crypto::sha256;
+use crate::crypto::sig;
 use crate::hardware::flash::Flash;
 use crate::hardware::flash::Ram;
 use crate::io::write::StdWrite;
@@ -177,7 +177,7 @@ pub enum EncodingError {
     HashError(sha256::Error),
 
     /// Indicates an error while computing an RSA signature.
-    RsaError(rsa::Error),
+    SigError(sig::Error),
 }
 
 impl<E> From<sha256::Error<E>> for EncodingError {
@@ -186,9 +186,9 @@ impl<E> From<sha256::Error<E>> for EncodingError {
     }
 }
 
-impl<E> From<rsa::Error<E>> for EncodingError {
-    fn from(e: rsa::Error<E>) -> Self {
-        Self::RsaError(e.erased())
+impl<E> From<sig::Error<E>> for EncodingError {
+    fn from(e: sig::Error<E>) -> Self {
+        Self::SigError(e.erased())
     }
 }
 
@@ -201,7 +201,7 @@ impl<E: Element> Container<E> {
     pub fn parse(
         bytes: &[u8],
         sha: &impl sha256::Builder,
-        rsa: Option<&mut impl rsa::Engine>,
+        sig_verify: Option<&mut impl sig::Verify>,
     ) -> Result<Parse<E>, Error>
     where
         E: for<'f> FromUnowned<'f, Ram<&'f [u8]>>,
@@ -229,9 +229,10 @@ impl<E: Element> Container<E> {
 
         parse.container.metadata = container.metadata();
         parse.bad_toc_hash = container.verify_toc_hash(sha).is_err();
-        if let Some(rsa) = rsa {
-            parse.bad_signature =
-                container.verify_signature(sha, rsa, &OutOfMemory).is_err();
+        if let Some(sig_verify) = sig_verify {
+            parse.bad_signature = container
+                .verify_signature(sha, sig_verify, &OutOfMemory)
+                .is_err();
         }
 
         for (i, entry) in container.toc().entries().enumerate() {
@@ -266,7 +267,7 @@ impl<E: Element> Container<E> {
         &self,
         padding_byte: u8,
         sha: &impl sha256::Builder,
-        rsa: &mut impl rsa::Signer,
+        signer: &mut impl sig::Sign,
     ) -> Result<Vec<u8>, EncodingError> {
         let mut bytes = Vec::new();
         let mut w = StdWrite(&mut bytes);
@@ -275,7 +276,7 @@ impl<E: Element> Container<E> {
         let _ = w.write_le(0u16); // To be filled in later.
         let _ = w.write_le(E::TYPE.to_wire_value());
         let _ = w.write_le(self.metadata.version_id);
-        let _ = w.write_le(rsa.pub_len().byte_len() as u16);
+        let _ = w.write_le(signer.sig_bytes() as u16);
         let _ = w.write_le(0u8); // Should be sig_type.
         let _ = w.write_le(padding_byte);
 
@@ -396,15 +397,15 @@ impl<E: Element> Container<E> {
             bytes.extend_from_slice(data);
         }
 
-        let total_len: u16 = (bytes.len() + rsa.pub_len().byte_len())
+        let total_len: u16 = (bytes.len() + signer.sig_bytes())
             .try_into()
             .map_err(|_| EncodingError::OutOfSpace)?;
         bytes[0..2].copy_from_slice(&total_len.to_le_bytes());
 
         let mut signed = [0; 32];
-        let mut signature = vec![0; rsa.pub_len().byte_len()];
+        let mut signature = vec![0; signer.sig_bytes()];
         sha.hash_contiguous(&bytes, &mut signed)?;
-        rsa.sign(&signed, &mut signature)?;
+        signer.sign(&signed, &mut signature)?;
         bytes.extend_from_slice(&signature);
 
         Ok(bytes)

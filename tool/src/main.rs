@@ -24,8 +24,7 @@ use structopt::StructOpt;
 
 use manticore::crypto::ring;
 use manticore::crypto::rsa::Builder as _;
-use manticore::crypto::rsa::Keypair as _;
-use manticore::crypto::rsa::SignerBuilder as _;
+use manticore::crypto::rsa::KeyPair as _;
 use manticore::io::write::StdWrite;
 use manticore::io::Read as _;
 use manticore::manifest::owned;
@@ -282,7 +281,7 @@ fn main() {
             let (mut input, mut output) = open_files(input, output);
 
             let key = fs::read(key).expect("failed to open file");
-            let keypair = ring::rsa::Keypair::from_pkcs8(&key)
+            let keypair = ring::rsa::KeyPair::from_pkcs8(&key)
                 .expect("failed to parse key");
             let mut signer = ring::rsa::Builder::new()
                 .new_signer(keypair)
@@ -314,10 +313,10 @@ fn main() {
 
             let mut engine = key.map(|key| {
                 let key = fs::read(key).expect("failed to open file");
-                let keypair = ring::rsa::Keypair::from_pkcs8(&key)
+                let keypair = ring::rsa::KeyPair::from_pkcs8(&key)
                     .expect("failed to parse key");
                 ring::rsa::Builder::new()
-                    .new_engine(keypair.public())
+                    .new_verifier(keypair.public())
                     .expect("failed to create signature verification engine")
             });
             let sha = ring::sha256::Builder::new();

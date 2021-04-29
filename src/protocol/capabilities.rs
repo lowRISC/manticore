@@ -207,7 +207,7 @@ bitflags! {
 impl RsaKeyStrength {
     /// Creates an `RsaKeyStrength` representing the key strengths supported
     /// by `rsa`.
-    pub fn from_builder(rsa: &impl rsa::Builder) -> Self {
+    pub fn from_builder<Algo>(rsa: &impl rsa::Builder<Algo>) -> Self {
         let mut key_strength = Self::empty();
         if rsa.supports_modulus(rsa::ModulusLength::Bits2048) {
             key_strength |= Self::BITS_2048;

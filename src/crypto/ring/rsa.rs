@@ -11,6 +11,7 @@ use ring::signature::KeyPair as _;
 use ring::signature::RsaPublicKeyComponents;
 
 use crate::crypto::rsa;
+use crate::crypto::sig;
 
 #[cfg(doc)]
 use crate::crypto;
@@ -45,13 +46,13 @@ impl rsa::PublicKey for PublicKey {
     }
 }
 
-/// A `ring`-based [`rsa::Keypair`].
-pub struct Keypair {
+/// A `ring`-based [`rsa::KeyPair`].
+pub struct KeyPair {
     keypair: ring::signature::RsaKeyPair,
 }
 
-impl Keypair {
-    /// Creates a new `Keypair` from the given PKCS#8-encoded private key.
+impl KeyPair {
+    /// Creates a new `KeyPair` from the given PKCS#8-encoded private key.
     ///
     /// This function will return `None` if parsing fails or if it is not one
     /// of the sanctioned sizes in [`rsa::ModulusLength`].
@@ -62,7 +63,7 @@ impl Keypair {
     }
 }
 
-impl rsa::Keypair for Keypair {
+impl rsa::KeyPair for KeyPair {
     type Pub = PublicKey;
     fn public(&self) -> Self::Pub {
         let n = self
@@ -89,7 +90,7 @@ impl rsa::Keypair for Keypair {
     }
 }
 
-/// A `ring`-based [`rsa::Builder`] and [`rsa::SignerBuilder`].
+/// A `ring`-based [`rsa::Builder`].
 pub struct Builder {
     _priv: (),
 }
@@ -107,115 +108,110 @@ impl Default for Builder {
     }
 }
 
-impl rsa::Builder for Builder {
-    type Engine = Engine;
+impl rsa::Builder<rsa::RsaPkcs1Sha256> for Builder {
+    type Verify = Verify256;
+    type Sign = Sign256;
+
+    type Key = PublicKey;
+    type KeyPair = KeyPair;
+
+    fn new_signer(
+        &self,
+        keypair: Self::KeyPair,
+    ) -> Result<Self::Sign, sig::SignError<Self::Sign>> {
+        Ok(Self::Sign { keypair })
+    }
 
     fn supports_modulus(&self, _: rsa::ModulusLength) -> bool {
         true
     }
 
-    fn new_engine(
+    fn new_verifier(
         &self,
         key: PublicKey,
-    ) -> Result<Engine, rsa::Error<Unspecified>> {
-        Ok(Engine { key })
+    ) -> Result<Self::Verify, sig::VerifyError<Self::Verify>> {
+        Ok(Self::Verify { key })
     }
 }
 
-impl rsa::SignerBuilder for Builder {
-    type Signer = Signer;
-
-    fn new_signer(
-        &self,
-        keypair: Keypair,
-    ) -> Result<Signer, rsa::Error<Unspecified>> {
-        Ok(Signer { keypair })
-    }
-}
-
-/// A `ring`-based [`rsa::Engine`].
-pub struct Engine {
+/// A `ring`-based [`sig::Verify`] for PKCS#1.5 RSA using SHA-256.
+pub struct Verify256 {
     key: PublicKey,
 }
 
-impl rsa::Engine for Engine {
+impl sig::Verify for Verify256 {
     type Error = Unspecified;
-    type Key = PublicKey;
 
-    fn verify_signature(
+    fn verify(
         &mut self,
         signature: &[u8],
         message: &[u8],
-    ) -> Result<(), rsa::Error<Unspecified>> {
+    ) -> Result<(), sig::VerifyError<Self>> {
         let scheme = &ring::signature::RSA_PKCS1_2048_8192_SHA256;
         self.key
             .key
             .verify(scheme, message, signature)
-            .map_err(rsa::Error::Custom)
+            .map_err(sig::Error::Custom)
     }
 }
+impl sig::VerifyFor<rsa::RsaPkcs1Sha256> for Verify256 {}
 
-/// A `ring`-based [`rsa::Signer`].
-pub struct Signer {
-    keypair: Keypair,
+/// A `ring`-based [`sig::Sign`] for PKCS#1.5 RSA using SHA-256.
+pub struct Sign256 {
+    keypair: KeyPair,
 }
 
-impl rsa::Signer for Signer {
-    type Engine = Engine;
-    type Keypair = Keypair;
+impl sig::Sign for Sign256 {
+    type Error = Unspecified;
 
-    fn pub_len(&self) -> rsa::ModulusLength {
-        use crate::crypto::rsa::Keypair as _;
-        self.keypair.pub_len()
+    fn sig_bytes(&self) -> usize {
+        use crate::crypto::rsa::KeyPair as _;
+        self.keypair.pub_len().byte_len()
     }
 
     fn sign(
         &mut self,
         message: &[u8],
         signature: &mut [u8],
-    ) -> Result<(), rsa::Error<Unspecified>> {
+    ) -> Result<(), sig::SignError<Self>> {
         let scheme = &ring::signature::RSA_PKCS1_SHA256;
         let rng = ring::rand::SystemRandom::new();
         self.keypair
             .keypair
             .sign(scheme, &rng, message, signature)
-            .map_err(rsa::Error::Custom)
+            .map_err(sig::Error::Custom)
     }
 }
+impl sig::SignFor<rsa::RsaPkcs1Sha256> for Sign256 {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::rsa;
     use crate::crypto::rsa::Builder as _;
-    use crate::crypto::rsa::Engine as _;
-    use crate::crypto::rsa::Keypair as _;
-    use crate::crypto::rsa::Signer as _;
-    use crate::crypto::rsa::SignerBuilder as _;
+    use crate::crypto::rsa::KeyPair as _;
+    use crate::crypto::rsa::ModulusLength;
+    use crate::crypto::sig::Sign as _;
+    use crate::crypto::sig::Verify as _;
     use crate::crypto::testdata;
 
     #[test]
     fn rsa() {
         let keypair =
-            Keypair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8).unwrap();
-        assert_eq!(keypair.pub_len(), rsa::ModulusLength::Bits2048);
+            KeyPair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8).unwrap();
+        assert_eq!(keypair.pub_len(), ModulusLength::Bits2048);
 
         let rsa = Builder::new();
-        let mut engine = rsa.new_engine(keypair.public()).unwrap();
+        let mut engine = rsa.new_verifier(keypair.public()).unwrap();
+
         engine
-            .verify_signature(
-                testdata::RSA_2048_SHA256_SIG_PKCS1,
-                testdata::PLAIN_TEXT,
-            )
+            .verify(testdata::RSA_2048_SHA256_SIG_PKCS1, testdata::PLAIN_TEXT)
             .unwrap();
 
         let mut signer = rsa.new_signer(keypair).unwrap();
-        let mut generated_sig = vec![0; signer.pub_len().byte_len()];
+        let mut generated_sig = vec![0; signer.sig_bytes()];
         signer
             .sign(testdata::PLAIN_TEXT, &mut generated_sig)
             .unwrap();
-        engine
-            .verify_signature(&generated_sig, testdata::PLAIN_TEXT)
-            .unwrap();
+        engine.verify(&generated_sig, testdata::PLAIN_TEXT).unwrap();
     }
 }

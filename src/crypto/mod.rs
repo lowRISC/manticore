@@ -39,6 +39,7 @@
 
 pub mod rsa;
 pub mod sha256;
+pub mod sig;
 
 #[cfg(feature = "ring")]
 pub mod ring;
