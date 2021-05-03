@@ -26,15 +26,15 @@ jobs:
       run: cargo fmt -- --check --files-with-diff
 
     - name: Build with default settings
-      run: cargo build --verbose
+      run: cargo build -v -p manticore
     - name: Build with no features
-      run: cargo build --verbose --no-default-features
+      run: cargo build -v -p manticore --no-default-features
     - name: Build with all features
-      run: cargo build --verbose --all-features
+      run: cargo build -v -p manticore --all-features
     - name: Build for baremetal RISC-V
-      run: cargo build --verbose --no-default-features --target riscv32imc-unknown-none-elf
+      run: cargo build -v -p manticore --no-default-features --target riscv32imc-unknown-none-elf
     - name: Build CLI tool
-      run: cargo build --features=tool --bin manticore-tool
+      run: cargo build -v -p manticore-tool
 
     - name: Build docs
       run: cargo doc --verbose
