@@ -26,6 +26,28 @@ enum Options {
 }
 
 fn main() {
+    let pid = std::process::id();
+    env_logger::builder()
+        .format(move |buf, record| {
+            use std::io::Write;
+            for line in record.args().to_string().trim().lines() {
+                writeln!(
+                    buf,
+                    "[{level}{pid} {file}:{line}] {msg}",
+                    level = record.level().to_string().chars().next().unwrap(),
+                    pid = pid,
+                    file = record.file().unwrap_or("?.rs"),
+                    line = record.line().unwrap_or(0),
+                    msg = line,
+                )?;
+            }
+            Ok(())
+        })
+        .init();
+    for (i, arg) in std::env::args_os().enumerate() {
+        log::info!("argv[{}] = {:?}", i, arg);
+    }
+
     let _ = Options::from_args();
     match Options::from_args() {
         Options::RunTests { port, .. } => {
@@ -42,15 +64,17 @@ fn main() {
                 port,
                 FirmwareVersionRequest { index: 0 },
                 &arena,
-            )
-            .unwrap()
-            .unwrap();
-
-            eprintln!(
-                "resp.version: {}",
-                std::str::from_utf8(resp.version).unwrap()
             );
-            assert!(resp.version.starts_with(b"my cool e2e test"));
+            match resp {
+                Ok(Ok(resp)) => {
+                    log::info!(
+                        "resp.version: {}",
+                        std::str::from_utf8(resp.version).unwrap()
+                    );
+                    assert!(resp.version.starts_with(b"my cool e2e test"));
+                }
+                bad => log::error!("bad response: {:?}", bad),
+            }
 
             subproc.kill().unwrap();
         }
