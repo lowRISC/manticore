@@ -10,6 +10,7 @@
 //! 2. The request bit; `0` for responses, `1` for requests.
 //! 3. The length of the payload as a little-endian `u16`.
 
+use std::any::type_name;
 use std::io::Read as _;
 use std::io::Write as _;
 use std::net::TcpListener;
@@ -41,12 +42,16 @@ where
     Cmd: Command<'a>,
     A: Arena,
 {
-    let mut conn = TcpStream::connect(("127.0.0.1", port))
-        .map_err(|_| net::Error::Io(io::Error::Internal))?;
+    log::info!("connecting to 127.0.0.1:{}", port);
+    let mut conn = TcpStream::connect(("127.0.0.1", port)).map_err(|e| {
+        log::error!("{}", e);
+        net::Error::Io(io::Error::Internal)
+    })?;
     let mut writer = Writer::new(Header {
         command: <Cmd::Req as Request>::TYPE,
         is_request: true,
     });
+    log::info!("serializing {}", type_name::<Cmd::Req>());
     req.to_wire(&mut writer)?;
     writer.finish(&mut conn)?;
 
@@ -58,7 +63,10 @@ where
             if *len < out.len() {
                 return Err(io::Error::BufferExhausted);
             }
-            stream.read_exact(out).map_err(|_| io::Error::Internal)?;
+            stream.read_exact(out).map_err(|e| {
+                log::error!("{}", e);
+                io::Error::Internal
+            })?;
             *len -= out.len();
             Ok(())
         }
@@ -67,15 +75,19 @@ where
             self.1
         }
     }
+    log::info!("waiting for response");
     let (header, len) = header_from_wire(&mut conn)?;
     let r = Reader(&mut conn, len);
 
     if header.is_request {
+        log::error!("unexpected header.is_request: {}", header.is_request);
         return Err(net::Error::BadHeader.into());
     }
     if header.command == <Cmd::Resp as Response>::TYPE {
+        log::info!("deserializing {}", type_name::<Cmd::Resp>());
         Ok(Ok(FromWire::from_wire(r, arena)?))
     } else if header.command == CommandType::Error {
+        log::info!("deserializing {}", type_name::<protocol::Error>());
         Ok(Err(FromWire::from_wire(r, arena)?))
     } else {
         Err(net::Error::BadHeader.into())
@@ -86,17 +98,24 @@ fn header_from_wire(
     mut r: impl std::io::Read,
 ) -> Result<(Header, usize), net::Error> {
     let mut header_bytes = [0u8; 4];
-    r.read_exact(&mut header_bytes)
-        .map_err(|_| io::Error::Internal)?;
+    r.read_exact(&mut header_bytes).map_err(|e| {
+        log::error!("{}", e);
+        net::Error::Io(io::Error::Internal)
+    })?;
     let [cmd_byte, req_bit, len_lo, len_hi] = header_bytes;
 
     let header = Header {
-        command: CommandType::from_wire_value(cmd_byte)
-            .ok_or(net::Error::BadHeader)?,
+        command: CommandType::from_wire_value(cmd_byte).ok_or_else(|| {
+            log::error!("bad command byte: {}", cmd_byte);
+            net::Error::BadHeader
+        })?,
         is_request: match req_bit {
             0 => false,
             1 => true,
-            _ => return Err(net::Error::BadHeader),
+            _ => {
+                log::error!("bar request bit value: {}", req_bit);
+                return Err(net::Error::BadHeader);
+            }
         },
     };
     let len = u16::from_le_bytes([len_lo, len_hi]);
@@ -124,9 +143,14 @@ impl Writer {
             len_lo,
             len_hi,
         ])
-        .map_err(|_| io::Error::BufferExhausted)?;
-        w.write_all(&self.buf)
-            .map_err(|_| io::Error::BufferExhausted)?;
+        .map_err(|e| {
+            log::error!("{}", e);
+            net::Error::Io(io::Error::BufferExhausted)
+        })?;
+        w.write_all(&self.buf).map_err(|e| {
+            log::error!("{}", e);
+            net::Error::Io(io::Error::BufferExhausted)
+        })?;
         Ok(())
     }
 }
@@ -150,8 +174,10 @@ struct Inner {
 
 impl TcpHostPort {
     pub fn bind(port: u16) -> Result<Self, net::Error> {
-        let listener = TcpListener::bind(("127.0.0.1", port))
-            .map_err(|_| io::Error::Internal)?;
+        let listener = TcpListener::bind(("127.0.0.1", port)).map_err(|e| {
+            log::error!("{}", e);
+            net::Error::Io(io::Error::Internal)
+        })?;
         Ok(Self(Inner {
             listener,
             stream: None,
@@ -165,9 +191,13 @@ impl HostPort for TcpHostPort {
         let inner = &mut self.0;
         inner.stream = None;
 
-        let (mut stream, _) =
-            inner.listener.accept().map_err(|_| io::Error::Internal)?;
+        log::info!("blocking on listener");
+        let (mut stream, _) = inner.listener.accept().map_err(|e| {
+            log::error!("{}", e);
+            net::Error::Io(io::Error::Internal)
+        })?;
 
+        log::info!("parsing header");
         let (header, len) = header_from_wire(&mut stream)?;
         inner.stream = Some((header, len, stream));
 
@@ -178,6 +208,7 @@ impl HostPort for TcpHostPort {
 impl HostRequest for Inner {
     fn header(&self) -> Result<Header, net::Error> {
         if self.output_buffer.is_some() {
+            log::error!("header() called out-of-order");
             return Err(net::Error::OutOfOrder);
         }
         self.stream
@@ -188,9 +219,11 @@ impl HostRequest for Inner {
 
     fn payload(&mut self) -> Result<&mut dyn io::Read, net::Error> {
         if self.stream.is_none() {
+            log::error!("payload() called out-of-order");
             return Err(net::Error::Disconnected);
         }
         if self.output_buffer.is_some() {
+            log::error!("payload() called out-of-order");
             return Err(net::Error::OutOfOrder);
         }
 
@@ -202,9 +235,11 @@ impl HostRequest for Inner {
         header: Header,
     ) -> Result<&mut dyn HostResponse, net::Error> {
         if self.stream.is_none() {
+            log::error!("payload() called out-of-order");
             return Err(net::Error::Disconnected);
         }
         if self.output_buffer.is_some() {
+            log::error!("payload() called out-of-order");
             return Err(net::Error::OutOfOrder);
         }
 
@@ -216,6 +251,7 @@ impl HostRequest for Inner {
 impl HostResponse for Inner {
     fn sink(&mut self) -> Result<&mut dyn io::Write, net::Error> {
         if self.stream.is_none() {
+            log::error!("sink() called out-of-order");
             return Err(net::Error::Disconnected);
         }
 
@@ -232,8 +268,12 @@ impl HostResponse for Inner {
                 output_buffer: Some(_),
                 ..
             } => {
+                log::info!("sending reply");
                 self.output_buffer.take().unwrap().finish(&mut *stream)?;
-                stream.flush().map_err(|_| io::Error::Internal)?;
+                stream.flush().map_err(|e| {
+                    log::error!("{}", e);
+                    net::Error::Io(io::Error::Internal)
+                })?;
                 self.stream = None;
                 self.output_buffer = None;
                 Ok(())
@@ -250,7 +290,10 @@ impl io::Read for Inner {
         if *len < out.len() {
             return Err(io::Error::BufferExhausted);
         }
-        stream.read_exact(out).map_err(|_| io::Error::Internal)?;
+        stream.read_exact(out).map_err(|e| {
+            log::error!("{}", e);
+            io::Error::Internal
+        })?;
         *len -= out.len();
         Ok(())
     }

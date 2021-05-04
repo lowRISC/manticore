@@ -138,6 +138,7 @@ impl Options {
 
     /// Spawns a subprocess that serves a PA-RoT describes by this `Options`.
     pub fn self_exec(&self) -> Child {
+        log::info!("spawning server: {:#?}", self);
         // Get argv[0]. We assume this is the path to the executable.
         let exe = std::env::args_os().next().unwrap();
         let args = self.unparse();
@@ -150,13 +151,16 @@ impl Options {
         let mut line = String::new();
 
         // Wait until the child signals it's ready by writing a line to stdout.
-        stdout.read_line(&mut line).unwrap();
-        print!("{}", line);
-        child
+        while line.is_empty() {
+            stdout.read_line(&mut line).unwrap();
+        }
+        log::info!("acked child startup: {}", line);
+        return child;
     }
 }
 
 pub fn serve(opts: Options) -> ! {
+    log::info!("configuring server...");
     let networking = capabilities::Networking {
         max_message_size: opts.max_message_size,
         max_packet_size: opts.max_packet_size,
@@ -219,15 +223,27 @@ pub fn serve(opts: Options) -> ! {
         timeouts,
     });
 
-    let mut host = TcpHostPort::bind(opts.port).unwrap();
-    println!("listening at localhost:{}", opts.port);
+    log::info!("binding to 127.0.0.1:{}", opts.port);
+    let mut host = match TcpHostPort::bind(opts.port) {
+        Ok(host) => host,
+        Err(e) => {
+            log::error!("could not connect to host: {:?}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Notify parent that we're listening on the requested port.
+    println!("listening!");
 
     let mut arena = vec![0; 64];
     let mut arena = BumpArena::new(&mut arena);
 
+    log::info!("entering server loop");
     loop {
         // TODO: handle this gracefully instead of crashing on a bad packet.
-        server.process_request(&mut host, &arena).unwrap();
+        if let Err(e) = server.process_request(&mut host, &arena) {
+            log::error!("failed to process request: {:?}", e);
+        }
         arena.reset();
     }
 }

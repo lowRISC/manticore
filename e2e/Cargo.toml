@@ -15,5 +15,8 @@ description = "End-to-end tests for Manticore"
 
 [dependencies]
 manticore = { path = ".." }
-structopt = "0.3.16"
+
+env_logger = "0.8"
+log = "0.4"
 serde_json = "1.0"
+structopt = "0.3.16"
