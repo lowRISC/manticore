@@ -20,6 +20,12 @@ pub trait Identity {
     /// Although not enforced, it is recommended that this be an ASCII string.
     fn firmware_version(&self) -> &[u8; 32];
 
+    /// Returns a string indicating the Vendor firmware version at the specified slot.
+    fn vendor_firmware_version(&self, slot: u8) -> Option<&[u8; 32]> {
+        let _ = slot;
+        None
+    }
+
     /// Returns the "unique device identity" for the device. This is a binary
     /// value of unspecified format.
     fn unique_device_identity(&self) -> &[u8];
@@ -44,24 +50,38 @@ pub trait Reset {
 pub(crate) mod fake {
     use core::convert::TryInto;
     use core::time::Duration;
+    use std::collections::HashMap;
 
     /// A fake `Identity` that returns fixed values.
     pub struct Identity {
         firmware_version: Vec<u8>,
+        vendor_firmware_versions: HashMap<u8, Vec<u8>>,
         unique_id: Vec<u8>,
     }
 
     impl Identity {
         /// Creates a new `fake::Identity`.
-        pub fn new(firmware_version: &[u8], unique_id: &[u8]) -> Self {
-            let mut firmware_version = firmware_version.to_vec();
-            while firmware_version.len() < 32 {
-                firmware_version.push(0);
+        pub fn new(
+            firmware_version: &[u8],
+            vendor_firmware_versions: &[(u8, &[u8])],
+            unique_id: &[u8],
+        ) -> Self {
+            fn pad_to_32(data: &[u8]) -> Vec<u8> {
+                let mut vec = data.to_vec();
+                while vec.len() < 32 {
+                    vec.push(0);
+                }
+                vec.truncate(32);
+
+                vec
             }
-            firmware_version.truncate(32);
 
             Self {
-                firmware_version,
+                firmware_version: pad_to_32(firmware_version),
+                vendor_firmware_versions: vendor_firmware_versions
+                    .iter()
+                    .map(|(key, value)| (*key, pad_to_32(value)))
+                    .collect(),
                 unique_id: unique_id.to_vec(),
             }
         }
@@ -70,6 +90,11 @@ pub(crate) mod fake {
     impl super::Identity for Identity {
         fn firmware_version(&self) -> &[u8; 32] {
             self.firmware_version[..32].try_into().unwrap()
+        }
+        fn vendor_firmware_version(&self, slot: u8) -> Option<&[u8; 32]> {
+            self.vendor_firmware_versions
+                .get(&slot)
+                .map(|data| data[..32].try_into().unwrap())
         }
         fn unique_device_identity(&self) -> &[u8] {
             &self.unique_id[..]
