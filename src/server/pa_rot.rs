@@ -76,16 +76,20 @@ where
     ) -> Result<(), Error> {
         let result = Handler::<&mut Self>::new()
             .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
-                if req.index != 0 {
-                    return Err(protocol::Error {
-                        code: protocol::ErrorCode::Unspecified,
-                        data: [0; 4],
+                use protocol::firmware_version::FirmwareVersionResponse;
+                if req.index == 0 {
+                    return Ok(FirmwareVersionResponse {
+                        version: zelf.opts.identity.firmware_version(),
                     });
                 }
 
-                Ok(protocol::firmware_version::FirmwareVersionResponse {
-                    version: zelf.opts.identity.firmware_version(),
-                })
+                match zelf.opts.identity.vendor_firmware_version(req.index) {
+                    Some(version) => Ok(FirmwareVersionResponse { version }),
+                    None => Err(protocol::Error {
+                        code: protocol::ErrorCode::Unspecified,
+                        data: [0; 4],
+                    }),
+                }
             })
             .handle::<protocol::DeviceCapabilities, _>(|zelf, req| {
                 use protocol::capabilities::*;
@@ -228,7 +232,9 @@ mod test {
         arena: &'a mut A,
         server: &mut PaRot<fake::Identity, fake::Reset, ring::rsa::Builder>,
         request: C::Req,
-    ) -> Result<C::Resp, Error> {
+    ) -> Result<Result<C::Resp, protocol::Error>, Error> {
+        use crate::protocol::Response;
+
         let len = scratch_space.len();
         let (req_scratch, port_scratch) = scratch_space.split_at_mut(len / 2);
         let mut cursor = Cursor::new(req_scratch);
@@ -251,10 +257,17 @@ mod test {
         let (header, mut resp) = host_port.response().unwrap();
         assert!(!header.is_request);
 
+        if header.command == protocol::Error::TYPE {
+            let resp_val = FromWire::from_wire(&mut resp, arena)
+                .expect("failed to read response");
+            assert_eq!(resp.len(), 0);
+            return Ok(Err(resp_val));
+        }
+
         let resp_val = FromWire::from_wire(&mut resp, arena)
             .expect("failed to read response");
         assert_eq!(resp.len(), 0);
-        Ok(resp_val)
+        Ok(Ok(resp_val))
     }
 
     fn simulate_response<'a, C: protocol::Command<'a>, A: Arena>(
@@ -307,7 +320,11 @@ mod test {
 
     #[test]
     fn sanity() {
-        let identity = fake::Identity::new(b"test version", b"random bits");
+        let identity = fake::Identity::new(
+            b"test version",
+            &[(1, b"vendor fw 1"), (3, b"vendor fw 3")],
+            b"random bits",
+        );
         let reset = fake::Reset::new(0, Duration::from_millis(1));
         let rsa = ring::rsa::Builder::new();
         let mut server = PaRot::new(Options {
@@ -331,8 +348,37 @@ mod test {
             &mut server,
             req,
         )
-        .expect("got error from server");
+        .expect("got error from server")
+        .expect("got error message from server");
         assert_eq!(resp.version, identity.firmware_version());
+
+        arena.reset();
+
+        let req =
+            protocol::firmware_version::FirmwareVersionRequest { index: 1 };
+        let resp = simulate_request::<protocol::FirmwareVersion, _>(
+            &mut scratch,
+            &mut arena,
+            &mut server,
+            req,
+        )
+        .expect("got error from server")
+        .expect("got error message from server");
+        assert_eq!(Some(resp.version), identity.vendor_firmware_version(1));
+
+        arena.reset();
+
+        let req =
+            protocol::firmware_version::FirmwareVersionRequest { index: 2 };
+        let resp = simulate_request::<protocol::FirmwareVersion, _>(
+            &mut scratch,
+            &mut arena,
+            &mut server,
+            req,
+        )
+        .expect("got error from server")
+        .expect_err("got non-error message from server");
+        assert_eq!(resp.code, protocol::ErrorCode::Unspecified);
 
         arena.reset();
 
@@ -343,7 +389,8 @@ mod test {
             &mut server,
             req,
         )
-        .expect("got error from server");
+        .expect("got error from server")
+        .expect("got error message from server");
         assert_eq!(resp.id, DEVICE_ID);
 
         arena.reset();
