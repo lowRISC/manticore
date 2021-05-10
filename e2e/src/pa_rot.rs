@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A `manticore` server that can be spoken to over local TCP.
+//! A virtual PA-RoT that can be spoken to over local TCP.
 
 use std::io::BufRead as _;
 use std::io::BufReader;
@@ -42,36 +42,52 @@ mod parse {
     }
 }
 
+/// Options for the PA-RoT.
 #[derive(Debug, StructOpt)]
 pub struct Options {
+    /// Which port to listen on.
     #[structopt(short, long)]
     pub port: u16,
+
+    /// A firmware version blob to report to clients.
     #[structopt(
         long,
         default_value = "<version unspecified>",
         parse(from_str = parse::bytes),
     )]
     pub firmware_version: Bytes,
+
+    /// A unique device identity blob to report to clients.
     #[structopt(
         long,
         default_value = "<uid unspecified>",
         parse(from_str = parse::bytes),
     )]
     pub unique_device_identity: Bytes,
+
+    /// The number of resets to report since power on.
     #[structopt(long, default_value = "0")]
     pub resets_since_power_on: u32,
 
+    /// The maximum message size to report as a capability
+    /// (unused by the transport)
     #[structopt(long, default_value = "1024")]
     pub max_message_size: u16,
+    /// The maximum packet size to report as a capability
+    /// (unused by the transport)
     #[structopt(long, default_value = "256")]
     pub max_packet_size: u16,
 
+    /// The timeout to report for a non-cryptographic operation in milliseconds
+    /// (unused other than for capabilities requests)
     #[structopt(
         long,
         default_value = "30",
         parse(try_from_str = parse::millis),
     )]
     pub regular_timeout: Duration,
+    /// The timeout to report for a cryptographic operation in milliseconds
+    /// (unused other than for capabilities requests)
     #[structopt(
         long,
         default_value = "200",
@@ -79,6 +95,7 @@ pub struct Options {
     )]
     pub crypto_timeout: Duration,
 
+    /// The device identifier to report to the client
     #[structopt(
         long,
         default_value = r#"{"vendor_id":1,"device_id":2,"subsys_vendor_id":3,"subsys_id":4}"#,
@@ -135,30 +152,30 @@ impl Options {
             ),
         ]
     }
+}
+/// Spawns a virtual PA-RoT subprocess as described by `opts`.
+pub fn spawn(opts: &Options) -> Child {
+    log::info!("spawning server: {:#?}", opts);
+    // Get argv[0]. We assume this is the path to the executable.
+    let exe = std::env::args_os().next().unwrap();
+    let args = opts.unparse();
+    let mut child = Command::new(exe)
+        .args(&args)
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn server subprocess");
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
 
-    /// Spawns a subprocess that serves a PA-RoT describes by this `Options`.
-    pub fn self_exec(&self) -> Child {
-        log::info!("spawning server: {:#?}", self);
-        // Get argv[0]. We assume this is the path to the executable.
-        let exe = std::env::args_os().next().unwrap();
-        let args = self.unparse();
-        let mut child = Command::new(exe)
-            .args(&args)
-            .stdout(Stdio::piped())
-            .spawn()
-            .expect("failed to spawn server subprocess");
-        let mut stdout = BufReader::new(child.stdout.take().unwrap());
-        let mut line = String::new();
-
-        // Wait until the child signals it's ready by writing a line to stdout.
-        while line.is_empty() {
-            stdout.read_line(&mut line).unwrap();
-        }
-        log::info!("acked child startup: {}", line);
-        return child;
+    // Wait until the child signals it's ready by writing a line to stdout.
+    while line.is_empty() {
+        stdout.read_line(&mut line).unwrap();
     }
+    log::info!("acked child startup: {}", line);
+    return child;
 }
 
+/// Starts a server loop for serving PA-RoT requests, as described by `opts`.
 pub fn serve(opts: Options) -> ! {
     log::info!("configuring server...");
     let networking = capabilities::Networking {
@@ -240,7 +257,6 @@ pub fn serve(opts: Options) -> ! {
 
     log::info!("entering server loop");
     loop {
-        // TODO: handle this gracefully instead of crashing on a bad packet.
         if let Err(e) = server.process_request(&mut host, &arena) {
             log::error!("failed to process request: {:?}", e);
         }
