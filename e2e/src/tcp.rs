@@ -4,11 +4,19 @@
 
 //! A TCP-based Manticore `HostPort`.
 //!
-//! This specific binding of Manticore implements the abstract Cerberus header
-//! as a four-bytes, consisting of, in order:
-//! 1. The command type byte.
-//! 2. The request bit; `0` for responses, `1` for requests.
-//! 3. The length of the payload as a little-endian `u16`.
+//! This module defines an ad-hoc binding of Cerberus over TCP (termed
+//! "Cerberus over TCP"). This binding of Manticore implements the abstract
+//! Cerberus header as a four-bytes, described as a packed C struct:
+//! ```text
+//! struct TcpCerberus {
+//!   command_type: u8,
+//!   is_request: bool,  // Eight bits; must be 0x0 or 0x1.
+//!   payload_len: u16,
+//! }
+//! ```
+//!
+//! In a transport-agnostic-Cerberus world, the payload length bytes will
+//! hopefully be removed.
 
 use std::any::type_name;
 use std::io::Read as _;
@@ -33,6 +41,10 @@ use manticore::protocol::Request;
 use manticore::protocol::Response;
 use manticore::server;
 
+/// Sends `req` to a virtual RoT listening on `localhost:{port}`, using
+/// Cerberus-over-TCP.
+///
+/// Blocks until a response comes back.
 pub fn send_local<'a, Cmd, A>(
     port: u16,
     req: Cmd::Req,
@@ -94,6 +106,9 @@ where
     }
 }
 
+/// Parses a Cerberus-over-TCP header.
+///
+/// Returns a pair of abstract header and payload length.
 fn header_from_wire(
     mut r: impl std::io::Read,
 ) -> Result<(Header, usize), net::Error> {
@@ -122,12 +137,22 @@ fn header_from_wire(
     Ok((header, len as usize))
 }
 
-pub struct Writer {
+/// A helper for constructing Cerberus-over-TCP messages.
+///
+/// Because the Cerberus-over-TCP header currently requires a length prefix for
+/// the payload, we need to buffer the entire reply before writing the header.
+///
+/// This will be eliminated once length prefixes are no longer required
+/// by the challenge protocol.
+///
+/// This type implements [`manticore::io::Write`].
+struct Writer {
     header: Header,
     buf: Vec<u8>,
 }
 
 impl Writer {
+    /// Creates a new `Writer` that will encode the given abstract [`Header`].
     pub fn new(header: Header) -> Self {
         Self {
             header,
@@ -135,6 +160,8 @@ impl Writer {
         }
     }
 
+    /// Flushes the buffered data to the given [`std::io::Write`] (usually, a
+    /// [`TcpStream`]).
     pub fn finish(self, mut w: impl std::io::Write) -> Result<(), net::Error> {
         let [len_lo, len_hi] = (self.buf.len() as u16).to_le_bytes();
         w.write_all(&[
@@ -162,17 +189,34 @@ impl io::Write for Writer {
     }
 }
 
+/// A Cerberus-over-TCP implementation of [`HostPort`].
+///
+/// This type can be used to drive a Manticore server using a TCP port bound to
+/// `localhost`. It also serves as an example for how an integration should
+/// implement [`HostPort`] for their own transport.
 pub struct TcpHostPort(Inner);
 
+/// The "inner" state of the `HostPort`. This type is intended to carry the state
+/// and functionality for an in-process request/response flow, without making it
+/// accessible to outside callers except through the associated [`manticore::net`]
+/// trait objects.
+///
+/// Most implementations of `HostPort` will follow this "nesting doll" pattern.
+///
+/// This type implements [`HostRequest`], [`HostReply`], and [`manticore::io::Read`],
+/// though users may only move from one trait implementation to the other by calling
+/// methods like `reply()` and `payload()`.
 struct Inner {
     listener: TcpListener,
+    // State for `HostRequest`: a parsed header, the length of the payload, and
+    // a stream to read it from.
     stream: Option<(Header, usize, TcpStream)>,
-    // This is currently necessary so that we know the full length of the
-    // output a priori.
+    // State for `HostResponse`: a `Writer` to dump the response bytes into.
     output_buffer: Option<Writer>,
 }
 
 impl TcpHostPort {
+    /// Binds a new `TcpHostPort` to the given port.
     pub fn bind(port: u16) -> Result<Self, net::Error> {
         let listener = TcpListener::bind(("127.0.0.1", port)).map_err(|e| {
             log::error!("{}", e);

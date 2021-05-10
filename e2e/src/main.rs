@@ -2,10 +2,25 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
+//! End-to-end tests for Manticore.
+//!
+//! This crate operates as follows. When run as `./e2e run-tests`, it will
+//! re-exec a copy of the process via `./e2e serve`. This new process is a
+//! "virtual RoT", which is connected back to the parent over a TCP "bus".
+//! The parent can then actuate the virtual RoT as a sort of black box.
+//!
+//! This crate serves two major purposes:
+//! 1. To provide an easy way to black-box test Manticore; in the future, we'd
+//!    like to be able to make it possible to test other implementations, such
+//!    as Azure's Cerberus implementation.
+//! 2. To provide an example *integration* for platform integrators to
+//!    understand how to build a Cerberus-compliant device using Manticore's
+//!    toolkit.
+
 #![deny(warnings)]
 #![deny(unused)]
 #![deny(unsafe_code)]
-//#![deny(missing_docs)]
+#![deny(missing_docs)]
 
 use structopt::StructOpt;
 
@@ -16,12 +31,16 @@ use manticore::protocol::firmware_version::FirmwareVersionRequest;
 pub mod pa_rot;
 pub mod tcp;
 
+/// End-to-end tests for Manticore.
 #[derive(Debug, StructOpt)]
 enum Options {
+    /// Execute the end-to-end tests
     RunTests {
+        /// Spawn the virtual RoT at the given port
         #[structopt(long, short, default_value = "9999")]
         port: u16,
     },
+    /// Spawn a virtual RoT that can be interacted with over local TCP
     Serve(pa_rot::Options),
 }
 
@@ -48,15 +67,16 @@ fn main() {
         log::info!("argv[{}] = {:?}", i, arg);
     }
 
-    let _ = Options::from_args();
     match Options::from_args() {
         Options::RunTests { port, .. } => {
-            let mut subproc = pa_rot::Options {
+            // Currently, we only run one, trivial test.
+            // Eventually, this will be replaced with a more general "test
+            // suite".
+            let mut subproc = pa_rot::spawn(&pa_rot::Options {
                 port,
                 firmware_version: b"my cool e2e test".to_vec(),
                 ..Default::default()
-            }
-            .self_exec();
+            });
 
             let mut arena = [0; 64];
             let arena = BumpArena::new(&mut arena);
