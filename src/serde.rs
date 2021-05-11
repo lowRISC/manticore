@@ -4,6 +4,8 @@
 
 //! Internal `serde` helpers.
 
+#![allow(clippy::from_str_radix_10)]
+
 use core::fmt::Binary;
 use core::fmt::LowerHex;
 use core::marker::PhantomData;
