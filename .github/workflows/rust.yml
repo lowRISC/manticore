@@ -18,16 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-        target: riscv32imc-unknown-none-elf
-        components: rustfmt, clippy
 
     - name: Check format
       run: cargo fmt -- --check --files-with-diff
+    - name: Check clippy lints
+      run: cargo clippy --verbose
 
     - name: Build with default settings
       run: cargo build -v -p manticore
@@ -45,6 +40,3 @@ jobs:
 
     - name: Run tests
       run: cargo test --verbose
-
-    - name: Run clippy
-      run: cargo clippy
