@@ -252,8 +252,8 @@ impl<'a> FromWire<'a> for Header {
 
         let command = CommandType::from_wire(r, a)?;
         Ok(Self {
-            is_request,
             command,
+            is_request,
         })
     }
 }

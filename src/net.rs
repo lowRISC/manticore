@@ -338,10 +338,7 @@ impl<'buf> InMemHost<'buf> {
     /// Gets the most recent response recieved until `request()` is called
     /// again.
     pub fn response(&self) -> Option<(Header, &[u8])> {
-        match self.0.tx_header {
-            Some(header) => Some((header, self.0.tx.consumed_bytes())),
-            None => None,
-        }
+        self.0.tx_header.map(|h| (h, self.0.tx.consumed_bytes()))
     }
 }
 
