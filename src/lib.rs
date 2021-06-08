@@ -54,6 +54,7 @@ pub mod protocol;
 #[cfg(feature = "serde")]
 mod serde;
 
+pub mod cert;
 pub mod crypto;
 pub mod hardware;
 pub mod io;
