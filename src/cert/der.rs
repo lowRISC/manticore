@@ -20,6 +20,10 @@ use crate::cert::Error;
 use crate::io;
 use crate::io::Read as _;
 
+#[cfg(test)]
+#[path = "der_test.rs"]
+mod test;
+
 pub const TRUE: &[u8] = &[0xff];
 pub const FALSE: &[u8] = &[0x00];
 
@@ -153,7 +157,7 @@ pub fn bits_total<'cert>(
 pub fn bits_partial<'cert>(
     buf: &mut untrusted::Reader<'cert>,
 ) -> Result<untrusted::Input<'cert>, Error> {
-    bits_checked(buf, true)
+    bits_checked(buf, false)
 }
 
 fn bits_checked<'cert>(
@@ -173,7 +177,7 @@ fn bits_checked<'cert>(
             }
 
             // If we specifically requested octets, reject extra padding.
-            _ if ensure_octets => return Err(Error::BadEncoding),
+            _ if ensure_octets => Err(Error::BadEncoding),
 
             extra @ 1..=7 => {
                 let rest = buf.read_bytes_to_end();
@@ -192,7 +196,7 @@ fn bits_checked<'cert>(
             }
 
             // Too many extra bits.
-            _ => return Err(Error::BadEncoding),
+            _ => Err(Error::BadEncoding),
         }
     })
 }
@@ -221,15 +225,10 @@ pub fn uint<'cert>(
             return Err(Error::BadEncoding);
         }
 
-        // Leading nonzero is always ok.
-        if first != 0 {
-            return Ok(());
-        }
-
         // A leading zero is only permitted if the byte that
         // follows has a high bit set, to disambiguate
         // `-128 == [0x80]` from `128 == [0x00, 0x80]`.
-        if buf.read_byte()? & 0x80 == 0 {
+        if first == 0 && buf.read_byte()? & 0x80 == 0 {
             return Err(Error::BadEncoding);
         }
 
@@ -243,9 +242,14 @@ pub fn uint<'cert>(
 pub fn u32(buf: &mut untrusted::Reader) -> Result<u32, Error> {
     uint(buf)?.read_all(Error::BadEncoding, |buf| {
         let mut v: u32 = 0;
+        let mut octets = 0;
         while let Ok(b) = buf.read_byte() {
-            v = v.checked_shl(8).ok_or(Error::BadEncoding)?;
+            if octets >= 4 {
+                return Err(Error::BadEncoding);
+            }
+            v <<= 8;
             v |= b as u32;
+            octets += 1;
         }
         Ok(v)
     })

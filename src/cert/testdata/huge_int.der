@@ -1,0 +1,6 @@
+# Copyright lowRISC contributors.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Specifically, this integer is > u32::MAX.
+INTEGER { `5555555555` }
