@@ -91,3 +91,8 @@ pub const LONG_FORM_ANY: untrusted::Input = untrusted::Input::from(include_bytes
 #[rustfmt::skip]
 /// Generated from empty.der.
 pub const EMPTY: untrusted::Input = untrusted::Input::from(include_bytes!("der/empty.bin"));
+
+#[rustfmt::skip]
+/// Generated from x509_self_signed.der.
+/// Signed with ./src/cert/testdata/../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_SELF_SIGNED: untrusted::Input = untrusted::Input::from(include_bytes!("der/x509_self_signed.bin"));

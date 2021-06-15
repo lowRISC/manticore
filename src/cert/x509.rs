@@ -231,6 +231,21 @@ fn parse_extn(
                     return Err(Error::BadEncoding);
                 }
 
+                // Constants from RFC5280 S4.2.1.3. I.e.,
+                // ```asn1
+                // KeyUsage ::= BIT STRING {
+                //   digitalSignature        (0),
+                //   nonRepudiation          (1),
+                //   keyEncipherment         (2),
+                //   dataEncipherment        (3),
+                //   keyAgreement            (4),
+                //   keyCertSign             (5),
+                //   cRLSign                 (6),
+                //   encipherOnly            (7),
+                //   decipherOnly            (8),
+                // }
+                // ```
+                //
                 // Note that the bits in a `BIT STRING` are big endian
                 // within bytes, so we need to "shift from the left"
                 // instead.
