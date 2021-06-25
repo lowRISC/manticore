@@ -52,6 +52,7 @@ pub struct FirmwareVersionRequest {
     /// integration.
     pub index: u8,
 }
+make_fuzz_safe!(FirmwareVersionRequest);
 
 impl Request<'_> for FirmwareVersionRequest {
     const TYPE: CommandType = CommandType::FirmwareVersion;

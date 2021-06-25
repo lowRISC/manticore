@@ -67,6 +67,7 @@ pub struct ResetCounterRequest {
     /// The port that the device whose reset counter is being looked up.
     pub port_id: u8,
 }
+make_fuzz_safe!(ResetCounterRequest);
 
 impl Request<'_> for ResetCounterRequest {
     const TYPE: CommandType = CommandType::ResetCounter;
@@ -102,6 +103,7 @@ pub struct ResetCounterResponse {
     /// The number of resets since POR, for the requested device.
     pub count: u16,
 }
+make_fuzz_safe!(ResetCounterResponse);
 
 impl Response<'_> for ResetCounterResponse {
     const TYPE: CommandType = CommandType::ResetCounter;

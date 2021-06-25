@@ -52,9 +52,9 @@ macro_rules! round_trip_test {
     )+}
 }
 
-#[cfg(feature = "arbitrary-derive")]
 /// Convenience trait for use with `make_fuzz_safe`.
 #[doc(hidden)]
+#[cfg(feature = "arbitrary-derive")]
 pub trait FuzzSafe {
     type Safe: libfuzzer_sys::arbitrary::Arbitrary;
 }
@@ -62,6 +62,12 @@ pub trait FuzzSafe {
 /// Convenience macro for generating a "fuzz-safe" version of the struct that
 /// can be cheaply converted into the original struct.
 macro_rules! make_fuzz_safe {
+    ($name:ident$(<$lt:lifetime>)?) => {
+        #[cfg(feature = "arbitrary-derive")]
+        impl<$($lt)?> $crate::protocol::macros::FuzzSafe for $name<$($lt)?> {
+            type Safe = $name<$($lt)?>;
+        }
+    };
     (
         $(#[$meta:meta])*
         $vis:vis struct $name:ident $(<$lt:lifetime>)? as $wrapper_name:ident {$(

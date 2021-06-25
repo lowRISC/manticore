@@ -27,118 +27,117 @@ features = ["arbitrary-derive"]
 [workspace]
 members = ["."]
 
-# The definitions below are auto-generated.
-# See `$REPO_TOP/util/new_protocol_target.py`
+# Anything below this line will be blown away by `generate_proto_fuzz.py`.
+## BEGIN GENERATED TARGETS
+[[bin]]
+name = "manticore_protocol_capabilities_DeviceCapabilities__req_to_wire"
+path = "gen/manticore_protocol_capabilities_DeviceCapabilities__req_to_wire.rs"
 
 [[bin]]
-name = "firmware_version_request_from_wire"
-path = "fuzz_targets/firmware_version_request_from_wire.rs"
+name = "manticore_protocol_capabilities_DeviceCapabilities__req_from_wire"
+path = "gen/manticore_protocol_capabilities_DeviceCapabilities__req_from_wire.rs"
 
 [[bin]]
-name = "firmware_version_request_to_wire"
-path = "fuzz_targets/firmware_version_request_to_wire.rs"
+name = "manticore_protocol_capabilities_DeviceCapabilities__resp_from_wire"
+path = "gen/manticore_protocol_capabilities_DeviceCapabilities__resp_from_wire.rs"
 
 [[bin]]
-name = "firmware_version_response_from_wire"
-path = "fuzz_targets/firmware_version_response_from_wire.rs"
+name = "manticore_protocol_capabilities_DeviceCapabilities__resp_to_wire"
+path = "gen/manticore_protocol_capabilities_DeviceCapabilities__resp_to_wire.rs"
 
 [[bin]]
-name = "firmware_version_response_to_wire"
-path = "fuzz_targets/firmware_version_response_to_wire.rs"
+name = "manticore_protocol_device_id_DeviceId__req_to_wire"
+path = "gen/manticore_protocol_device_id_DeviceId__req_to_wire.rs"
 
 [[bin]]
-name = "device_capabilities_request_to_wire"
-path = "fuzz_targets/device_capabilities_request_to_wire.rs"
+name = "manticore_protocol_device_id_DeviceId__req_from_wire"
+path = "gen/manticore_protocol_device_id_DeviceId__req_from_wire.rs"
 
 [[bin]]
-name = "device_capabilities_request_from_wire"
-path = "fuzz_targets/device_capabilities_request_from_wire.rs"
+name = "manticore_protocol_device_id_DeviceId__resp_from_wire"
+path = "gen/manticore_protocol_device_id_DeviceId__resp_from_wire.rs"
 
 [[bin]]
-name = "device_capabilities_response_to_wire"
-path = "fuzz_targets/device_capabilities_response_to_wire.rs"
+name = "manticore_protocol_device_id_DeviceId__resp_to_wire"
+path = "gen/manticore_protocol_device_id_DeviceId__resp_to_wire.rs"
 
 [[bin]]
-name = "device_capabilities_response_from_wire"
-path = "fuzz_targets/device_capabilities_response_from_wire.rs"
+name = "manticore_protocol_device_info_DeviceInfo__req_to_wire"
+path = "gen/manticore_protocol_device_info_DeviceInfo__req_to_wire.rs"
 
 [[bin]]
-name = "device_id_request_to_wire"
-path = "fuzz_targets/device_id_request_to_wire.rs"
+name = "manticore_protocol_device_info_DeviceInfo__req_from_wire"
+path = "gen/manticore_protocol_device_info_DeviceInfo__req_from_wire.rs"
 
 [[bin]]
-name = "device_id_request_from_wire"
-path = "fuzz_targets/device_id_request_from_wire.rs"
+name = "manticore_protocol_device_info_DeviceInfo__resp_from_wire"
+path = "gen/manticore_protocol_device_info_DeviceInfo__resp_from_wire.rs"
 
 [[bin]]
-name = "device_id_response_to_wire"
-path = "fuzz_targets/device_id_response_to_wire.rs"
+name = "manticore_protocol_device_info_DeviceInfo__resp_to_wire"
+path = "gen/manticore_protocol_device_info_DeviceInfo__resp_to_wire.rs"
 
 [[bin]]
-name = "device_id_response_from_wire"
-path = "fuzz_targets/device_id_response_from_wire.rs"
+name = "manticore_protocol_device_uptime_DeviceUptime__req_to_wire"
+path = "gen/manticore_protocol_device_uptime_DeviceUptime__req_to_wire.rs"
 
 [[bin]]
-name = "device_info_request_to_wire"
-path = "fuzz_targets/device_info_request_to_wire.rs"
+name = "manticore_protocol_device_uptime_DeviceUptime__req_from_wire"
+path = "gen/manticore_protocol_device_uptime_DeviceUptime__req_from_wire.rs"
 
 [[bin]]
-name = "device_info_request_from_wire"
-path = "fuzz_targets/device_info_request_from_wire.rs"
+name = "manticore_protocol_device_uptime_DeviceUptime__resp_from_wire"
+path = "gen/manticore_protocol_device_uptime_DeviceUptime__resp_from_wire.rs"
 
 [[bin]]
-name = "device_info_response_from_wire"
-path = "fuzz_targets/device_info_response_from_wire.rs"
+name = "manticore_protocol_device_uptime_DeviceUptime__resp_to_wire"
+path = "gen/manticore_protocol_device_uptime_DeviceUptime__resp_to_wire.rs"
 
 [[bin]]
-name = "device_info_response_to_wire"
-path = "fuzz_targets/device_info_response_to_wire.rs"
+name = "manticore_protocol_firmware_version_FirmwareVersion__req_to_wire"
+path = "gen/manticore_protocol_firmware_version_FirmwareVersion__req_to_wire.rs"
 
 [[bin]]
-name = "device_uptime_request_to_wire"
-path = "fuzz_targets/device_uptime_request_to_wire.rs"
+name = "manticore_protocol_firmware_version_FirmwareVersion__req_from_wire"
+path = "gen/manticore_protocol_firmware_version_FirmwareVersion__req_from_wire.rs"
 
 [[bin]]
-name = "device_uptime_request_from_wire"
-path = "fuzz_targets/device_uptime_request_from_wire.rs"
+name = "manticore_protocol_firmware_version_FirmwareVersion__resp_from_wire"
+path = "gen/manticore_protocol_firmware_version_FirmwareVersion__resp_from_wire.rs"
 
 [[bin]]
-name = "device_uptime_response_to_wire"
-path = "fuzz_targets/device_uptime_response_to_wire.rs"
+name = "manticore_protocol_firmware_version_FirmwareVersion__resp_to_wire"
+path = "gen/manticore_protocol_firmware_version_FirmwareVersion__resp_to_wire.rs"
 
 [[bin]]
-name = "device_uptime_response_from_wire"
-path = "fuzz_targets/device_uptime_response_from_wire.rs"
+name = "manticore_protocol_request_counter_RequestCounter__req_to_wire"
+path = "gen/manticore_protocol_request_counter_RequestCounter__req_to_wire.rs"
 
 [[bin]]
-name = "reset_counter_request_to_wire"
-path = "fuzz_targets/reset_counter_request_to_wire.rs"
+name = "manticore_protocol_request_counter_RequestCounter__req_from_wire"
+path = "gen/manticore_protocol_request_counter_RequestCounter__req_from_wire.rs"
 
 [[bin]]
-name = "reset_counter_request_from_wire"
-path = "fuzz_targets/reset_counter_request_from_wire.rs"
+name = "manticore_protocol_request_counter_RequestCounter__resp_from_wire"
+path = "gen/manticore_protocol_request_counter_RequestCounter__resp_from_wire.rs"
 
 [[bin]]
-name = "reset_counter_response_to_wire"
-path = "fuzz_targets/reset_counter_response_to_wire.rs"
+name = "manticore_protocol_request_counter_RequestCounter__resp_to_wire"
+path = "gen/manticore_protocol_request_counter_RequestCounter__resp_to_wire.rs"
 
 [[bin]]
-name = "reset_counter_response_from_wire"
-path = "fuzz_targets/reset_counter_response_from_wire.rs"
+name = "manticore_protocol_reset_counter_ResetCounter__req_to_wire"
+path = "gen/manticore_protocol_reset_counter_ResetCounter__req_to_wire.rs"
 
 [[bin]]
-name = "request_counter_request_to_wire"
-path = "fuzz_targets/request_counter_request_to_wire.rs"
+name = "manticore_protocol_reset_counter_ResetCounter__req_from_wire"
+path = "gen/manticore_protocol_reset_counter_ResetCounter__req_from_wire.rs"
 
 [[bin]]
-name = "request_counter_request_from_wire"
-path = "fuzz_targets/request_counter_request_from_wire.rs"
+name = "manticore_protocol_reset_counter_ResetCounter__resp_from_wire"
+path = "gen/manticore_protocol_reset_counter_ResetCounter__resp_from_wire.rs"
 
 [[bin]]
-name = "request_counter_response_to_wire"
-path = "fuzz_targets/request_counter_response_to_wire.rs"
-
-[[bin]]
-name = "request_counter_response_from_wire"
-path = "fuzz_targets/request_counter_response_from_wire.rs"
+name = "manticore_protocol_reset_counter_ResetCounter__resp_to_wire"
+path = "gen/manticore_protocol_reset_counter_ResetCounter__resp_to_wire.rs"
 
