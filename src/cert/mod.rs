@@ -11,6 +11,9 @@
 use crate::crypto::sig;
 use crate::io;
 
+#[cfg(feature = "ring")]
+use {crate::crypto::ring, ::ring::error::Unspecified};
+
 // Note that all parsers leverage Brian Smith's `untrusted` crate to ensure
 // we don't walk off the end of the buffer. We may wind up building this
 // functionality into `manticore::io` if buffering certificates in memory
@@ -241,4 +244,47 @@ pub trait Ciphers {
         algo: Algo,
         key: &PublicKeyParams,
     ) -> Option<&'a mut dyn sig::Verify<Error = Self::Error>>;
+}
+
+/// A [`Ciphers`] built on top of `ring`.
+#[cfg(feature = "ring")]
+#[derive(Default)]
+pub struct RingCiphers {
+    verifier: Option<Box<dyn sig::Verify<Error = Unspecified>>>,
+}
+
+#[cfg(feature = "ring")]
+impl RingCiphers {
+    /// Returns a new `RingCiphers`.
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+
+#[cfg(feature = "ring")]
+impl Ciphers for RingCiphers {
+    type Error = Unspecified;
+    fn verifier<'a>(
+        &'a mut self,
+        algo: Algo,
+        key: &PublicKeyParams,
+    ) -> Option<&'a mut dyn sig::Verify<Error = Unspecified>> {
+        match (key, algo) {
+            (
+                PublicKeyParams::Rsa { modulus, exponent },
+                Algo::RsaPkcs1Sha256,
+            ) => {
+                use crate::crypto::rsa::Builder as _;
+
+                let key = ring::rsa::PublicKey::new(
+                    (*modulus).into(),
+                    (*exponent).into(),
+                )?;
+
+                let rsa = ring::rsa::Builder::new();
+                self.verifier = Some(Box::new(rsa.new_verifier(key).ok()?));
+                self.verifier.as_mut().map(|x| &mut **x as _)
+            }
+        }
+    }
 }
