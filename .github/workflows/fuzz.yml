@@ -12,6 +12,43 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  'x509_signed':
+    runs-on: ubuntu-latest
+    name: 'Fuzz X.509 parser with signature checking.'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install Toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: `cargo fuzz run --release --sanitizer address`
+      run: |
+        cargo +nightly fuzz run \
+          --release --sanitizer address \
+          x509_signed
+          -- -max_total_time=180
+          
+  'x509_unsigned':
+    runs-on: ubuntu-latest
+    name: 'Fuzz X.509 parser without signature checking.'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install Toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: `cargo fuzz run --release --sanitizer address`
+      run: |
+        cargo +nightly fuzz run \
+          --release --sanitizer address \
+          x509_unsigned
+          -- -max_total_time=180
+
+
   # Everything below this line is generated and will be blown away by
   # fuzz/generate_fuzz_targets.py
   ## BEGIN GENERATED JOBS
