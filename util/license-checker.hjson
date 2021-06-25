@@ -31,6 +31,7 @@
 
     // This is a template for part of a file, so a license
     // header doesn't make much sense.
-    'util/fuzz_job.yml.tpl',
+    'fuzz/templates/fuzz_job.yml.tpl',
+    'fuzz/templates/target.toml.tpl',
   ],
 }

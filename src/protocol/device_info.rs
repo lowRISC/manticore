@@ -56,6 +56,7 @@ pub struct DeviceInfoRequest {
     /// Which device information to look up.
     pub index: InfoIndex,
 }
+make_fuzz_safe!(DeviceInfoRequest);
 
 impl Request<'_> for DeviceInfoRequest {
     const TYPE: CommandType = CommandType::DeviceInfo;

@@ -44,6 +44,7 @@ impl<'a> Command<'a> for RequestCounter {
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RequestCounterRequest;
+make_fuzz_safe!(RequestCounterRequest);
 
 impl Request<'_> for RequestCounterRequest {
     const TYPE: CommandType = CommandType::RequestCounter;
@@ -74,6 +75,7 @@ pub struct RequestCounterResponse {
     /// The number of failed requests since reset.
     pub err_count: u16,
 }
+make_fuzz_safe!(RequestCounterResponse);
 
 impl Response<'_> for RequestCounterResponse {
     const TYPE: CommandType = CommandType::RequestCounter;

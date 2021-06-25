@@ -54,6 +54,7 @@ pub struct DeviceCapabilitiesRequest {
     /// The advertised capabilities of the client.
     pub capabilities: Capabilities,
 }
+make_fuzz_safe!(DeviceCapabilitiesRequest);
 
 impl Request<'_> for DeviceCapabilitiesRequest {
     const TYPE: CommandType = CommandType::DeviceCapabilities;
@@ -85,6 +86,7 @@ pub struct DeviceCapabilitiesResponse {
     /// Timeouts that this device expects the client to observe.
     pub timeouts: Timeouts,
 }
+make_fuzz_safe!(DeviceCapabilitiesResponse);
 
 impl Response<'_> for DeviceCapabilitiesResponse {
     const TYPE: CommandType = CommandType::DeviceCapabilities;

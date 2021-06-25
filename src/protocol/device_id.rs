@@ -46,6 +46,7 @@ impl Command<'_> for DeviceId {
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceIdRequest;
+make_fuzz_safe!(DeviceIdRequest);
 
 impl Request<'_> for DeviceIdRequest {
     const TYPE: CommandType = CommandType::DeviceId;
@@ -74,6 +75,7 @@ pub struct DeviceIdResponse {
     /// A device identifier that uniquely identifies this device's silicon.
     pub id: DeviceIdentifier,
 }
+make_fuzz_safe!(DeviceIdResponse);
 
 impl Response<'_> for DeviceIdResponse {
     const TYPE: CommandType = CommandType::DeviceId;

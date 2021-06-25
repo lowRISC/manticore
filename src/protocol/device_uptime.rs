@@ -53,6 +53,7 @@ pub struct DeviceUptimeRequest {
     /// The port that the device whose uptime is being looked up.
     pub port_id: u8,
 }
+make_fuzz_safe!(DeviceUptimeRequest);
 
 impl Request<'_> for DeviceUptimeRequest {
     const TYPE: CommandType = CommandType::DeviceUptime;
@@ -86,6 +87,7 @@ pub struct DeviceUptimeResponse {
     /// seconds.
     pub uptime: Duration,
 }
+make_fuzz_safe!(DeviceUptimeResponse);
 
 impl Response<'_> for DeviceUptimeResponse {
     const TYPE: CommandType = CommandType::DeviceUptime;
