@@ -27,6 +27,14 @@ features = ["arbitrary-derive"]
 [workspace]
 members = ["."]
 
+[[bin]]
+name = "x509_signed"
+path = "targets/x509_signed.rs"
+
+[[bin]]
+name = "x509_unsigned"
+path = "targets/x509_unsigned.rs"
+
 # Anything below this line will be blown away by `generate_proto_fuzz.py`.
 ## BEGIN GENERATED TARGETS
 [[bin]]
