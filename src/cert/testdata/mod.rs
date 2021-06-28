@@ -93,6 +93,111 @@ pub const LONG_FORM_ANY: untrusted::Input = untrusted::Input::from(include_bytes
 pub const EMPTY: untrusted::Input = untrusted::Input::from(include_bytes!("der/empty.bin"));
 
 #[rustfmt::skip]
-/// Generated from x509_self_signed.der.
-/// Signed with ./src/cert/testdata/../../crypto/testdata/rsa_2048_private_key.pk8.
-pub const X509_SELF_SIGNED: untrusted::Input = untrusted::Input::from(include_bytes!("der/x509_self_signed.bin"));
+/// Generated from x509_bad_missing_spki_rsa_modulus.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_MISSING_SPKI_RSA_MODULUS: &[u8] = include_bytes!("der/x509_bad_missing_spki_rsa_modulus.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_ok_unknown_default_criticality.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_OK_UNKNOWN_DEFAULT_CRITICALITY: &[u8] = include_bytes!("der/x509_ok_unknown_default_criticality.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_ca_without_cert_sign.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_CA_WITHOUT_CERT_SIGN: &[u8] = include_bytes!("der/x509_bad_ca_without_cert_sign.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_sub_signed.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_SUB_SIGNED: &[u8] = include_bytes!("der/x509_sub_signed.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_cert_sign_with_other_use.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_CERT_SIGN_WITH_OTHER_USE: &[u8] = include_bytes!("der/x509_bad_cert_sign_with_other_use.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_ok_no_ca_without_bc.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_OK_NO_CA_WITHOUT_BC: &[u8] = include_bytes!("der/x509_ok_no_ca_without_bc.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_unknown_critical.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_UNKNOWN_CRITICAL: &[u8] = include_bytes!("der/x509_bad_unknown_critical.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_self_signed.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_SELF_SIGNED: &[u8] = include_bytes!("der/x509_self_signed.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_missing_version.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_MISSING_VERSION: &[u8] = include_bytes!("der/x509_bad_missing_version.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_missing_subject.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_MISSING_SUBJECT: &[u8] = include_bytes!("der/x509_bad_missing_subject.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_cert_sign_without_bc.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_CERT_SIGN_WITHOUT_BC: &[u8] = include_bytes!("der/x509_bad_cert_sign_without_bc.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_missing_spki.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_MISSING_SPKI: &[u8] = include_bytes!("der/x509_bad_missing_spki.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_missing_issuer.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_MISSING_ISSUER: &[u8] = include_bytes!("der/x509_bad_missing_issuer.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_missing_serial.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_MISSING_SERIAL: &[u8] = include_bytes!("der/x509_bad_missing_serial.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_ok_unknown_noncritical.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_OK_UNKNOWN_NONCRITICAL: &[u8] = include_bytes!("der/x509_ok_unknown_noncritical.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_serial_too_long.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_SERIAL_TOO_LONG: &[u8] = include_bytes!("der/x509_bad_serial_too_long.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_different_sig_alg.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_DIFFERENT_SIG_ALG: &[u8] = include_bytes!("der/x509_bad_different_sig_alg.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_missing_validty.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_MISSING_VALIDTY: &[u8] = include_bytes!("der/x509_bad_missing_validty.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_wrong_version.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_WRONG_VERSION: &[u8] = include_bytes!("der/x509_bad_wrong_version.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_missing_sig_alg.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_MISSING_SIG_ALG: &[u8] = include_bytes!("der/x509_bad_missing_sig_alg.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_missing_rsa_null.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_MISSING_RSA_NULL: &[u8] = include_bytes!("der/x509_bad_missing_rsa_null.bin");
+
+#[rustfmt::skip]
+/// Generated from x509_bad_missing_extns.tbs.
+/// Signed with ./../../crypto/testdata/rsa_2048_private_key.pk8.
+pub const X509_BAD_MISSING_EXTNS: &[u8] = include_bytes!("der/x509_bad_missing_extns.bin");

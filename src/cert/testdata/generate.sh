@@ -29,6 +29,7 @@ mkdir "$TESTDATA_DIR/der"
 
 # Convert all .der files into DER directly.
 for ascii in $(find "$TESTDATA_DIR" -name '*.der'); do
+  echo "$ascii"
   file="$(basename "${ascii%.*}")"
   cat "$ascii" | ascii2der > "$TESTDATA_DIR/der/$file.bin"
   cat <<EOF >>"$RUST_FILE"
@@ -44,6 +45,7 @@ done
 #
 # ".tbs" stands for "to be signed", as in an X509 tbsCertificate.
 for tbs in $(find "$TESTDATA_DIR" -name '*.tbs'); do
+  echo "$tbs"
   file="$(basename "${tbs%.*}")"
   alg="$(grep '# sign-alg:' "$tbs" | cut -d: -f2)"
   key="$TESTDATA_DIR/$(grep '# sign-key:' "$tbs" | cut -d: -f2)"
@@ -63,14 +65,16 @@ SEQUENCE {
 }
 EOF
   # Generate a PEM version of the file for debugging convenience.
-  openssl x509 -inform DER -outform PEM \
-    -in "$TESTDATA_DIR/der/$file.bin" \
-    -out "$TESTDATA_DIR/der/$file.pem"
+  if [[ "$file" != *bad* ]]; then
+    openssl x509 -inform DER -outform PEM \
+      -in "$TESTDATA_DIR/der/$file.bin" \
+      -out "$TESTDATA_DIR/der/$file.pem"
+  fi
   cat <<EOF >>"$RUST_FILE"
 
 #[rustfmt::skip]
-/// Generated from $file.der.
+/// Generated from $file.tbs.
 /// Signed with $key.
-pub const ${file^^}: untrusted::Input = untrusted::Input::from(include_bytes!("der/$file.bin"));
+pub const ${file^^}: &[u8] = include_bytes!("der/$file.bin");
 EOF
 done
