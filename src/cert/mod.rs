@@ -20,8 +20,8 @@ use {crate::crypto::ring, ::ring::error::Unspecified};
 // proves to be a non-starter.
 #[macro_use]
 mod der;
-
 mod cbor;
+mod cwt;
 mod x509;
 
 #[cfg(test)]
@@ -121,7 +121,7 @@ impl<'cert> Cert<'cert> {
     ) -> Result<Self, Error> {
         match format {
             CertFormat::RiotX509 => x509::parse(cert, format, key, ciphers),
-            CertFormat::OpenDiceCwt => todo!(),
+            CertFormat::OpenDiceCwt => cwt::parse(cert, key, ciphers),
         }
     }
 
