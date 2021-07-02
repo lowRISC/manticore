@@ -24,6 +24,15 @@ use core::convert::TryInto as _;
 
 use crate::cert::Error;
 
+#[cfg(test)]
+#[path = "cbor_macro.rs"]
+#[macro_use]
+mod cbor_macro;
+
+#[cfg(test)]
+#[path = "cbor_test.rs"]
+mod test;
+
 // NOTE: the orderings of fields in `Int` and `Scalar` are significant, because
 // they ensure that the generated derive(Ord) implementation is consistent with
 // bytewise lexicographic ordering. This is enforced by the below test.
@@ -263,6 +272,15 @@ impl<'i, 'r> Item<'i, 'r> {
             _ => Err(Error::BadEncoding),
         }
     }
+
+    /// Ignores this element, driving its internal state to completion.
+    pub fn ignore(self) -> Result<(), Error> {
+        match self {
+            Item::Array(a) => a.with(|e| e.ignore()),
+            Item::Map(m) => m.walk(|_| Ok(())),
+            _ => Ok(()),
+        }
+    }
 }
 
 // NOTE: Array and Map cannot be iterators, because the result value needs to
@@ -358,7 +376,7 @@ impl<'i, 'r> Map<'i, 'r> {
             last_get: None,
         };
         let val = body(&mut walker)?;
-        walker.with(|_| Ok(()))?;
+        walker.with(|(_, v)| v.ignore())?;
         Ok(val)
     }
 }
@@ -376,6 +394,13 @@ impl<'i, 'r> MapWalker<'i, 'r> {
     /// previous one.
     pub fn get(
         &mut self,
+        key: impl Into<Scalar<'i>>,
+    ) -> Result<Option<Item<'i, '_>>, Error> {
+        self.get_inner(key.into())
+    }
+
+    fn get_inner(
+        &mut self,
         key: Scalar<'i>,
     ) -> Result<Option<Item<'i, '_>>, Error> {
         if let Some(last) = self.last_get {
@@ -387,7 +412,7 @@ impl<'i, 'r> MapWalker<'i, 'r> {
             match Ord::cmp(&next, &key) {
                 // We're still in front of `key`, keep searching.
                 Ordering::Less => {
-                    let _ = self.map.next()?;
+                    self.map.next()?.map(|(_, v)| v.ignore()).transpose()?;
                 }
                 // We found it!
                 Ordering::Equal => return Ok(self.map.next()?.map(|(_, v)| v)),
@@ -399,7 +424,10 @@ impl<'i, 'r> MapWalker<'i, 'r> {
     }
 
     /// Like `get()`, but failure is an encoding error.
-    pub fn must_get(&mut self, key: Scalar<'i>) -> Result<Item<'i, '_>, Error> {
+    pub fn must_get(
+        &mut self,
+        key: impl Into<Scalar<'i>>,
+    ) -> Result<Item<'i, '_>, Error> {
         self.get(key)?.ok_or(Error::BadEncoding)
     }
 

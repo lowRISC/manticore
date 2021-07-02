@@ -80,23 +80,19 @@ pub fn parse<'cert>(
 
     let (issuer, subject, subject_key, ku) =
         cose.payload.read_all(Error::BadEncoding, |buf| {
-            Item::parse(buf)?.read_all(|buf| {
-                Item::parse(buf)?.into_map()?.walk(|map| {
-                    let iss = Name(
-                        map.must_get(label::CWT_ISS)?.into_utf8()?.as_bytes(),
-                    );
-                    let sub = Name(
-                        map.must_get(label::CWT_SUB)?.into_utf8()?.as_bytes(),
-                    );
+            Item::parse(buf)?.into_map()?.walk(|map| {
+                let iss =
+                    Name(map.must_get(label::CWT_ISS)?.into_utf8()?.as_bytes());
+                let sub =
+                    Name(map.must_get(label::CWT_SUB)?.into_utf8()?.as_bytes());
 
-                    let (_algo, params) =
-                        parse_cose_key(map.must_get(label::DICE_SPKI)?)?;
-                    let ku = map
-                        .get(label::DICE_KEY_USAGE)?
-                        .map(|v| x509::KeyUsage::from_le(v.into_bytes()?))
-                        .transpose()?;
-                    Ok((iss, sub, params, ku))
-                })
+                let (_algo, params) =
+                    parse_cose_key(map.must_get(label::DICE_SPKI)?)?;
+                let ku = map
+                    .get(label::DICE_KEY_USAGE)?
+                    .map(|v| x509::KeyUsage::from_le(v.into_bytes()?))
+                    .transpose()?;
+                Ok((iss, sub, params, ku))
             })
         })?;
 
@@ -140,23 +136,17 @@ fn parse_cose_key<'cert>(
     key: Item<'cert, '_>,
 ) -> Result<(Option<Algo>, PublicKeyParams<'cert>), Error> {
     key.into_map()?.walk(|map| {
-        let kty = map.must_get(label::KEY_KTY.into())?.into_int()?;
-        let _kid = map
-            .get(label::KEY_KID.into())?
-            .map(Item::into_bytes)
-            .transpose()?;
-        let algo = map
-            .get(label::KEY_ALG.into())?
-            .map(parse_algo)
-            .transpose()?;
+        let kty = map.must_get(label::KEY_KTY)?.into_int()?;
+        let _kid =
+            map.get(label::KEY_KID)?.map(Item::into_bytes).transpose()?;
+        let algo = map.get(label::KEY_ALG)?.map(parse_algo).transpose()?;
         // Skip other fields for now.
 
         let params = match kty {
             label::KEY_KTY_RSA => {
-                let modulus =
-                    map.must_get(label::RSA_MODULUS.into())?.into_bytes()?;
+                let modulus = map.must_get(label::RSA_MODULUS)?.into_bytes()?;
                 let exponent =
-                    map.must_get(label::RSA_MODULUS.into())?.into_bytes()?;
+                    map.must_get(label::RSA_MODULUS)?.into_bytes()?;
                 PublicKeyParams::Rsa { modulus, exponent }
             }
             _ => return Err(Error::UnknownAlgorithm),
@@ -198,7 +188,7 @@ impl<'cert> Cose<'cert> {
         ) -> Result<Headers<'cert>, Error> {
             Item::parse(buf)?.into_map()?.walk(|map| {
                 let algo = map
-                    .get(label::COSE_ALG.into())?
+                    .get(label::COSE_ALG)?
                     .map(|v| {
                         if !protected {
                             return Err(Error::BadEncoding);
@@ -207,7 +197,7 @@ impl<'cert> Cose<'cert> {
                     })
                     .transpose()?;
 
-                map.get(label::COSE_CRIT.into())?
+                map.get(label::COSE_CRIT)?
                     .map(|v| -> Result<_, _> {
                         if !protected {
                             return Err(Error::BadEncoding);
@@ -224,7 +214,7 @@ impl<'cert> Cose<'cert> {
                     .transpose()?;
 
                 let kid = map
-                    .get(label::COSE_KID.into())?
+                    .get(label::COSE_KID)?
                     .map(Item::into_bytes)
                     .transpose()?;
 
