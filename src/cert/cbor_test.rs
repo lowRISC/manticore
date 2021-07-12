@@ -6,8 +6,6 @@
 //!
 //! These are hung off to the side to avoid cluttering the main der.rs.
 
-#![allow(unused)]
-
 // NOTE: This is only for convenience and should be avoided in non-test code.
 use untrusted::Input;
 

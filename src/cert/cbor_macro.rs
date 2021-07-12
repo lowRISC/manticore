@@ -120,6 +120,17 @@ macro_rules! raw_cbor {
         *$count.unwrap() += 1;
         raw_cbor!(@parse[$out, $count] $($rest)*);
     }};
+    (@parse[$out:tt, $count:tt] h$imm:tt $($rest:tt)*) => {{
+        let hex: &'static str = $imm;
+        let hex: String = hex.chars().filter(|&c| !" \t\r\n".contains(c)).collect();
+
+        assert_eq!(hex.len() % 2, 0);
+        for i in (0..hex.len()).step_by(2) {
+            $out.push(u8::from_str_radix(&hex[i..i+2], 16).unwrap());
+        }
+
+        raw_cbor!(@parse[$out, $count] $($rest)*);
+    }};
     (@parse[$out:tt, $count:tt] $imm:tt $($rest:tt)*) => {{
         $out.extend_from_slice($imm.as_ref());
         raw_cbor!(@parse[$out, $count] $($rest)*);
