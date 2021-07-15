@@ -35,22 +35,24 @@ pub type SignError<S> = Error<<S as Sign>::Error>;
 
 /// A signature-verification engine, already primed with a key.
 ///
-/// There is no way to extract the key back out of an `Engine` value.
+/// There is no way to extract the key back out of a `Verify` value.
 pub trait Verify {
     /// The error returned when an operation fails.
     type Error;
 
-    /// Uses this engine to verify `signature` against `expected_hash`, by
-    /// performing an encryption operation on `signature`, and comparing the
-    /// result to a hash of `message`.
+    /// Verifies that `signature` is a valid signature for `message_vec`.
+    ///
+    /// `message_vec` is an iovec-like structure: the message is split across
+    /// many buffers for digital signatures that are the concatenation of many
+    /// parts, such as the Cerberus challenge command or a CWT signature.
     ///
     /// If the underlying cryptographic operation succeeds, returns `Ok(())`.
     /// Failures, including signature check failures, are included in the
     /// `Err` variant.
     fn verify(
         &mut self,
+        message_vec: &[&[u8]],
         signature: &[u8],
-        message: &[u8],
     ) -> Result<(), VerifyError<Self>>;
 }
 
@@ -73,13 +75,17 @@ pub trait Sign {
     /// Returns the number of bytes a signature produced by this signer needs.
     fn sig_bytes(&self) -> usize;
 
-    /// Uses this signer to create a signature value for `message`.
+    /// Creates a digital signature for `message_vec`, writing it to signature.
+    ///
+    /// `message_vec` is an iovec-like structure: the message is split across
+    /// many buffers for digital signatures that are the concatenation of many
+    /// parts, such as the Cerberus challenge command or a CWT signature.
     ///
     /// If the underlying cryptographic operation succeeds, returns `Ok(())`.
     /// Failures are included in the `Err` variant.
     fn sign(
         &mut self,
-        message: &[u8],
+        message_vec: &[&[u8]],
         signature: &mut [u8],
     ) -> Result<(), SignError<Self>>;
 }
