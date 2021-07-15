@@ -93,7 +93,9 @@ pub fn parse<'cert>(
     let verifier = ciphers
         .verifier(sig_algo, key)
         .ok_or(Error::UnknownAlgorithm)?;
-    verifier.verify(sig, tbs).map_err(|_| Error::BadSignature)?;
+    verifier
+        .verify(&[tbs], sig)
+        .map_err(|_| Error::BadSignature)?;
 
     Ok(cert)
 }

@@ -405,7 +405,7 @@ impl<E: Element> Container<E> {
         let mut signed = [0; 32];
         let mut signature = vec![0; signer.sig_bytes()];
         sha.hash_contiguous(&bytes, &mut signed)?;
-        signer.sign(&signed, &mut signature)?;
+        signer.sign(&[&signed], &mut signature)?;
         bytes.extend_from_slice(&signature);
 
         Ok(bytes)
