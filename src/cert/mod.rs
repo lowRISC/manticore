@@ -20,7 +20,9 @@ use {crate::crypto::ring, ::ring::error::Unspecified};
 // proves to be a non-starter.
 #[macro_use]
 mod der;
-
+#[macro_use]
+mod cbor;
+mod cwt;
 mod x509;
 
 #[cfg(test)]
@@ -34,8 +36,11 @@ pub enum CertFormat {
     /// TCG provides a published version of RIoT at
     /// https://trustedcomputinggroup.org/wp-content/uploads/TCG-DICE-Arch-Implicit-Identity-Based-Device-Attestation-v1-rev93.pdf.
     RiotX509,
-    // TODO: describe other formats, such as the OpenDICE X.509 and CWT-based
-    // formats.
+    /// A CWT certificate, using the OpenDICE profile.
+    ///
+    /// See
+    /// https://pigweed.googlesource.com/open-dice/+/refs/heads/main/docs/specification.md#CBOR-UDS-Certificates.
+    OpenDiceCwt,
 }
 
 /// A parsed certificate that has been validated against its signature.
@@ -117,6 +122,7 @@ impl<'cert> Cert<'cert> {
     ) -> Result<Self, Error> {
         match format {
             CertFormat::RiotX509 => x509::parse(cert, format, key, ciphers),
+            CertFormat::OpenDiceCwt => cwt::parse(cert, key, ciphers),
         }
     }
 

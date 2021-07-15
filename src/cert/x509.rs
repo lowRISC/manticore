@@ -186,8 +186,8 @@ fn parse_tbs<'cert>(
         })
     })?;
 
-    let is_cert_sign = match extns.is_cert_sign {
-        Some(b) => b,
+    let is_cert_sign = match extns.key_usage {
+        Some(b) => b.is_cert_sign(),
         _ => return Err(Error::BadEncoding),
     };
 
@@ -212,10 +212,75 @@ fn parse_tbs<'cert>(
     })
 }
 
+/// An X.509 `KeyUsage` value, representing the valid usages of a subject
+/// public key.
+///
+/// The memory representation is little-endian, meaning that for X.509, we
+/// need to reverse the bytes and the bits within, but not for CBOR.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct KeyUsage(u16);
+
+impl KeyUsage {
+    pub fn from_be(bytes: &[u8]) -> Result<Self, Error> {
+        Self::from_bits(bytes, true)
+    }
+
+    pub fn from_le(bytes: &[u8]) -> Result<Self, Error> {
+        Self::from_bits(bytes, false)
+    }
+
+    fn from_bits(bytes: &[u8], is_be: bool) -> Result<Self, Error> {
+        let b1 = *bytes.get(0).unwrap_or(&0);
+        let b2 = *bytes.get(1).unwrap_or(&0);
+        let val = if is_be {
+            // Note that ASN.1 BIT STRINGs are actually little-endian bytes;
+            // it is merely the bits within the bytes that are big endian!
+            u16::from_le_bytes([b1.reverse_bits(), b2.reverse_bits()])
+        } else {
+            u16::from_le_bytes([b1, b2])
+        };
+
+        // NOTE: This technically drops any "domain-specific"
+        // bits on the ground, but we have zero interest in retaining
+        // those.
+        let bits = Self(val);
+
+        // For domain separation reasons, we reject all
+        // certificates that mix certificate signing with any
+        // other usage.
+        if bits.is_cert_sign() && bits.0 != Self::CERT_SIGN_MASK {
+            return Err(Error::BadEncoding);
+        }
+
+        Ok(bits)
+    }
+
+    // Constants from RFC5280 S4.2.1.3. I.e.,
+    // ```asn1
+    // KeyUsage ::= BIT STRING {
+    //   digitalSignature        (0),
+    //   nonRepudiation          (1),
+    //   keyEncipherment         (2),
+    //   dataEncipherment        (3),
+    //   keyAgreement            (4),
+    //   keyCertSign             (5),
+    //   cRLSign                 (6),
+    //   encipherOnly            (7),
+    //   decipherOnly            (8),
+    // }
+    // ```
+    // Add constants as needed.
+    const CERT_SIGN_MASK: u16 = 1 << 5;
+
+    pub fn is_cert_sign(self) -> bool {
+        self.0 & Self::CERT_SIGN_MASK != 0
+    }
+}
+
 #[derive(Default)]
 struct Extensions {
     basic_constraints: Option<cert::BasicConstraints>,
-    is_cert_sign: Option<bool>,
+    key_usage: Option<KeyUsage>,
 }
 
 fn parse_extn(
@@ -227,48 +292,13 @@ fn parse_extn(
         let is_critical = der::opt_bool(buf)?.unwrap_or(false);
         der::tagged(Tag::OCTET_STRING, buf, |buf| match oid {
             oid::KEY_USAGE => {
-                if extns.is_cert_sign.is_some() {
+                if extns.key_usage.is_some() {
                     return Err(Error::BadEncoding);
                 }
 
-                // Constants from RFC5280 S4.2.1.3. I.e.,
-                // ```asn1
-                // KeyUsage ::= BIT STRING {
-                //   digitalSignature        (0),
-                //   nonRepudiation          (1),
-                //   keyEncipherment         (2),
-                //   dataEncipherment        (3),
-                //   keyAgreement            (4),
-                //   keyCertSign             (5),
-                //   cRLSign                 (6),
-                //   encipherOnly            (7),
-                //   decipherOnly            (8),
-                // }
-                // ```
-                //
-                // Note that the bits in a `BIT STRING` are big endian
-                // within bytes, so we need to "shift from the left"
-                // instead.
-                const CERT_SIGN_MASK: u16 = 1 << (15 - 5);
-
                 der::bits_partial(buf)?.read_all(Error::BadEncoding, |buf| {
-                    let first_byte = buf.read_byte().unwrap_or(0);
-                    let second_byte = buf.read_byte().unwrap_or(0);
-                    // NOTE: This technically drops any "domain-specific"
-                    // bits on the ground, but we have zero interest in retaining
-                    // those.
-                    let bits = u16::from_be_bytes([first_byte, second_byte]);
-
-                    extns.is_cert_sign = Some(bits & CERT_SIGN_MASK != 0);
-                    if extns.is_cert_sign == Some(true)
-                        && bits != CERT_SIGN_MASK
-                    {
-                        // For domain separation reasons, we reject all
-                        // certificates that mix certificate signing with any
-                        // other usage.
-                        return Err(Error::BadEncoding);
-                    }
-
+                    let bytes = buf.read_bytes_to_end().as_slice_less_safe();
+                    extns.key_usage = Some(KeyUsage::from_be(bytes)?);
                     Ok(())
                 })
             }
