@@ -24,7 +24,7 @@ impl sig::Verify for NoVerify {
     type Error = ();
     fn verify(
         &mut self,
-        _: &[u8],
+        _: &[&[u8]],
         _: &[u8],
     ) -> core::result::Result<(), sig::Error> {
         Ok(())

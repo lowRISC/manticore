@@ -426,7 +426,7 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
         let sig =
             self.flash
                 .read_direct(self.signature_region(), verify_arena, 1)?;
-        sig_verify.verify(sig, &digest)?;
+        sig_verify.verify(&[&digest], sig)?;
         Ok(())
     }
 
