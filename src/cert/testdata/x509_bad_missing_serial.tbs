@@ -1,0 +1,96 @@
+# Copyright lowRISC contributors.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# sign-alg:SEQUENCE { OBJECT_IDENTIFIER { 1.2.840.113549.1.1.11 } NULL {} }
+# sign-key:../../crypto/testdata/rsa_2048_private_key.pk8
+
+# tbsCertificate
+SEQUENCE {
+  # version = v3
+  [0] { INTEGER { 2 } }
+
+  # serialNumber
+  # INTEGER { 110011001100110011 }
+
+  # signature
+  SEQUENCE {
+    # sha256WithRSAEncryption
+    OBJECT_IDENTIFIER { 1.2.840.113549.1.1.11 }
+    NULL {}
+  }
+
+  # issuer (same as subject).
+  SEQUENCE {
+    SET {
+      SEQUENCE {
+        # "serialNumber" RDN attr
+        OBJECT_IDENTIFIER { 2.4.5.6 }
+        PrintableString { "my cool trust chain" }
+      }
+    }
+  }
+
+  # validity; this cert is always valid.
+  SEQUENCE {
+    GeneralizedTime { "99991231235959Z" }
+    GeneralizedTime { "99991231235959Z" }
+  }
+
+  # subject
+  SEQUENCE {
+    SET {
+      SEQUENCE {
+        # "serialNumber" RDN attr
+        OBJECT_IDENTIFIER { 2.4.5.6 }
+        PrintableString { "my cool trust chain" }
+      }
+    }
+  }
+
+  # subjectPublicKeyInfo
+  # This is `src/crypto/testdata/rsa_2048_public_key_2.pk8`.
+  SEQUENCE {
+    SEQUENCE {
+      # rsaEncryption
+      OBJECT_IDENTIFIER { 1.2.840.113549.1.1.1 }
+      NULL {}
+    }
+    BIT_STRING {
+      `00`
+      SEQUENCE {
+        INTEGER { `00e92c96a00bc68dad211fac2e1a948f84a5b438ac4b18a84e09088be389881e93964e8464e78040c485c0aa44c608ef3a38191b0d8892002c36c6e0c85f8c5b1044cbdd66aaa3802ef6a138bd53295050371d6b9af98fb31b09e98d6fef0dbb7bf38ca89f293b5085bd02ab2443b692edc829a5e3030aef1e4aae4b1e37981111fa593ee158028ed7e2a8cf826b16069f4d5486b8283b7bbe92f28db22a137b45d456585bdd2788ac9d5fac82d7d5bb3af48206c6f12504268dbd1886c95e3d63a9a06495ac6e1b58248d1c381965b54ee37fce3fc8b2babf59b8b236394cf8b4615ff51bf81ba5ec381d5cfe9fdb5e5617dd48c631e6921013cf067edf7b5e59` }
+        INTEGER { 65537 }
+      }
+    }
+  }
+
+  # extensions
+  [3] {
+    SEQUENCE {
+      # basicConstraints
+      SEQUENCE {
+        OBJECT_IDENTIFIER { 2.5.29.19 }
+        BOOLEAN { TRUE } # critical
+        OCTET_STRING {
+          SEQUENCE {
+            # cA
+            BOOLEAN { TRUE }
+            # pathLenConstraint
+            INTEGER { 1 }
+          }
+        }
+      }
+
+      # keyUsage
+      SEQUENCE {
+        OBJECT_IDENTIFIER { 2.5.29.15 }
+        BOOLEAN { TRUE } # critical
+        OCTET_STRING {
+          # keyCertSign
+          BIT_STRING { `00` `04` }
+        }
+      }
+    }
+  }
+}

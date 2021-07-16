@@ -10,6 +10,7 @@ use ring::error::Unspecified;
 use ring::signature::KeyPair as _;
 use ring::signature::RsaPublicKeyComponents;
 
+use crate::cert;
 use crate::crypto::rsa;
 use crate::crypto::sig;
 
@@ -36,6 +37,15 @@ impl PublicKey {
                 e: exponent,
             },
         })
+    }
+
+    /// Converts this `PublicKey` in a form useable by Manticore's certificate
+    /// parsers.
+    pub fn as_cert_params(&self) -> cert::PublicKeyParams {
+        cert::PublicKeyParams::Rsa {
+            modulus: &self.key.n,
+            exponent: &self.key.e,
+        }
     }
 }
 

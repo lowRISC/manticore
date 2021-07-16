@@ -287,7 +287,13 @@ fn parse_extn(
                 })
             }
             _ if is_critical => Err(Error::BadEncoding),
-            _ => Ok(()),
+            _ => {
+                // Drop the rest of the bytes on the floor. `untrusted` requires
+                // us to explicitly use all bytes, but we just want to ignore
+                // them in this case.
+                let _ = buf.read_bytes_to_end();
+                Ok(())
+            }
         })
     })
 }
