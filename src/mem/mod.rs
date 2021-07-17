@@ -8,6 +8,9 @@
 mod arena;
 pub use arena::*;
 
+mod self_ref;
+pub use self_ref::MapMut;
+
 pub mod cow;
 
 /// Aligns the given address to the alignment for the given type.
