@@ -5,22 +5,23 @@
 //! X.509 parsing.
 
 use crate::cert;
-use crate::cert::der;
-use crate::cert::der::Tag;
+use crate::cert::x509::der::Tag;
 use crate::cert::Algo;
 use crate::cert::Cert;
 use crate::cert::Error;
 use crate::cert::Name;
 use crate::cert::PublicKeyParams;
 
+#[macro_use]
+mod der;
+
 #[cfg(test)]
-#[path = "x509_test.rs"]
 mod test;
 
 /// OIDs used by the parser.
 #[allow(unused)]
 mod oid {
-    use crate::cert::der::Oid;
+    use crate::cert::x509::der::Oid;
 
     pub const RSA_ENCRYPTION: Oid = oid!(1, 2, 840, 113549, 1, 1, 1);
     pub const RSA_PKCS1_SHA256: Oid = oid!(1, 2, 840, 113549, 1, 1, 11);

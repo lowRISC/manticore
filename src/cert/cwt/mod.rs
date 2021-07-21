@@ -8,7 +8,7 @@
 //! https://datatracker.ietf.org/doc/html/rfc8392
 
 use crate::cert;
-use crate::cert::cbor::Item;
+use crate::cert::cwt::cbor::Item;
 use crate::cert::x509;
 use crate::cert::Algo;
 use crate::cert::Cert;
@@ -16,14 +16,16 @@ use crate::cert::Error;
 use crate::cert::Name;
 use crate::cert::PublicKeyParams;
 
+#[macro_use]
+mod cbor;
+
 #[cfg(test)]
-#[path = "cwt_test.rs"]
 mod test;
 
 // Well-known CBOR labels.
 #[allow(unused)]
 mod label {
-    use crate::cert::cbor::Int;
+    use crate::cert::cwt::cbor::Int;
     // COSE header labels. See RFC8152 Table 2.
     // Labels not listed here are ignored.
     pub const COSE_ALG: Int = Int::from_i32(1);

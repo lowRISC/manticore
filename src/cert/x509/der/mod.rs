@@ -21,7 +21,6 @@ use crate::io;
 use crate::io::Read as _;
 
 #[cfg(test)]
-#[path = "der_test.rs"]
 mod test;
 
 pub const TRUE: &[u8] = &[0xff];
@@ -364,6 +363,6 @@ macro_rules! oid {
             buf
         };
 
-        $crate::cert::der::Oid::<'static>::new(&ENC)
+        $crate::cert::x509::der::Oid::<'static>::new(&ENC)
     }}
 }

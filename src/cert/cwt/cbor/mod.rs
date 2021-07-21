@@ -25,12 +25,10 @@ use core::convert::TryInto as _;
 use crate::cert::Error;
 
 #[cfg(test)]
-#[path = "cbor_macro.rs"]
 #[macro_use]
-mod cbor_macro;
+mod macros;
 
 #[cfg(test)]
-#[path = "cbor_test.rs"]
 mod test;
 
 // NOTE: the orderings of fields in `Int` and `Scalar` are significant, because
