@@ -6,16 +6,10 @@
 //!
 //! These are hung off to the side to avoid cluttering the main cwt.rs.
 
-use ::ring::error::Unspecified;
-
-use crate::cert;
-use crate::cert::Algo;
 use crate::cert::Cert;
 use crate::cert::CertFormat;
-use crate::cert::PublicKeyParams;
+use crate::cert::RingCiphers;
 use crate::crypto;
-use crate::crypto::ring;
-use crate::crypto::sig;
 use crate::crypto::sig::Sign as _;
 
 const UINT: u8 = 0;
@@ -24,45 +18,6 @@ const UTF8: u8 = 3;
 const BYTES: u8 = 2;
 const ARRAY: u8 = 4;
 const MAP: u8 = 5;
-
-/// A `Ciphers` built on top of `ring`.
-struct RingCiphers {
-    verifier: Option<Box<dyn sig::Verify<Error = Unspecified>>>,
-}
-impl RingCiphers {
-    fn new() -> Self {
-        Self { verifier: None }
-    }
-}
-impl cert::Ciphers for RingCiphers {
-    type Error = Unspecified;
-    fn verifier<'a>(
-        &'a mut self,
-        algo: Algo,
-        key: &PublicKeyParams,
-    ) -> Option<&'a mut dyn sig::Verify<Error = Unspecified>> {
-        match (key, algo) {
-            (
-                PublicKeyParams::Rsa { modulus, exponent },
-                Algo::RsaPkcs1Sha256,
-            ) => {
-                use crate::crypto::rsa::Builder as _;
-
-                let key = ring::rsa::PublicKey::new(
-                    (*modulus).into(),
-                    (*exponent).into(),
-                )
-                .unwrap();
-                let rsa = ring::rsa::Builder::new();
-                self.verifier = Some(Box::new(rsa.new_verifier(key).unwrap()));
-                match &mut self.verifier {
-                    Some(x) => Some(&mut **x),
-                    None => None,
-                }
-            }
-        }
-    }
-}
 
 #[test]
 fn self_signed() {
