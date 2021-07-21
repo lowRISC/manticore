@@ -9,8 +9,8 @@
 // NOTE: This is only for convenience and should be avoided in non-test code.
 use untrusted::Input;
 
-use crate::cert::cbor::Int;
-use crate::cert::cbor::Item;
+use crate::cert::cwt::cbor::Int;
+use crate::cert::cwt::cbor::Item;
 use crate::cert::Error::BadEncoding;
 
 type Result = core::result::Result<(), crate::cert::Error>;

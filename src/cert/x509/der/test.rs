@@ -9,9 +9,9 @@
 // NOTE: This is only for convenience and should be avoided in non-test code.
 use untrusted::{Input, Reader};
 
-use crate::cert::der;
-use crate::cert::der::Tag;
 use crate::cert::testdata;
+use crate::cert::x509::der;
+use crate::cert::x509::der::Tag;
 use crate::cert::Error::BadEncoding;
 
 type Result = core::result::Result<(), crate::cert::Error>;

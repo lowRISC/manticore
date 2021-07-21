@@ -18,10 +18,6 @@ use {crate::crypto::ring, ::ring::error::Unspecified};
 // we don't walk off the end of the buffer. We may wind up building this
 // functionality into `manticore::io` if buffering certificates in memory
 // proves to be a non-starter.
-#[macro_use]
-mod der;
-#[macro_use]
-mod cbor;
 mod cwt;
 mod x509;
 
