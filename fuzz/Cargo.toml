@@ -38,6 +38,22 @@ path = "targets/x509_unsigned.rs"
 # Anything below this line will be blown away by `generate_proto_fuzz.py`.
 ## BEGIN GENERATED TARGETS
 [[bin]]
+name = "manticore_protocol_challenge_Challenge__req_to_wire"
+path = "gen/manticore_protocol_challenge_Challenge__req_to_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_challenge_Challenge__req_from_wire"
+path = "gen/manticore_protocol_challenge_Challenge__req_from_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_challenge_Challenge__resp_from_wire"
+path = "gen/manticore_protocol_challenge_Challenge__resp_from_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_challenge_Challenge__resp_to_wire"
+path = "gen/manticore_protocol_challenge_Challenge__resp_to_wire.rs"
+
+[[bin]]
 name = "manticore_protocol_capabilities_DeviceCapabilities__req_to_wire"
 path = "gen/manticore_protocol_capabilities_DeviceCapabilities__req_to_wire.rs"
 

@@ -62,10 +62,10 @@ pub trait FuzzSafe {
 /// Convenience macro for generating a "fuzz-safe" version of the struct that
 /// can be cheaply converted into the original struct.
 macro_rules! make_fuzz_safe {
-    ($name:ident$(<$lt:lifetime>)?) => {
+    ($name:ident) => {
         #[cfg(feature = "arbitrary-derive")]
-        impl<$($lt)?> $crate::protocol::macros::FuzzSafe for $name<$($lt)?> {
-            type Safe = $name<$($lt)?>;
+        impl $crate::protocol::macros::FuzzSafe for $name {
+            type Safe = $name;
         }
     };
     (
@@ -97,19 +97,19 @@ macro_rules! make_fuzz_safe {
             $field: make_fuzz_safe!(@convert_ty, $field_ty),
         )*}
         #[cfg(feature = "arbitrary-derive")]
-        impl $wrapper_name {
-            /// Borrow this value into a protocol struct.
-            pub fn as_ref<$($lt)?>(&$($lt)? self)
-            -> $name<$($lt)?> {
-                $name {$(
-                    $field: make_fuzz_safe!(@extract_ty,
-                                            self.$field: $field_ty),
-                )*}
-            }
-        }
-        #[cfg(feature = "arbitrary-derive")]
         impl<$($lt)?> $crate::protocol::macros::FuzzSafe for $name<$($lt)?> {
             type Safe = $wrapper_name;
+        }
+
+        #[cfg(feature = "arbitrary-derive")]
+        impl $crate::protocol::wire::ToWire for $wrapper_name {
+            fn to_wire<W: $crate::io::Write>(&self, w: W)
+                -> Result<(), $crate::protocol::wire::ToWireError> {
+                $crate::protocol::wire::ToWire::to_wire(&$name {$(
+                    $field: make_fuzz_safe!(@extract_ty,
+                                            self.$field: $field_ty),
+                )*}, w)
+            }
         }
     };
     (@convert_ty, (&$lt:tt [$ty:ty])) => {std::boxed::Box<[$ty]>};

@@ -10,14 +10,16 @@
 
 use libfuzzer_sys::fuzz_target;
 
+use manticore::mem::BumpArena;
 use manticore::protocol::Command;
-use manticore::protocol::wire::ToWire;
-use manticore::protocol::FuzzSafe;
+use manticore::protocol::wire::FromWire;
 
-use {ty} as C;
+use manticore::protocol::challenge::Challenge as C;
 
-fuzz_target!(|data: <<C as Command<'static>>::Resp as FuzzSafe>::Safe| {{
-    let mut out = [0u8; 1024];
-    let _ = data.to_wire(&mut &mut out[..]);
-}});
+fuzz_target!(|data: &[u8]| {
+    let mut arena = vec![0; data.len()];
+    let arena = BumpArena::new(&mut arena);
+    let mut data = data;
+    let _ = <C as Command<'_>>::Resp::from_wire(&mut data, &arena);
+});
 

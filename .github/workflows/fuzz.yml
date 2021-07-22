@@ -46,6 +46,66 @@ jobs:
   # Everything below this line is generated and will be blown away by
   # fuzz/generate_fuzz_targets.py
   ## BEGIN GENERATED JOBS
+  'manticore_protocol_challenge_Challenge__req_to_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::challenge::Challenge` with `req_to_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_challenge_Challenge__req_to_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_challenge_Challenge__req_from_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::challenge::Challenge` with `req_from_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_challenge_Challenge__req_from_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_challenge_Challenge__resp_from_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::challenge::Challenge` with `resp_from_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_challenge_Challenge__resp_from_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_challenge_Challenge__resp_to_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::challenge::Challenge` with `resp_to_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_challenge_Challenge__resp_to_wire \
+          -- -max_total_time=180
+
   'manticore_protocol_capabilities_DeviceCapabilities__req_to_wire':
     runs-on: ubuntu-latest
     name: 'Fuzz `manticore::protocol::capabilities::DeviceCapabilities` with `req_to_wire.rs`'
@@ -291,15 +351,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::get_digests::GetDigests` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
-    - name: `cargo fuzz run --release --sanitizer address`
+    - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_get_digests_GetDigests__req_to_wire \
           -- -max_total_time=180
@@ -309,15 +366,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::get_digests::GetDigests` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
-    - name: `cargo fuzz run --release --sanitizer address`
+    - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_get_digests_GetDigests__req_from_wire \
           -- -max_total_time=180
@@ -327,15 +381,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::get_digests::GetDigests` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
-    - name: `cargo fuzz run --release --sanitizer address`
+    - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_get_digests_GetDigests__resp_from_wire \
           -- -max_total_time=180
@@ -345,15 +396,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::get_digests::GetDigests` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
-    - name: `cargo fuzz run --release --sanitizer address`
+    - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_get_digests_GetDigests__resp_to_wire \
           -- -max_total_time=180
@@ -363,15 +411,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::get_cert::GetCert` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
-    - name: `cargo fuzz run --release --sanitizer address`
+    - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_get_cert_GetCert__req_to_wire \
           -- -max_total_time=180
@@ -381,15 +426,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::get_cert::GetCert` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
-    - name: `cargo fuzz run --release --sanitizer address`
+    - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_get_cert_GetCert__req_from_wire \
           -- -max_total_time=180
@@ -399,15 +441,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::get_cert::GetCert` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
-    - name: `cargo fuzz run --release --sanitizer address`
+    - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_get_cert_GetCert__resp_from_wire \
           -- -max_total_time=180
@@ -417,15 +456,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::get_cert::GetCert` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
-    - name: `cargo fuzz run --release --sanitizer address`
+    - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_get_cert_GetCert__resp_to_wire \
           -- -max_total_time=180

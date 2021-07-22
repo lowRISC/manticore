@@ -14,10 +14,10 @@ use manticore::protocol::Command;
 use manticore::protocol::wire::ToWire;
 use manticore::protocol::FuzzSafe;
 
-use {ty} as C;
+use manticore::protocol::challenge::Challenge as C;
 
-fuzz_target!(|data: <<C as Command<'static>>::Resp as FuzzSafe>::Safe| {{
+fuzz_target!(|data: <<C as Command<'static>>::Req as FuzzSafe>::Safe| {
     let mut out = [0u8; 1024];
     let _ = data.to_wire(&mut &mut out[..]);
-}});
+});
 
