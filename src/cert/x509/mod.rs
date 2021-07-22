@@ -6,11 +6,10 @@
 
 use crate::cert;
 use crate::cert::x509::der::Tag;
-use crate::cert::Algo;
 use crate::cert::Cert;
 use crate::cert::Error;
 use crate::cert::Name;
-use crate::cert::PublicKeyParams;
+use crate::crypto::sig;
 
 #[macro_use]
 mod der;
@@ -32,11 +31,11 @@ mod oid {
 }
 
 /// Parses an RFC3279 algorithm identifier.
-fn parse_algo(buf: &mut untrusted::Reader) -> Result<Algo, Error> {
+fn parse_algo(buf: &mut untrusted::Reader) -> Result<sig::Algo, Error> {
     match der::oid(buf)? {
         oid::RSA_PKCS1_SHA256 => {
             der::null(buf)?;
-            Ok(Algo::RsaPkcs1Sha256)
+            Ok(sig::Algo::RsaPkcs1Sha256)
         }
         _ => Err(Error::UnknownAlgorithm),
     }
@@ -56,8 +55,8 @@ fn parse_algo(buf: &mut untrusted::Reader) -> Result<Algo, Error> {
 pub fn parse<'cert>(
     cert: &'cert [u8],
     format: cert::CertFormat,
-    key: Option<&PublicKeyParams<'_>>,
-    ciphers: &mut impl cert::Ciphers,
+    key: Option<&sig::PublicKeyParams<'_>>,
+    ciphers: &mut impl sig::Ciphers,
 ) -> Result<Cert<'cert>, Error> {
     let buf = untrusted::Input::from(cert);
     let (cert, tbs, sig_algo, sig) =
@@ -167,7 +166,7 @@ fn parse_tbs<'cert>(
                     if exponent[0] == 0 {
                         exponent = &exponent[1..];
                     }
-                    Ok(PublicKeyParams::Rsa { modulus, exponent })
+                    Ok(sig::PublicKeyParams::Rsa { modulus, exponent })
                 })
             }
             _ => Err(Error::UnknownAlgorithm),

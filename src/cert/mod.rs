@@ -11,9 +11,6 @@
 use crate::crypto::sig;
 use crate::io;
 
-#[cfg(feature = "ring")]
-use {crate::crypto::ring, ::ring::error::Unspecified};
-
 // Note that all parsers leverage Brian Smith's `untrusted` crate to ensure
 // we don't walk off the end of the buffer. We may wind up building this
 // functionality into `manticore::io` if buffering certificates in memory
@@ -48,7 +45,7 @@ pub struct Cert<'cert> {
     format: CertFormat,
     issuer: Name<'cert>,
     subject: Name<'cert>,
-    subject_key: PublicKeyParams<'cert>,
+    subject_key: sig::PublicKeyParams<'cert>,
     basic_constraints: Option<BasicConstraints>,
     // Currently, we drop the authority identifier on the ground, but we may
     // want to communicate it for verification.
@@ -73,7 +70,7 @@ struct BasicConstraints {
 /// Rust does not provide a way to scope `impl` blocks.
 #[derive(Clone, Debug)]
 pub enum Error {
-    /// Indicates that the signature is not supported by the [`Ciphers`] used.
+    /// Indicates that the signature is not supported by the [`sig::Ciphers`] used.
     UnsupportedSig,
     /// Indicates that the encoding (e.g., DER or CBOR) was invalid for some
     /// reason.
@@ -113,8 +110,8 @@ impl<'cert> Cert<'cert> {
     pub fn parse(
         cert: &'cert [u8],
         format: CertFormat,
-        key: Option<&PublicKeyParams<'_>>,
-        ciphers: &mut impl Ciphers,
+        key: Option<&sig::PublicKeyParams<'_>>,
+        ciphers: &mut impl sig::Ciphers,
     ) -> Result<Self, Error> {
         match format {
             CertFormat::RiotX509 => x509::parse(cert, format, key, ciphers),
@@ -139,7 +136,7 @@ impl<'cert> Cert<'cert> {
     }
 
     /// The subject key bound to this certificate.
-    pub fn subject_key(&self) -> &PublicKeyParams<'cert> {
+    pub fn subject_key(&self) -> &sig::PublicKeyParams<'cert> {
         &self.subject_key
     }
 
@@ -194,99 +191,3 @@ impl<'cert> Cert<'cert> {
 /// comparisons.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Name<'cert>(&'cert [u8]);
-
-/// Public key parameters extracted from a certificate.
-///
-/// This must be paired with a compatible [`Algo`] (which specifies *algorithm*
-/// parameters) to be usable for signature verification.
-#[derive(Debug)]
-pub enum PublicKeyParams<'cert> {
-    /// RSA in an unspecified forma with an unspecified hash function.
-    Rsa {
-        /// The key modulus, in big-endian.
-        modulus: &'cert [u8],
-        /// The key exponent, in big-endian.
-        exponent: &'cert [u8],
-    },
-}
-
-impl PublicKeyParams<'_> {
-    /// Returns whether these parameters are appropriate for the given
-    /// algorithm.
-    pub fn is_params_for(&self, algo: Algo) -> bool {
-        match (self, algo) {
-            (Self::Rsa { .. }, Algo::RsaPkcs1Sha256) => true,
-        }
-    }
-}
-
-/// A signature algorithm for a subject key.
-///
-/// Each variant of this enum captures all parameters of the algorithm.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Algo {
-    /// PKCS#1.5-encoded RSA signatures using SHA-256 for hashing.
-    RsaPkcs1Sha256,
-}
-
-/// A collection of ciphers that are provided to certificate machinery.
-///
-/// Users are expected to implement this trait to efficiently describe to
-/// Manticore which algorithms they consider acceptable and how to access them.
-pub trait Ciphers {
-    /// The error returned by verifiers on failure.
-    type Error;
-
-    /// Returns a [`sig::Verify`] that can be used to verify signatures using
-    /// the given `key`.
-    ///
-    /// Returns `None` if `key`'s algorithm is not supported.
-    fn verifier<'a>(
-        &'a mut self,
-        algo: Algo,
-        key: &PublicKeyParams,
-    ) -> Option<&'a mut dyn sig::Verify<Error = Self::Error>>;
-}
-
-/// A [`Ciphers`] built on top of `ring`.
-#[cfg(feature = "ring")]
-#[derive(Default)]
-pub struct RingCiphers {
-    verifier: Option<Box<dyn sig::Verify<Error = Unspecified>>>,
-}
-
-#[cfg(feature = "ring")]
-impl RingCiphers {
-    /// Returns a new `RingCiphers`.
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
-#[cfg(feature = "ring")]
-impl Ciphers for RingCiphers {
-    type Error = Unspecified;
-    fn verifier<'a>(
-        &'a mut self,
-        algo: Algo,
-        key: &PublicKeyParams,
-    ) -> Option<&'a mut dyn sig::Verify<Error = Unspecified>> {
-        match (key, algo) {
-            (
-                PublicKeyParams::Rsa { modulus, exponent },
-                Algo::RsaPkcs1Sha256,
-            ) => {
-                use crate::crypto::rsa::Builder as _;
-
-                let key = ring::rsa::PublicKey::new(
-                    (*modulus).into(),
-                    (*exponent).into(),
-                )?;
-
-                let rsa = ring::rsa::Builder::new();
-                self.verifier = Some(Box::new(rsa.new_verifier(key).ok()?));
-                self.verifier.as_mut().map(|x| &mut **x as _)
-            }
-        }
-    }
-}

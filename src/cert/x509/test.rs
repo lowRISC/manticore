@@ -6,41 +6,13 @@
 //!
 //! These are hung off to the side to avoid cluttering the main x509.rs.
 
-use crate::cert;
 use crate::cert::testdata;
-use crate::cert::Algo;
 use crate::cert::Cert;
 use crate::cert::CertFormat;
-use crate::cert::PublicKeyParams;
-use crate::cert::RingCiphers;
 use crate::crypto;
 use crate::crypto::ring;
 use crate::crypto::rsa::KeyPair as _;
-use crate::crypto::sig;
-
-/// A `Ciphers` that blindly accepts all signatures.
-#[allow(unused)]
-struct NoVerify;
-impl sig::Verify for NoVerify {
-    type Error = ();
-    fn verify(
-        &mut self,
-        _: &[&[u8]],
-        _: &[u8],
-    ) -> core::result::Result<(), sig::Error> {
-        Ok(())
-    }
-}
-impl cert::Ciphers for NoVerify {
-    type Error = ();
-    fn verifier<'a>(
-        &'a mut self,
-        _: Algo,
-        _: &PublicKeyParams,
-    ) -> Option<&'a mut dyn sig::Verify<Error = ()>> {
-        Some(self)
-    }
-}
+use crate::crypto::sig::NoVerify;
 
 #[test]
 fn self_signed() {
@@ -48,7 +20,7 @@ fn self_signed() {
         testdata::X509_SELF_SIGNED,
         CertFormat::RiotX509,
         None,
-        &mut RingCiphers::new(),
+        &mut ring::sig::Ciphers::new(),
     )
     .unwrap();
 
@@ -68,7 +40,7 @@ fn explicit_key() {
         testdata::X509_SUB_SIGNED,
         CertFormat::RiotX509,
         Some(&keypair.public().as_cert_params()),
-        &mut RingCiphers::new(),
+        &mut ring::sig::Ciphers::new(),
     )
     .unwrap();
 

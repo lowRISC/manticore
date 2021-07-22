@@ -8,7 +8,7 @@
 
 use crate::cert::Cert;
 use crate::cert::CertFormat;
-use crate::cert::RingCiphers;
+use crate::crypto::ring;
 use crate::crypto;
 use crate::crypto::sig::Sign as _;
 
@@ -87,7 +87,7 @@ fn self_signed() {
         &data,
         CertFormat::OpenDiceCwt,
         None,
-        &mut RingCiphers::new(),
+        &mut ring::sig::Ciphers::new(),
     )
     .unwrap();
 

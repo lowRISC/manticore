@@ -95,3 +95,84 @@ pub trait Sign {
 ///
 /// See [`VerifyFor`].
 pub trait SignFor<Algo>: Sign {}
+
+/// Public key parameters extracted from a certificate.
+///
+/// This must be paired with a compatible [`Algo`] (which specifies *algorithm*
+/// parameters) to be usable for signature verification.
+#[derive(Debug)]
+pub enum PublicKeyParams<'cert> {
+    /// RSA in an unspecified form with an unspecified hash function.
+    Rsa {
+        /// The key modulus, in big-endian.
+        modulus: &'cert [u8],
+        /// The key exponent, in big-endian.
+        exponent: &'cert [u8],
+    },
+}
+
+impl PublicKeyParams<'_> {
+    /// Returns whether these parameters are appropriate for the given
+    /// algorithm.
+    pub fn is_params_for(&self, algo: Algo) -> bool {
+        match (self, algo) {
+            (Self::Rsa { .. }, Algo::RsaPkcs1Sha256) => true,
+        }
+    }
+}
+
+/// A signature algorithm for a certificate subject key.
+///
+/// Each variant of this enum captures all parameters of the algorithm.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Algo {
+    /// PKCS#1.5-encoded RSA signatures using SHA-256 for hashing.
+    RsaPkcs1Sha256,
+}
+
+/// A collection of ciphers that are provided to certificate machinery.
+///
+/// Users are expected to implement this trait to efficiently describe to
+/// Manticore which algorithms they consider acceptable and how to access them.
+pub trait Ciphers {
+    /// The error returned by verifiers on failure.
+    type Error;
+
+    /// Returns a [`Verify`] that can be used to verify signatures using
+    /// the given `key`.
+    ///
+    /// Returns `None` if `key`'s algorithm is not supported.
+    fn verifier<'a>(
+        &'a mut self,
+        algo: Algo,
+        key: &PublicKeyParams,
+    ) -> Option<&'a mut dyn Verify<Error = Self::Error>>;
+}
+
+/// A [`Ciphers`] that blindly accepts all signatures, for testing purposes.
+#[cfg(test)]
+pub(crate) struct NoVerify;
+
+#[cfg(test)]
+impl Verify for NoVerify {
+    type Error = ();
+    fn verify(
+        &mut self,
+        _: &[&[u8]],
+        _: &[u8],
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+impl Ciphers for NoVerify {
+    type Error = ();
+    fn verifier<'a>(
+        &'a mut self,
+        _: Algo,
+        _: &PublicKeyParams,
+    ) -> Option<&'a mut dyn Verify<Error = ()>> {
+        Some(self)
+    }
+}

@@ -10,11 +10,10 @@
 use crate::cert;
 use crate::cert::cwt::cbor::Item;
 use crate::cert::x509;
-use crate::cert::Algo;
 use crate::cert::Cert;
 use crate::cert::Error;
 use crate::cert::Name;
-use crate::cert::PublicKeyParams;
+use crate::crypto::sig;
 
 #[macro_use]
 mod cbor;
@@ -78,8 +77,8 @@ mod label {
 /// Parses a CWT certificate.
 pub fn parse<'cert>(
     cert: &'cert [u8],
-    key: Option<&PublicKeyParams<'_>>,
-    ciphers: &mut impl cert::Ciphers,
+    key: Option<&sig::PublicKeyParams<'_>>,
+    ciphers: &mut impl sig::Ciphers,
 ) -> Result<Cert<'cert>, Error> {
     let buf = untrusted::Input::from(cert);
     let cose = buf.read_all(Error::BadEncoding, Cose::parse)?;
@@ -144,7 +143,7 @@ pub fn parse<'cert>(
 
 fn parse_cose_key<'cert>(
     key: Item<'cert, '_>,
-) -> Result<(Option<Algo>, PublicKeyParams<'cert>), Error> {
+) -> Result<(Option<sig::Algo>, sig::PublicKeyParams<'cert>), Error> {
     key.into_map()?.walk(|map| {
         let kty = map.must_get(label::KEY_KTY)?.into_int()?;
         let _kid =
@@ -157,7 +156,7 @@ fn parse_cose_key<'cert>(
                 let modulus = map.must_get(label::RSA_MODULUS)?.into_bytes()?;
                 let exponent =
                     map.must_get(label::RSA_EXPONENT)?.into_bytes()?;
-                PublicKeyParams::Rsa { modulus, exponent }
+                sig::PublicKeyParams::Rsa { modulus, exponent }
             }
             _ => return Err(Error::UnknownAlgorithm),
         };
@@ -165,16 +164,16 @@ fn parse_cose_key<'cert>(
     })
 }
 
-fn parse_algo(v: Item) -> Result<Algo, Error> {
+fn parse_algo(v: Item) -> Result<sig::Algo, Error> {
     match v.into_int()? {
-        label::RSA_PKCS1_SHA256 => Ok(Algo::RsaPkcs1Sha256),
+        label::RSA_PKCS1_SHA256 => Ok(sig::Algo::RsaPkcs1Sha256),
         _ => Err(Error::UnknownAlgorithm),
     }
 }
 
 /// A COSE Sign1 structure.
 struct Cose<'cert> {
-    algo: Algo,
+    algo: sig::Algo,
     protected_bytes: untrusted::Input<'cert>,
     payload: untrusted::Input<'cert>,
     signature: &'cert [u8],
@@ -188,7 +187,7 @@ struct Cose<'cert> {
 impl<'cert> Cose<'cert> {
     fn parse(buf: &mut untrusted::Reader<'cert>) -> Result<Cose<'cert>, Error> {
         struct Headers<'cert> {
-            algo: Option<Algo>,
+            algo: Option<sig::Algo>,
             kid: Option<&'cert [u8]>,
         }
 

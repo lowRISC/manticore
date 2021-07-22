@@ -9,11 +9,8 @@
 
 use libfuzzer_sys::fuzz_target;
 
-use manticore::cert;
-use manticore::cert::Algo;
 use manticore::cert::Cert;
 use manticore::cert::CertFormat;
-use manticore::cert::PublicKeyParams;
 use manticore::crypto::sig;
 
 /// A `Ciphers` that blindly accepts all signatures.
@@ -23,19 +20,19 @@ impl sig::Verify for NoVerify {
     type Error = ();
     fn verify(
         &mut self,
+        _: &[&[u8]],
         _: &[u8],
-        _: &[u8],
-    ) -> core::result::Result<(), sig::Error> {
+    ) -> Result<(), sig::Error> {
         Ok(())
     }
 }
 
-impl cert::Ciphers for NoVerify {
+impl sig::Ciphers for NoVerify {
     type Error = ();
     fn verifier<'a>(
         &'a mut self,
-        _: Algo,
-        _: &PublicKeyParams,
+        _: sig::Algo,
+        _: &sig::PublicKeyParams,
     ) -> Option<&'a mut dyn sig::Verify<Error = ()>> {
         Some(self)
     }
