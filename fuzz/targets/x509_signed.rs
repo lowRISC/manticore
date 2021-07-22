@@ -11,14 +11,14 @@ use libfuzzer_sys::fuzz_target;
 
 use manticore::cert::Cert;
 use manticore::cert::CertFormat;
-use manticore::cert::RingCiphers;
+use manticore::crypto::ring;
 
 fuzz_target!(|data: &[u8]| {
     let cert = Cert::parse(
         data,
         CertFormat::RiotX509,
         None,
-        &mut RingCiphers::new()
+        &mut ring::sig::Ciphers::new()
     );
 
     // Since we're checking signatures, this is *guaranteed* to fail to verify.
