@@ -82,6 +82,9 @@ pub use firmware_version::FirmwareVersion;
 pub mod get_digests;
 pub use get_digests::GetDigests;
 
+pub mod get_cert;
+pub use get_cert::GetCert;
+
 pub mod reset_counter;
 pub use reset_counter::ResetCounter;
 
@@ -152,7 +155,11 @@ wire_enum! {
         /// A request for hashes of a certificate chain.
         ///
         /// See [`GetDigests`].
-        GetDigests = 0x82,
+        GetDigests = 0x81,
+        /// A request for a chunk of a certificate.
+        ///
+        /// See [`GetCert`].
+        GetCert = 0x82,
         /// A request for the number of times the device has been reset since
         /// POR.
         ///
