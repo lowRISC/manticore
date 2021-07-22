@@ -8,8 +8,8 @@
 
 use crate::cert::Cert;
 use crate::cert::CertFormat;
-use crate::crypto::ring;
 use crate::crypto;
+use crate::crypto::ring;
 use crate::crypto::sig::Sign as _;
 
 const UINT: u8 = 0;

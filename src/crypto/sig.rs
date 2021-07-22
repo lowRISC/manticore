@@ -4,6 +4,8 @@
 
 //! Algorithm-generic signature traits.
 
+use crate::protocol::capabilities;
+
 /// An error returned by a signature operation.
 ///
 /// This type serves as a combination of built-in error types known to
@@ -138,6 +140,12 @@ pub trait Ciphers {
     /// The error returned by verifiers on failure.
     type Error;
 
+    /// Performs cryptographic capabilities negotiation.
+    ///
+    /// This function populates `caps` with whatever asymmetric cryptography
+    /// it supports.
+    fn negotiate(&self, caps: &mut capabilities::Crypto);
+
     /// Returns a [`Verify`] that can be used to verify signatures using
     /// the given `key`.
     ///
@@ -156,11 +164,7 @@ pub(crate) struct NoVerify;
 #[cfg(test)]
 impl Verify for NoVerify {
     type Error = ();
-    fn verify(
-        &mut self,
-        _: &[&[u8]],
-        _: &[u8],
-    ) -> Result<(), Error> {
+    fn verify(&mut self, _: &[&[u8]], _: &[u8]) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -168,6 +172,7 @@ impl Verify for NoVerify {
 #[cfg(test)]
 impl Ciphers for NoVerify {
     type Error = ();
+    fn negotiate(&self, _: &mut capabilities::Crypto) {}
     fn verifier<'a>(
         &'a mut self,
         _: Algo,

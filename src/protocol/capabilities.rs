@@ -264,6 +264,28 @@ pub struct Networking {
     pub roles: BusRole,
 }
 
+/// Cryptographic device capabilities.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Crypto {
+    /// Whether this device supports ECDSA.
+    pub has_ecdsa: bool,
+    /// Whether this device supports ECC.
+    pub has_ecc: bool,
+    /// Whether this device supports RSA.
+    pub has_rsa: bool,
+    /// Whether this device supports AES.
+    pub has_aes: bool,
+
+    /// ECC key strengths supported by this device.
+    pub ecc_strength: EccKeyStrength,
+    /// RSA key strengths supported by this device.
+    pub rsa_strength: RsaKeyStrength,
+    /// AES key strengths supported by this device.
+    pub aes_strength: AesKeyStrength,
+}
+
 /// A description of device capabilities.
 ///
 /// This struct describes all of the device capabilities used in capability
@@ -294,21 +316,8 @@ pub struct Capabilities {
     /// The meaning of this field is unspecified by Cerberus.
     pub has_firmware_protection: bool,
 
-    /// Whether this device supports ECDSA.
-    pub has_ecdsa: bool,
-    /// Whether this device supports ECC.
-    pub has_ecc: bool,
-    /// Whether this device supports RSA.
-    pub has_rsa: bool,
-    /// Whether this device supports AES.
-    pub has_aes: bool,
-
-    /// ECC key strengths supported by this device.
-    pub ecc_strength: EccKeyStrength,
-    /// RSA key strengths supported by this device.
-    pub rsa_strength: RsaKeyStrength,
-    /// AES key strengths supported by this device.
-    pub aes_strength: AesKeyStrength,
+    /// Cryptographic capabilities supported by this device.
+    pub crypto: Crypto,
 }
 
 /// Constants relevant to parsing `Capabilities`.
@@ -392,14 +401,16 @@ impl<'a> FromWire<'a> for Capabilities {
             has_policy_support,
             has_firmware_protection,
 
-            has_ecdsa,
-            has_ecc,
-            has_rsa,
-            has_aes: false,
+            crypto: Crypto {
+                has_ecdsa,
+                has_ecc,
+                has_rsa,
+                has_aes: false,
 
-            ecc_strength,
-            rsa_strength,
-            aes_strength,
+                ecc_strength,
+                rsa_strength,
+                aes_strength,
+            },
         })
     }
 }
@@ -427,16 +438,16 @@ impl ToWire for Capabilities {
         w.write_le(sixth_byte.bits())?;
 
         let mut seventh_byte = BitBuf::new();
-        seventh_byte.write_bit(self.has_rsa)?;
-        seventh_byte.write_bit(self.has_ecdsa)?;
-        seventh_byte.write_bits(ECC_SIZE, self.ecc_strength.bits())?;
-        seventh_byte.write_bits(RSA_SIZE, self.rsa_strength.bits())?;
+        seventh_byte.write_bit(self.crypto.has_rsa)?;
+        seventh_byte.write_bit(self.crypto.has_ecdsa)?;
+        seventh_byte.write_bits(ECC_SIZE, self.crypto.ecc_strength.bits())?;
+        seventh_byte.write_bits(RSA_SIZE, self.crypto.rsa_strength.bits())?;
         w.write_le(seventh_byte.bits())?;
 
         let mut eighth_byte = BitBuf::new();
-        eighth_byte.write_bit(self.has_ecc)?;
+        eighth_byte.write_bit(self.crypto.has_ecc)?;
         eighth_byte.write_zero_bits(4)?;
-        eighth_byte.write_bits(AES_SIZE, self.aes_strength.bits())?;
+        eighth_byte.write_bits(AES_SIZE, self.crypto.aes_strength.bits())?;
         w.write_le(eighth_byte.bits())?;
 
         Ok(())
@@ -492,13 +503,15 @@ mod test {
                     has_pfm_support: true,
                     has_policy_support: false,
                     has_firmware_protection: false,
-                    has_ecdsa: false,
-                    has_ecc: false,
-                    has_rsa: true,
-                    has_aes: false,
-                    ecc_strength: EccKeyStrength::empty(),
-                    rsa_strength: RsaKeyStrength::BITS_2048,
-                    aes_strength: AesKeyStrength::BITS_128 | AesKeyStrength::BITS_256,
+                    crypto: Crypto {
+                        has_ecdsa: false,
+                        has_ecc: false,
+                        has_rsa: true,
+                        has_aes: false,
+                        ecc_strength: EccKeyStrength::empty(),
+                        rsa_strength: RsaKeyStrength::BITS_2048,
+                        aes_strength: AesKeyStrength::BITS_128 | AesKeyStrength::BITS_256,
+                    },
                 },
             },
         },
@@ -525,13 +538,15 @@ mod test {
                     has_pfm_support: true,
                     has_policy_support: false,
                     has_firmware_protection: false,
-                    has_ecdsa: false,
-                    has_ecc: false,
-                    has_rsa: true,
-                    has_aes: false,
-                    ecc_strength: EccKeyStrength::empty(),
-                    rsa_strength: RsaKeyStrength::BITS_2048,
-                    aes_strength: AesKeyStrength::BITS_128 | AesKeyStrength::BITS_256,
+                    crypto: Crypto {
+                        has_ecdsa: false,
+                        has_ecc: false,
+                        has_rsa: true,
+                        has_aes: false,
+                        ecc_strength: EccKeyStrength::empty(),
+                        rsa_strength: RsaKeyStrength::BITS_2048,
+                        aes_strength: AesKeyStrength::BITS_128 | AesKeyStrength::BITS_256,
+                    },
                 },
                 timeouts: Timeouts {
                     regular: Duration::from_millis(500),

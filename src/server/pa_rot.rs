@@ -7,7 +7,7 @@
 //! This module provides structures for serving responses to a host making
 //! requests to a PA-RoT.
 
-use crate::crypto::rsa;
+use crate::crypto::sig;
 use crate::hardware;
 use crate::mem::Arena;
 use crate::net;
@@ -19,15 +19,15 @@ use crate::server::Error;
 use crate::server::handler::prelude::*;
 
 /// Options struct for initializing a [`PaRot`].
-pub struct Options<'a, Identity, Reset, Rsa> {
+pub struct Options<'a, Identity, Reset, Ciphers> {
     /// A handle to the "hardware identity" of the device.
     pub identity: &'a Identity,
     /// A handle for looking up reset-related information for the current
     /// device.
     pub reset: &'a Reset,
 
-    /// A handle to an RSA engine builder.
-    pub rsa: &'a Rsa,
+    /// A handle to a signature verification engine,
+    pub ciphers: &'a mut Ciphers,
 
     /// This device's silicon identifier.
     pub device_id: device_id::DeviceIdentifier,
@@ -43,20 +43,20 @@ pub struct Options<'a, Identity, Reset, Rsa> {
 /// This type implements the request -> response "business logic" of the
 /// host <-> PA-RoT interaction. That is, it accepts input and output buffers,
 /// and from those, parses incoming requests and processes them into responses.
-pub struct PaRot<'a, Identity, Reset, Rsa> {
-    opts: Options<'a, Identity, Reset, Rsa>,
+pub struct PaRot<'a, Identity, Reset, Ciphers> {
+    opts: Options<'a, Identity, Reset, Ciphers>,
     ok_count: u16,
     err_count: u16,
 }
 
-impl<'a, Identity, Reset, Rsa> PaRot<'a, Identity, Reset, Rsa>
+impl<'a, Identity, Reset, Ciphers> PaRot<'a, Identity, Reset, Ciphers>
 where
     Identity: hardware::Identity,
     Reset: hardware::Reset,
-    Rsa: rsa::Builder<rsa::RsaPkcs1Sha256>,
+    Ciphers: sig::Ciphers,
 {
     /// Create a new `PaRot` with the given `Options`.
-    pub fn new(opts: Options<'a, Identity, Reset, Rsa>) -> Self {
+    pub fn new(opts: Options<'a, Identity, Reset, Ciphers>) -> Self {
         Self {
             opts,
             ok_count: 0,
@@ -93,12 +93,11 @@ where
             })
             .handle::<protocol::DeviceCapabilities, _>(|zelf, req| {
                 use protocol::capabilities::*;
-                // For now, we drop the client's capabilities on the ground.
-                // Eventually, these should be used for negotiation of crypto
-                // use.
-                let _ = req.capabilities;
+                let mut crypto = req.capabilities.crypto;
 
-                let rsa_strength = RsaKeyStrength::from_builder(zelf.opts.rsa);
+                zelf.opts.ciphers.negotiate(&mut crypto);
+                crypto.has_aes = false;
+                crypto.aes_strength = AesKeyStrength::empty();
 
                 let capabilities = Capabilities {
                     networking: zelf.opts.networking,
@@ -108,14 +107,7 @@ where
                     has_policy_support: false,
                     has_firmware_protection: false,
 
-                    has_ecdsa: false,
-                    has_ecc: false,
-                    has_rsa: !rsa_strength.is_empty(),
-                    has_aes: false,
-
-                    ecc_strength: EccKeyStrength::empty(),
-                    rsa_strength,
-                    aes_strength: AesKeyStrength::empty(),
+                    crypto,
                 };
 
                 Ok(protocol::capabilities::DeviceCapabilitiesResponse {
@@ -230,7 +222,7 @@ mod test {
     fn simulate_request<'a, C: protocol::Command<'a>, A: Arena>(
         scratch_space: &'a mut [u8],
         arena: &'a mut A,
-        server: &mut PaRot<fake::Identity, fake::Reset, ring::rsa::Builder>,
+        server: &mut PaRot<fake::Identity, fake::Reset, ring::sig::Ciphers>,
         request: C::Req,
     ) -> Result<Result<C::Resp, protocol::Error>, Error> {
         use crate::protocol::Response;
@@ -326,11 +318,11 @@ mod test {
             b"random bits",
         );
         let reset = fake::Reset::new(0, Duration::from_millis(1));
-        let rsa = ring::rsa::Builder::new();
+        let mut ciphers = ring::sig::Ciphers::new();
         let mut server = PaRot::new(Options {
             identity: &identity,
             reset: &reset,
-            rsa: &rsa,
+            ciphers: &mut ciphers,
             device_id: DEVICE_ID,
             networking: NETWORKING,
             timeouts: TIMEOUTS,
