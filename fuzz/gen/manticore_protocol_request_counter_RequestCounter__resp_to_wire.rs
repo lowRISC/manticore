@@ -16,7 +16,7 @@ use manticore::protocol::FuzzSafe;
 
 use manticore::protocol::request_counter::RequestCounter as C;
 
-fuzz_target!(|data: <<C as Command<'static>>::Req as FuzzSafe>::Safe| {
+fuzz_target!(|data: <<C as Command<'static>>::Resp as FuzzSafe>::Safe| {
     let mut out = [0u8; 1024];
     let _ = data.to_wire(&mut &mut out[..]);
 });

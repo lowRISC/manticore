@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Keep sorted.
+manticore::protocol::challenge::Challenge
 manticore::protocol::capabilities::DeviceCapabilities
 manticore::protocol::device_id::DeviceId
 manticore::protocol::device_info::DeviceInfo
