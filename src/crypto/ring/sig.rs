@@ -6,10 +6,11 @@
 //!
 //! Requires the `std` feature flag to be enabled.
 
-use crate::crypto::ring::Unspecified;
 use crate::crypto::ring::rsa;
+use crate::crypto::ring::Unspecified;
 use crate::crypto::rsa::Builder as _;
 use crate::crypto::sig;
+use crate::protocol::capabilities;
 
 #[cfg(doc)]
 use crate::crypto;
@@ -29,6 +30,20 @@ impl Ciphers {
 
 impl sig::Ciphers for Ciphers {
     type Error = Unspecified;
+
+    fn negotiate(&self, caps: &mut capabilities::Crypto) {
+        use capabilities::*;
+        *caps = Crypto {
+            has_ecdsa: false,
+            has_ecc: false,
+            has_rsa: true,
+
+            ecc_strength: EccKeyStrength::empty(),
+            rsa_strength: RsaKeyStrength::from_builder(&rsa::Builder::new()),
+            ..*caps
+        };
+    }
+
     fn verifier<'a>(
         &'a mut self,
         algo: sig::Algo,
@@ -39,10 +54,8 @@ impl sig::Ciphers for Ciphers {
                 sig::Algo::RsaPkcs1Sha256,
                 sig::PublicKeyParams::Rsa { modulus, exponent },
             ) => {
-                let key = rsa::PublicKey::new(
-                    (*modulus).into(),
-                    (*exponent).into(),
-                )?;
+                let key =
+                    rsa::PublicKey::new((*modulus).into(), (*exponent).into())?;
 
                 let rsa = rsa::Builder::new();
                 self.verifier = Some(Box::new(rsa.new_verifier(key).ok()?));

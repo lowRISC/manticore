@@ -17,11 +17,11 @@
 //!
 //! [`ring` warranty disclaimer]: https://github.com/briansmith/ring/blob/main/README.md
 
+#[cfg(feature = "std")]
+pub mod rsa;
 pub mod sha256;
 #[cfg(feature = "std")]
 pub mod sig;
-#[cfg(feature = "std")]
-pub mod rsa;
 
 #[cfg(doc)]
 use crate::crypto;

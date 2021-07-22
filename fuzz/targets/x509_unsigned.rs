@@ -12,6 +12,7 @@ use libfuzzer_sys::fuzz_target;
 use manticore::cert::Cert;
 use manticore::cert::CertFormat;
 use manticore::crypto::sig;
+use manticore::protocol::capabilities;
 
 /// A `Ciphers` that blindly accepts all signatures.
 struct NoVerify;
@@ -29,6 +30,7 @@ impl sig::Verify for NoVerify {
 
 impl sig::Ciphers for NoVerify {
     type Error = ();
+    fn negotiate(&self, _: &mut capabilities::Crypto) {}
     fn verifier<'a>(
         &'a mut self,
         _: sig::Algo,
