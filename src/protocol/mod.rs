@@ -79,6 +79,9 @@ pub use capabilities::DeviceCapabilities;
 pub mod firmware_version;
 pub use firmware_version::FirmwareVersion;
 
+pub mod get_digests;
+pub use get_digests::GetDigests;
+
 pub mod reset_counter;
 pub use reset_counter::ResetCounter;
 
@@ -146,6 +149,10 @@ wire_enum! {
         ///
         /// See [`DeviceInfo`].
         DeviceInfo = 0x04,
+        /// A request for hashes of a certificate chain.
+        ///
+        /// See [`GetDigests`].
+        GetDigests = 0x82,
         /// A request for the number of times the device has been reset since
         /// POR.
         ///

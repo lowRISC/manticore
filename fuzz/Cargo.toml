@@ -102,6 +102,22 @@ name = "manticore_protocol_device_uptime_DeviceUptime__resp_to_wire"
 path = "gen/manticore_protocol_device_uptime_DeviceUptime__resp_to_wire.rs"
 
 [[bin]]
+name = "manticore_protocol_get_digests_GetDigests__req_to_wire"
+path = "gen/manticore_protocol_get_digests_GetDigests__req_to_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_get_digests_GetDigests__req_from_wire"
+path = "gen/manticore_protocol_get_digests_GetDigests__req_from_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_get_digests_GetDigests__resp_from_wire"
+path = "gen/manticore_protocol_get_digests_GetDigests__resp_from_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_get_digests_GetDigests__resp_to_wire"
+path = "gen/manticore_protocol_get_digests_GetDigests__resp_to_wire.rs"
+
+[[bin]]
 name = "manticore_protocol_firmware_version_FirmwareVersion__req_to_wire"
 path = "gen/manticore_protocol_firmware_version_FirmwareVersion__req_to_wire.rs"
 
