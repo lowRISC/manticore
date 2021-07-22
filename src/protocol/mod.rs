@@ -85,6 +85,9 @@ pub use get_digests::GetDigests;
 pub mod get_cert;
 pub use get_cert::GetCert;
 
+pub mod challenge;
+pub use challenge::Challenge;
+
 pub mod reset_counter;
 pub use reset_counter::ResetCounter;
 
@@ -160,6 +163,10 @@ wire_enum! {
         ///
         /// See [`GetCert`].
         GetCert = 0x82,
+        /// A Cerberus challenge.
+        ///
+        /// See [`Challenge`].
+        Challenge = 0x83,
         /// A request for the number of times the device has been reset since
         /// POR.
         ///
