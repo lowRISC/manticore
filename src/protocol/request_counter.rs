@@ -29,9 +29,6 @@ use serde::{Deserialize, Serialize};
 /// A command for querying the reqest counters.
 ///
 /// Corresponds to [`CommandType::RequestCounter`].
-///
-/// [`CommandType::RequestCounter`]:
-///     ../enum.CommandType.html#variant.RequestCounter
 pub enum RequestCounter {}
 
 impl<'a> Command<'a> for RequestCounter {

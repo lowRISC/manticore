@@ -128,62 +128,41 @@ wire_enum! {
     pub enum CommandType: u8 {
         /// An error message (or a trivial command ACK).
         ///
-        /// See [`Error`](struct.Error.html).
+        /// See [`Error`].
         Error = 0x7f,
         /// A request for the RoT's firmware version.
         ///
         /// See [`FirmwareVersion`].
-        ///
-        /// [`FirmwareVersion`]:
-        ///     firmware_version/struct.FirmwareVersion.html
         FirmwareVersion = 0x01,
         /// A request to negotiate device capabilities.
         ///
         /// See [`DeviceCapabilities`].
-        ///
-        /// [`DeviceCapabilities`]:
-        ///     capabilites/struct.DeviceCapabilities.html
         DeviceCapabilities = 0x02,
         /// A request for this device's identity.
         ///
         /// See [`DeviceId`].
-        ///
-        /// [`DeviceId`]:
-        ///     device_id/struct.DeviceId.html
         DeviceId = 0x03,
         /// A request for information about this device.
         ///
         /// See [`DeviceInfo`].
-        ///
-        /// [`DeviceInfo`]:
-        ///     device_info/struct.DeviceInfo.html
         DeviceInfo = 0x04,
         /// A request for the number of times the device has been reset since
         /// POR.
         ///
         /// See [`ResetCounter`].
-        ///
-        /// [`ResetCounter`]:
-        ///     reset_counter/struct.ResetCounter.html
         ResetCounter = 0x87,
         /// A request for the uptime of the device since last reset.
         ///
-        /// Note that this command is a `manticore` extension.
+        /// Note that this command is a Manticore extension.
         ///
         /// See [`DeviceUptime`].
-        ///
-        /// [`DeviceUptime`]:
-        ///     device_uptime/struct.DeviceUptime.html
         DeviceUptime = 0xa0,
         /// A request for an approximate number of requests the device has
         /// handled since last reset.
         ///
-        /// Note that this command is a `manticore` extension.
+        /// Note that this command is a Manticore extension.
         ///
         /// See [`RequestCounter`].
-        ///
-        /// [`RequestCounter`]:
-        ///     device_uptime/struct.RequestCounter.html
         RequestCounter = 0xa1,
     }
 }

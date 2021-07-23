@@ -28,9 +28,6 @@ use serde::{Deserialize, Serialize};
 /// A command for requesting device information.
 ///
 /// Corresponds to [`CommandType::DeviceInfo`].
-///
-/// [`CommandType::DeviceInfo`]:
-///     ../enum.CommandType.html#variant.DeviceInfo
 pub enum DeviceInfo {}
 
 impl<'a> Command<'a> for DeviceInfo {

@@ -28,16 +28,14 @@ use libfuzzer_sys::arbitrary::{self, Arbitrary};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(doc)]
+use crate::hardware::Reset;
+
 /// A command for requesting a firmware version.
 ///
 /// Corresponds to [`CommandType::DeviceUptime`].
 ///
-/// See [`hardware::Reset::uptime()`].
-///
-/// [`CommandType::DeviceUptime`]:
-///     ../enum.CommandType.html#variant.DeviceUptime
-/// [`hardware::Reset::uptime()`]:
-///     ../../hardware/trait.Reset.html#tymethod.uptime
+/// See [`Reset::uptime()`].
 pub enum DeviceUptime {}
 
 impl<'a> Command<'a> for DeviceUptime {
