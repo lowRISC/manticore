@@ -36,9 +36,6 @@ use serde::{Deserialize, Serialize};
 /// A command for negotiating shared device capabilities.
 ///
 /// Corresponds to [`CommandType::DeviceCapabilities`].
-///
-/// [`CommandType::DeviceCapabilities`]:
-///     ../enum.CommandType.html#variant.DeviceCapabilities
 pub enum DeviceCapabilities {}
 
 impl Command<'_> for DeviceCapabilities {

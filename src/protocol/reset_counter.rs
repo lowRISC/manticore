@@ -25,16 +25,14 @@ use libfuzzer_sys::arbitrary::{self, Arbitrary};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(doc)]
+use crate::hardware::Reset;
+
 /// A command for requesting a firmware version.
 ///
 /// Corresponds to [`CommandType::ResetCounter`].
 ///
-/// See [`hardware::Reset::resets_since_power_on()`].
-///
-/// [`CommandType::ResetCounter`]:
-///     ../enum.CommandType.html#variant.ResetCounter
-/// [`hardware::Reset::resets_since_power_on()`]:
-///     ../../hardware/trait.Reset.html#tymethod.resets_since_power_on
+/// See [`Reset::resets_since_power_on()`].
 pub enum ResetCounter {}
 
 impl<'a> Command<'a> for ResetCounter {

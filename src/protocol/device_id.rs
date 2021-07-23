@@ -24,16 +24,14 @@ use libfuzzer_sys::arbitrary::{self, Arbitrary};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(doc)]
+use crate::hardware::Identity;
+
 /// A command for requesting a unique "device ID".
 ///
 /// Corresponds to [`CommandType::DeviceId`].
 ///
-/// See [`hardware::Identity::device_identity()`].
-///
-/// [`CommandType::DeviceId`]:
-///     ../enum.CommandType.html#variant.DeviceId
-/// [`hardware::Identity::device_identity()`]:
-///     ../../hardware/trait.Identity.html#tymethod.device_identity
+/// See [`Identity::unique_device_identity()`].
 pub enum DeviceId {}
 
 impl Command<'_> for DeviceId {

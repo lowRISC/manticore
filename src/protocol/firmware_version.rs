@@ -25,16 +25,14 @@ use libfuzzer_sys::arbitrary::{self, Arbitrary};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize};
 
+#[cfg(doc)]
+use crate::hardware::Identity;
+
 /// A command for requesting a firmware version.
 ///
 /// Corresponds to [`CommandType::FirmwareVersion`].
 ///
-/// See [`hardware::Identity::firmware_version()`].
-///
-/// [`CommandType::FirmwareVersion`]:
-///     ../enum.CommandType.html#variant.FirmwareVersion
-/// [`hardware::Identity::firmware_version()`]:
-///     ../../hardware/trait.Identity.html#tymethod.firmware_version
+/// See [`Identity::firmware_version()`].
 pub enum FirmwareVersion {}
 
 impl<'a> Command<'a> for FirmwareVersion {
