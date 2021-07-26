@@ -9,7 +9,7 @@
         toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
-    - name: `cargo fuzz run --release --sanitizer address`
+    - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
         cargo +nightly fuzz run \
           --release --sanitizer address \
