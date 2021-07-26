@@ -17,33 +17,27 @@ jobs:
     name: 'Fuzz X.509 parser with signature checking.'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           x509_signed
           -- -max_total_time=180
-          
+
   'x509_unsigned':
     runs-on: ubuntu-latest
     name: 'Fuzz X.509 parser without signature checking.'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           x509_unsigned
           -- -max_total_time=180
@@ -57,15 +51,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::capabilities::DeviceCapabilities` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_capabilities_DeviceCapabilities__req_to_wire \
           -- -max_total_time=180
@@ -75,15 +66,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::capabilities::DeviceCapabilities` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_capabilities_DeviceCapabilities__req_from_wire \
           -- -max_total_time=180
@@ -93,15 +81,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::capabilities::DeviceCapabilities` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_capabilities_DeviceCapabilities__resp_from_wire \
           -- -max_total_time=180
@@ -111,15 +96,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::capabilities::DeviceCapabilities` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_capabilities_DeviceCapabilities__resp_to_wire \
           -- -max_total_time=180
@@ -129,15 +111,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::device_id::DeviceId` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_device_id_DeviceId__req_to_wire \
           -- -max_total_time=180
@@ -147,15 +126,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::device_id::DeviceId` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_device_id_DeviceId__req_from_wire \
           -- -max_total_time=180
@@ -165,15 +141,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::device_id::DeviceId` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_device_id_DeviceId__resp_from_wire \
           -- -max_total_time=180
@@ -183,15 +156,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::device_id::DeviceId` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_device_id_DeviceId__resp_to_wire \
           -- -max_total_time=180
@@ -201,15 +171,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::device_info::DeviceInfo` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_device_info_DeviceInfo__req_to_wire \
           -- -max_total_time=180
@@ -219,15 +186,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::device_info::DeviceInfo` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_device_info_DeviceInfo__req_from_wire \
           -- -max_total_time=180
@@ -237,15 +201,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::device_info::DeviceInfo` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_device_info_DeviceInfo__resp_from_wire \
           -- -max_total_time=180
@@ -255,15 +216,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::device_info::DeviceInfo` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_device_info_DeviceInfo__resp_to_wire \
           -- -max_total_time=180
@@ -273,15 +231,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::device_uptime::DeviceUptime` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_device_uptime_DeviceUptime__req_to_wire \
           -- -max_total_time=180
@@ -291,15 +246,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::device_uptime::DeviceUptime` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_device_uptime_DeviceUptime__req_from_wire \
           -- -max_total_time=180
@@ -309,15 +261,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::device_uptime::DeviceUptime` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_device_uptime_DeviceUptime__resp_from_wire \
           -- -max_total_time=180
@@ -327,15 +276,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::device_uptime::DeviceUptime` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_device_uptime_DeviceUptime__resp_to_wire \
           -- -max_total_time=180
@@ -345,15 +291,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::firmware_version::FirmwareVersion` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_firmware_version_FirmwareVersion__req_to_wire \
           -- -max_total_time=180
@@ -363,15 +306,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::firmware_version::FirmwareVersion` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_firmware_version_FirmwareVersion__req_from_wire \
           -- -max_total_time=180
@@ -381,15 +321,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::firmware_version::FirmwareVersion` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_firmware_version_FirmwareVersion__resp_from_wire \
           -- -max_total_time=180
@@ -399,15 +336,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::firmware_version::FirmwareVersion` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_firmware_version_FirmwareVersion__resp_to_wire \
           -- -max_total_time=180
@@ -417,15 +351,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::request_counter::RequestCounter` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_request_counter_RequestCounter__req_to_wire \
           -- -max_total_time=180
@@ -435,15 +366,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::request_counter::RequestCounter` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_request_counter_RequestCounter__req_from_wire \
           -- -max_total_time=180
@@ -453,15 +381,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::request_counter::RequestCounter` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_request_counter_RequestCounter__resp_from_wire \
           -- -max_total_time=180
@@ -471,15 +396,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::request_counter::RequestCounter` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_request_counter_RequestCounter__resp_to_wire \
           -- -max_total_time=180
@@ -489,15 +411,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::reset_counter::ResetCounter` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_reset_counter_ResetCounter__req_to_wire \
           -- -max_total_time=180
@@ -507,15 +426,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::reset_counter::ResetCounter` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_reset_counter_ResetCounter__req_from_wire \
           -- -max_total_time=180
@@ -525,15 +441,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::reset_counter::ResetCounter` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_reset_counter_ResetCounter__resp_from_wire \
           -- -max_total_time=180
@@ -543,15 +456,12 @@ jobs:
     name: 'Fuzz `manticore::protocol::reset_counter::ResetCounter` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
-    - name: Install Toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
     - name: Install `cargo fuzz`
       run: cargo install cargo-fuzz
     - name: Run `cargo fuzz run --release --sanitizer address`
       run: |
-        cargo +nightly fuzz run \
+        cd fuzz
+        cargo fuzz run \
           --release --sanitizer address \
           manticore_protocol_reset_counter_ResetCounter__resp_to_wire \
           -- -max_total_time=180
