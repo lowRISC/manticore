@@ -42,4 +42,4 @@ jobs:
       run: cargo test --verbose
 
     - name: Run e2e tests
-      run: cargo test -v -p manticore-e2e -- run-tests
+      run: cargo run -v -p e2e

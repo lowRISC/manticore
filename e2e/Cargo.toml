@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [package]
-name = "manticore-e2e"
+name = "e2e"
 version = "0.0.0"
 edition = "2018"
 
