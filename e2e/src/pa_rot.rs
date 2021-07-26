@@ -17,12 +17,15 @@ use std::time::Instant;
 use structopt::StructOpt;
 
 use manticore::crypto::ring;
-use manticore::mem::Arena as _;
+use manticore::mem::Arena;
 use manticore::mem::BumpArena;
+use manticore::protocol;
 use manticore::protocol::capabilities;
 use manticore::protocol::device_id::DeviceIdentifier;
+use manticore::server;
 use manticore::server::pa_rot::PaRot;
 
+use crate::tcp;
 use crate::tcp::TcpHostPort;
 
 // Exists to work around structopt wanting to interpret a
@@ -45,10 +48,6 @@ mod parse {
 /// Options for the PA-RoT.
 #[derive(Debug, StructOpt)]
 pub struct Options {
-    /// Which port to listen on.
-    #[structopt(short, long)]
-    pub port: u16,
-
     /// A firmware version blob to report to clients.
     #[structopt(
         long,
@@ -107,7 +106,6 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            port: 9999,
             firmware_version: b"<version unspecified>".to_vec(),
             unique_device_identity: b"<uid unspecified>".to_vec(),
             resets_since_power_on: 5,
@@ -131,7 +129,6 @@ impl Options {
     pub fn unparse(&self) -> Vec<String> {
         vec![
             format!("serve"),
-            format!("--port={}", self.port),
             // TODO: Come up with a non-panicking option.
             format!(
                 "--firmware-version={}",
@@ -153,26 +150,65 @@ impl Options {
         ]
     }
 }
-/// Spawns a virtual PA-RoT subprocess as described by `opts`.
-pub fn spawn(opts: &Options) -> Child {
-    log::info!("spawning server: {:#?}", opts);
-    // Get argv[0]. We assume this is the path to the executable.
-    let exe = std::env::args_os().next().unwrap();
-    let args = opts.unparse();
-    let mut child = Command::new(exe)
-        .args(&args)
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn server subprocess");
-    let mut stdout = BufReader::new(child.stdout.take().unwrap());
-    let mut line = String::new();
 
-    // Wait until the child signals it's ready by writing a line to stdout.
-    while line.is_empty() {
-        stdout.read_line(&mut line).unwrap();
+/// A virtual PA-RoT, implemented as a subprocess speaking TCP.
+pub struct Virtual {
+    child: Child,
+    port: u16,
+}
+
+impl Drop for Virtual {
+    fn drop(&mut self) {
+        self.child.kill().unwrap();
     }
-    log::info!("acked child startup: {}", line);
-    return child;
+}
+
+impl Virtual {
+    /// Spawns a virtual PA-RoT subprocess as described by `opts`.
+    pub fn spawn(opts: &Options) -> Virtual {
+        log::info!("spawning server: {:#?}", opts);
+        // Get argv[0]. We assume this is the path to the executable.
+        let exe = std::env::args_os().next().unwrap();
+        let args = opts.unparse();
+        let mut child = Command::new(exe)
+            .args(&args)
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("failed to spawn server subprocess");
+
+        // Wait until the child signals it's ready by writing a line to stdout.
+        let mut stdout = BufReader::new(child.stdout.take().unwrap());
+        let mut line = String::new();
+        loop {
+            line.clear();
+            stdout.read_line(&mut line).unwrap();
+            if line.is_empty() {
+                continue;
+            }
+
+            if let Some(port) = line.trim().strip_prefix("listening@") {
+                log::info!("acked child startup: {}", line);
+                return Virtual {
+                    child,
+                    port: port.parse().unwrap(),
+                };
+            }
+        }
+    }
+    /// Sends `req` to this virtal RoT, using Cerberus-over-TCP.
+    ///
+    /// Blocks until a response comes back.
+    pub fn send_local<'a, Cmd, A>(
+        &self,
+        req: Cmd::Req,
+        arena: &'a A,
+    ) -> Result<Result<Cmd::Resp, protocol::Error>, server::Error>
+    where
+        Cmd: protocol::Command<'a>,
+        A: Arena,
+    {
+        tcp::send_local::<Cmd, A>(self.port, req, arena)
+    }
 }
 
 /// Starts a server loop for serving PA-RoT requests, as described by `opts`.
@@ -240,17 +276,18 @@ pub fn serve(opts: Options) -> ! {
         timeouts,
     });
 
-    log::info!("binding to 127.0.0.1:{}", opts.port);
-    let mut host = match TcpHostPort::bind(opts.port) {
+    let mut host = match TcpHostPort::bind() {
         Ok(host) => host,
         Err(e) => {
             log::error!("could not connect to host: {:?}", e);
             std::process::exit(1);
         }
     };
+    let port = host.port();
+    log::info!("bound to port {}", port);
 
-    // Notify parent that we're listening on the requested port.
-    println!("listening!");
+    // Notify parent that we're listening.
+    println!("listening@{}", port);
 
     let mut arena = vec![0; 64];
     let mut arena = BumpArena::new(&mut arena);

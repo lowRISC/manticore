@@ -216,9 +216,9 @@ struct Inner {
 }
 
 impl TcpHostPort {
-    /// Binds a new `TcpHostPort` to the given port.
-    pub fn bind(port: u16) -> Result<Self, net::Error> {
-        let listener = TcpListener::bind(("127.0.0.1", port)).map_err(|e| {
+    /// Binds a new `TcpHostPort` to an open port.
+    pub fn bind() -> Result<Self, net::Error> {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(|e| {
             log::error!("{}", e);
             net::Error::Io(io::Error::Internal)
         })?;
@@ -227,6 +227,11 @@ impl TcpHostPort {
             stream: None,
             output_buffer: None,
         }))
+    }
+
+    /// Returns the TCP port this `HostPort` is bound to.
+    pub fn port(&self) -> u16 {
+        self.0.listener.local_addr().unwrap().port()
     }
 }
 
