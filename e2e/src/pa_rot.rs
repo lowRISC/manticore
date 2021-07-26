@@ -6,15 +6,12 @@
 
 use std::io::BufRead as _;
 use std::io::BufReader;
-use std::num::ParseIntError;
 use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
 use std::str;
 use std::time::Duration;
 use std::time::Instant;
-
-use structopt::StructOpt;
 
 use manticore::crypto::ring;
 use manticore::mem::Arena;
@@ -28,78 +25,33 @@ use manticore::server::pa_rot::PaRot;
 use crate::tcp;
 use crate::tcp::TcpHostPort;
 
-// Exists to work around structopt wanting to interpret a
-// Vec field as being "multiple arguments allowed".
-#[doc(hidden)]
-pub type Bytes = Vec<u8>;
-
-mod parse {
-    use super::*;
-
-    pub fn bytes(s: &str) -> Bytes {
-        s.as_bytes().to_vec()
-    }
-
-    pub fn millis(s: &str) -> Result<Duration, ParseIntError> {
-        Ok(Duration::from_millis(s.parse()?))
-    }
-}
-
 /// Options for the PA-RoT.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct Options {
     /// A firmware version blob to report to clients.
-    #[structopt(
-        long,
-        default_value = "<version unspecified>",
-        parse(from_str = parse::bytes),
-    )]
-    pub firmware_version: Bytes,
+    pub firmware_version: Vec<u8>,
 
     /// A unique device identity blob to report to clients.
-    #[structopt(
-        long,
-        default_value = "<uid unspecified>",
-        parse(from_str = parse::bytes),
-    )]
-    pub unique_device_identity: Bytes,
+    pub unique_device_identity: Vec<u8>,
 
     /// The number of resets to report since power on.
-    #[structopt(long, default_value = "0")]
     pub resets_since_power_on: u32,
 
     /// The maximum message size to report as a capability
-    /// (unused by the transport)
-    #[structopt(long, default_value = "1024")]
+    /// (unused by the transport).
     pub max_message_size: u16,
     /// The maximum packet size to report as a capability
-    /// (unused by the transport)
-    #[structopt(long, default_value = "256")]
+    /// (unused by the transport).
     pub max_packet_size: u16,
 
-    /// The timeout to report for a non-cryptographic operation in milliseconds
-    /// (unused other than for capabilities requests)
-    #[structopt(
-        long,
-        default_value = "30",
-        parse(try_from_str = parse::millis),
-    )]
+    /// The timeout to report for a non-cryptographic operation
+    /// (unused other than for capabilities requests).
     pub regular_timeout: Duration,
-    /// The timeout to report for a cryptographic operation in milliseconds
+    /// The timeout to report for a cryptographic operation.
     /// (unused other than for capabilities requests)
-    #[structopt(
-        long,
-        default_value = "200",
-        parse(try_from_str = parse::millis),
-    )]
     pub crypto_timeout: Duration,
 
-    /// The device identifier to report to the client
-    #[structopt(
-        long,
-        default_value = r#"{"vendor_id":1,"device_id":2,"subsys_vendor_id":3,"subsys_id":4}"#,
-        parse(try_from_str = serde_json::from_str),
-    )]
+    /// The device identifier to report to the client.
     pub device_id: DeviceIdentifier,
 }
 
@@ -123,34 +75,6 @@ impl Default for Options {
     }
 }
 
-impl Options {
-    /// Convert this `Options` into command-line arguments. This is intended
-    /// for simplifying an exec-into-self workflow.
-    pub fn unparse(&self) -> Vec<String> {
-        vec![
-            format!("serve"),
-            // TODO: Come up with a non-panicking option.
-            format!(
-                "--firmware-version={}",
-                str::from_utf8(self.firmware_version.as_ref()).unwrap()
-            ),
-            format!(
-                "--unique-device-identity={}",
-                str::from_utf8(self.unique_device_identity.as_ref()).unwrap()
-            ),
-            format!("--resets-since-power-on={}", self.resets_since_power_on),
-            format!("--max-message-size={}", self.max_message_size),
-            format!("--max-packet-size={}", self.max_packet_size),
-            format!("--regular-timeout={}", self.regular_timeout.as_millis()),
-            format!("--crypto-timeout={}", self.crypto_timeout.as_millis()),
-            format!(
-                "--device-id={}",
-                serde_json::to_string(&self.device_id).unwrap()
-            ),
-        ]
-    }
-}
-
 /// A virtual PA-RoT, implemented as a subprocess speaking TCP.
 pub struct Virtual {
     child: Child,
@@ -169,9 +93,9 @@ impl Virtual {
         log::info!("spawning server: {:#?}", opts);
         // Get argv[0]. We assume this is the path to the executable.
         let exe = std::env::args_os().next().unwrap();
-        let args = opts.unparse();
+        let opts = serde_json::to_string(opts).unwrap();
         let mut child = Command::new(exe)
-            .args(&args)
+            .args(&["--start-pa-rot-with-options", &opts])
             .stdout(Stdio::piped())
             .spawn()
             .expect("failed to spawn server subprocess");
@@ -228,7 +152,7 @@ pub fn serve(opts: Options) -> ! {
 
     struct Id {
         firmware_version: [u8; 32],
-        unique_device_identity: Bytes,
+        unique_device_identity: Vec<u8>,
     }
     impl manticore::hardware::Identity for Id {
         fn firmware_version(&self) -> &[u8; 32] {

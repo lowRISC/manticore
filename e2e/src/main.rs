@@ -33,11 +33,10 @@ pub mod tcp;
 
 /// End-to-end tests for Manticore.
 #[derive(Debug, StructOpt)]
-enum Options {
-    /// Execute the end-to-end tests
-    RunTests {},
-    /// Spawn a virtual RoT that can be interacted with over local TCP
-    Serve(pa_rot::Options),
+struct Options {
+    /// Internal flag.
+    #[structopt(long)]
+    start_pa_rot_with_options: Option<String>,
 }
 
 fn main() {
@@ -63,33 +62,34 @@ fn main() {
         log::info!("argv[{}] = {:?}", i, arg);
     }
 
-    match Options::from_args() {
-        Options::RunTests {} => {
-            // Currently, we only run one, trivial test.
-            // Eventually, this will be replaced with a more general "test
-            // suite".
-            let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
-                firmware_version: b"my cool e2e test".to_vec(),
-                ..Default::default()
-            });
+    let opts = Options::from_args();
+    if let Some(pa_opts) = &opts.start_pa_rot_with_options {
+        let opts = serde_json::from_str::<pa_rot::Options>(pa_opts).unwrap();
+        pa_rot::serve(opts);
+    }
 
-            let mut arena = [0; 64];
-            let arena = BumpArena::new(&mut arena);
-            let resp = virt.send_local::<FirmwareVersion, _>(
-                FirmwareVersionRequest { index: 0 },
-                &arena,
+    // Currently, we only run one, trivial test.
+    // Eventually, this will be replaced with a more general "test
+    // suite".
+    let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
+        firmware_version: b"my cool e2e test".to_vec(),
+        ..Default::default()
+    });
+
+    let mut arena = [0; 64];
+    let arena = BumpArena::new(&mut arena);
+    let resp = virt.send_local::<FirmwareVersion, _>(
+        FirmwareVersionRequest { index: 0 },
+        &arena,
+    );
+    match resp {
+        Ok(Ok(resp)) => {
+            log::info!(
+                "resp.version: {}",
+                std::str::from_utf8(resp.version).unwrap()
             );
-            match resp {
-                Ok(Ok(resp)) => {
-                    log::info!(
-                        "resp.version: {}",
-                        std::str::from_utf8(resp.version).unwrap()
-                    );
-                    assert!(resp.version.starts_with(b"my cool e2e test"));
-                }
-                bad => log::error!("bad response: {:?}", bad),
-            }
+            assert!(resp.version.starts_with(b"my cool e2e test"));
         }
-        Options::Serve(opts) => pa_rot::serve(opts),
+        bad => log::error!("bad response: {:?}", bad),
     }
 }
