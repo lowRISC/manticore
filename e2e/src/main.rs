@@ -35,11 +35,7 @@ pub mod tcp;
 #[derive(Debug, StructOpt)]
 enum Options {
     /// Execute the end-to-end tests
-    RunTests {
-        /// Spawn the virtual RoT at the given port
-        #[structopt(long, short, default_value = "9999")]
-        port: u16,
-    },
+    RunTests {},
     /// Spawn a virtual RoT that can be interacted with over local TCP
     Serve(pa_rot::Options),
 }
@@ -68,20 +64,18 @@ fn main() {
     }
 
     match Options::from_args() {
-        Options::RunTests { port, .. } => {
+        Options::RunTests {} => {
             // Currently, we only run one, trivial test.
             // Eventually, this will be replaced with a more general "test
             // suite".
-            let mut subproc = pa_rot::spawn(&pa_rot::Options {
-                port,
+            let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
                 firmware_version: b"my cool e2e test".to_vec(),
                 ..Default::default()
             });
 
             let mut arena = [0; 64];
             let arena = BumpArena::new(&mut arena);
-            let resp = tcp::send_local::<FirmwareVersion, _>(
-                port,
+            let resp = virt.send_local::<FirmwareVersion, _>(
                 FirmwareVersionRequest { index: 0 },
                 &arena,
             );
@@ -95,8 +89,6 @@ fn main() {
                 }
                 bad => log::error!("bad response: {:?}", bad),
             }
-
-            subproc.kill().unwrap();
         }
         Options::Serve(opts) => pa_rot::serve(opts),
     }
