@@ -24,12 +24,12 @@
 
 use structopt::StructOpt;
 
-use manticore::mem::BumpArena;
-use manticore::protocol::firmware_version::FirmwareVersion;
-use manticore::protocol::firmware_version::FirmwareVersionRequest;
-
+#[macro_use]
+pub mod harness;
 pub mod pa_rot;
 pub mod tcp;
+
+pub mod device_info;
 
 /// End-to-end tests for Manticore.
 #[derive(Debug, StructOpt)]
@@ -68,28 +68,5 @@ fn main() {
         pa_rot::serve(opts);
     }
 
-    // Currently, we only run one, trivial test.
-    // Eventually, this will be replaced with a more general "test
-    // suite".
-    let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
-        firmware_version: b"my cool e2e test".to_vec(),
-        ..Default::default()
-    });
-
-    let mut arena = [0; 64];
-    let arena = BumpArena::new(&mut arena);
-    let resp = virt.send_local::<FirmwareVersion, _>(
-        FirmwareVersionRequest { index: 0 },
-        &arena,
-    );
-    match resp {
-        Ok(Ok(resp)) => {
-            log::info!(
-                "resp.version: {}",
-                std::str::from_utf8(resp.version).unwrap()
-            );
-            assert!(resp.version.starts_with(b"my cool e2e test"));
-        }
-        bad => log::error!("bad response: {:?}", bad),
-    }
+    harness::run_pa_tests();
 }
