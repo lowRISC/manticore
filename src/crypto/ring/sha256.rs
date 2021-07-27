@@ -75,6 +75,7 @@ mod tests {
     use crate::crypto::testdata;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn sha() {
         let sha = Builder::new();
         let mut digest = sha256::Digest::default();

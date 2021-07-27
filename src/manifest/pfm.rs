@@ -833,6 +833,7 @@ mod test {
     use serde_json::from_str;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn empty() {
         let sha = ring::sha256::Builder::new();
         let (mut rsa, mut signer) = test_rsa();
@@ -860,6 +861,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn platform_id() {
         let sha = ring::sha256::Builder::new();
         let (mut rsa, mut signer) = test_rsa();
@@ -886,6 +888,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn fw_versions() {
         let sha = ring::sha256::Builder::new();
         let (mut rsa, mut signer) = test_rsa();
@@ -1005,6 +1008,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn baked_pfm1() {
         let sha = ring::sha256::Builder::new();
         let (mut rsa, mut signer) = test_rsa();

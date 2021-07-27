@@ -214,6 +214,7 @@ mod tests {
     use crate::crypto::testdata;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn rsa() {
         let keypair =
             KeyPair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8).unwrap();

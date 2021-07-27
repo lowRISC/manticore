@@ -43,3 +43,13 @@ jobs:
 
     - name: Run e2e tests
       run: cargo test -v -p manticore-e2e -- run-tests
+
+  miri_tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install Miri
+      run: rustup +nightly-2021-07-27 component add miri
+    - name: Run tests under Miri
+      run: cargo +nightly-2021-07-27 miri test

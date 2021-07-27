@@ -520,6 +520,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn round_trip() {
         let pfm = owned::Container {
             metadata: Metadata { version_id: 42 },
