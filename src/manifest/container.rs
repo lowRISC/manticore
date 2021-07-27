@@ -555,6 +555,7 @@ pub(crate) mod test {
     // manifest type.
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn empty() {
         let sha = ring::sha256::Builder::new();
         let (mut rsa, mut signer) = testdata::rsa();
@@ -585,6 +586,7 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn one_element() {
         let sha = ring::sha256::Builder::new();
         let (mut rsa, mut signer) = testdata::rsa();
@@ -622,6 +624,7 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn with_child() {
         let sha = ring::sha256::Builder::new();
         let (mut rsa, mut signer) = testdata::rsa();

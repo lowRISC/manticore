@@ -20,6 +20,7 @@ const ARRAY: u8 = 4;
 const MAP: u8 = 5;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn self_signed() {
     let protected = raw_cbor!(MAP [
         // Algorithm.
