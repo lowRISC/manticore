@@ -7,9 +7,9 @@
 #![allow(unsafe_code)]
 
 use core::cell::Cell;
+use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use core::mem;
-use core::ptr::NonNull;
 use core::slice;
 
 use static_assertions::assert_obj_safe;
@@ -111,8 +111,7 @@ pub unsafe trait Arena {
     /// the following behavior holds:
     /// ```
     /// # use manticore::mem::*;
-    /// # let mut data = [0; 128];
-    /// # let mut arena = BumpArena::new(&mut data);
+    /// # let mut arena = BumpArena::new([0; 128]);
     /// // If the first alloc succeeds (regardless of the value of `len`), then
     /// // the subsequent alloc after resetting the arena must also succeed.
     /// assert!(arena.alloc_aligned(64, 1).is_ok());
@@ -189,14 +188,15 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
     }
 }
 
-/// A bump-allocating [`Arena`] that is backed by a byte slice.
+/// A bump-allocating [`Arena`] that is backed by fixed storage.
 ///
+/// The type parameter is a type that can provide stable byte storage as long
+/// as it is not moved, such as a byte array, a byte slice, or even a [`Vec`]!
 ///
 /// # Examples
 /// ```
 /// # use manticore::mem::*;
-/// let mut data = [0; 128];
-/// let mut arena = BumpArena::new(&mut data);
+/// let mut arena = BumpArena::new([0; 128]);
 ///
 /// let buf1 = arena.alloc::<[u8; 64]>()?;
 /// let buf2 = arena.alloc_slice::<u8>(64)?;
@@ -214,8 +214,7 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
 /// example:
 /// ```compile_fail
 /// # use manticore::mem::*;
-/// let mut data = [0; 128];
-/// let mut arena = BumpArena::new(&mut data);
+/// let mut arena = BumpArena::new([0; 128]);
 ///
 /// let buf = arena.alloc_slice::<u8>(64)?;
 /// arena.reset();
@@ -226,40 +225,63 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
 /// # Panics
 ///
 /// `BumpArena::alloc_aligned()` will never panic.
-pub struct BumpArena<'arena> {
-    // Even though we do not store `slice`, the lifetime trapped in
-    // `lifetime_phantom` ensures that the slice is unaccessible until
-    // `self` goes out of scope.
-    lifetime_phantom: PhantomData<&'arena mut ()>,
-    // Invariant: this pointer points to an allocation, with lifetime 'arena,
-    // of `buf_len` bytes at all times. In other words, it points to the first
-    // byte of the buffer it was constructed from.
-    buf_ptr: NonNull<u8>,
-    buf_len: usize,
+#[derive(Default)]
+pub struct BumpArena<B: Buf> {
+    buf: B::Raw,
+    _ph: PhantomData<B>,
     // Invariant: cursor <= buf_len. This invariant is assumed when performing
     // unsafe operations.
     cursor: Cell<usize>,
 }
 
-impl<'arena> BumpArena<'arena> {
-    /// Create a new `BumpArena` by taking ownership of `slice`.
-    pub fn new(slice: &'arena mut [u8]) -> Self {
+impl<B: Buf> BumpArena<B> {
+    /// Create a new `BumpArena` by taking ownership of `buf`.
+    pub fn new(buf: B) -> Self {
+        let buf = buf.into_raw();
+
         // There is no way we could ever allocate this much memory. But we
         // include this assertion just in case.
-        assert!(slice.len() < isize::MAX as usize);
+        let (_, len) = unsafe { B::as_slice_from_raw(&buf) };
+        assert!(len < isize::MAX as usize);
 
         Self {
-            lifetime_phantom: PhantomData,
-            buf_ptr: NonNull::new(slice.as_mut_ptr())
-                .expect("slice pointer can never be null"),
-            buf_len: slice.len(),
+            buf,
+            _ph: PhantomData,
             cursor: Cell::new(0),
         }
     }
 
+    fn as_ref(&self) -> BumpArenaRef {
+        let (buf_ptr, buf_len) = unsafe { B::as_slice_from_raw(&self.buf) };
+        BumpArenaRef {
+            buf_ptr,
+            buf_len,
+            cursor: &self.cursor,
+        }
+    }
+}
+
+impl<B: Buf> Drop for BumpArena<B> {
+    fn drop(&mut self) {
+        unsafe {
+            B::drop(&mut self.buf);
+        }
+    }
+}
+
+/// Wrapper around non-generic state of [`BumpArena`], to help cut down on code
+/// size.
+#[derive(Copy, Clone)]
+struct BumpArenaRef<'arena> {
+    buf_ptr: *mut u8,
+    buf_len: usize,
+    cursor: &'arena Cell<usize>,
+}
+
+impl<'arena> BumpArenaRef<'arena> {
     /// Allocates unaligned memory of the given length, moving the cursor
     /// forward as necessary.
-    fn alloc_raw(&self, len: usize) -> Result<&mut [u8], OutOfMemory> {
+    fn alloc_raw(self, len: usize) -> Result<&'arena mut [u8], OutOfMemory> {
         if len == 0 {
             return Ok(&mut []);
         }
@@ -278,7 +300,7 @@ impl<'arena> BumpArena<'arena> {
         let slice = unsafe {
             // SAFE: buf_len >= cursor, and buf_len < isize::MAX; therefore,
             // this cast always produces a positive offset.
-            let offset_ptr = self.buf_ptr.as_ptr().add(cursor);
+            let offset_ptr = self.buf_ptr.add(cursor);
             // SAFE: buf_ptr[cursor..proposed_cursor] is initialized.
             slice::from_raw_parts_mut(offset_ptr, len)
         };
@@ -291,12 +313,12 @@ impl<'arena> BumpArena<'arena> {
     /// # Panics
     ///
     /// `align` must be a power of two.
-    fn align_to(&self, align: usize) -> Result<(), OutOfMemory> {
+    fn align_to(self, align: usize) -> Result<(), OutOfMemory> {
         assert!(align.is_power_of_two());
 
         // SAFE: see the safety notes in alloc_raw().
         let current_addr =
-            unsafe { self.buf_ptr.as_ptr().add(self.cursor.get()) as usize };
+            unsafe { self.buf_ptr.add(self.cursor.get()) as usize };
         let aligned = align_to(current_addr, align);
         if aligned == usize::MAX && align > 1 {
             // We've hit the top of the address space, so we have no hope of
@@ -310,7 +332,7 @@ impl<'arena> BumpArena<'arena> {
     }
 }
 
-unsafe impl<'arena> Arena for BumpArena<'arena> {
+unsafe impl<B: Buf> Arena for BumpArena<B> {
     fn alloc_aligned(
         &self,
         len: usize,
@@ -322,8 +344,9 @@ unsafe impl<'arena> Arena for BumpArena<'arena> {
             return OutOfMemory.alloc_aligned(0, align);
         }
 
-        self.align_to(align)?;
-        self.alloc_raw(len)
+        let a = self.as_ref();
+        a.align_to(align)?;
+        a.alloc_raw(len)
     }
 
     // NOTE: because this function takes `self` by unique reference, no mutable
@@ -337,14 +360,210 @@ unsafe impl<'arena> Arena for BumpArena<'arena> {
     }
 }
 
+/// A type that can serve as a buffer an arena can allocate from.
+///
+/// # Safety
+///
+/// This trait is unsafe to implement. In particular, the following
+/// must hold:
+/// - The return value of [`Buf::into_raw()`] must own exactly the same
+///   resources as the value passed into it.
+/// - Calling [`Buf::as_slice_from_raw()`] on a [`Buf::Raw`] will always
+///   produce the same pointer/length pair as long as the raw storage is not
+///   moved. This is weaker than, say, the [`StableDeref`] guarantee.
+/// - Both [`Buf::as_slice_from_raw()`] and [`Buf::as_slice()`] produce valid
+///   pointer/length pairs (i.e., they could be turned into slices via
+///   [`slice::from_raw_parts_mut()`]).
+/// - Although [`Self::into_raw()`] has a default implementation, it is only
+///   provided to facilitate implementations for `T: !Sized` types. It must be
+///   explicitly implemented by all `Sized` implementers.
+///
+/// [`StableDeref`]: https://docs.rs/stable_deref_trait/1.2.0/stable_deref_trait/trait.StableDeref.html
+pub unsafe trait Buf {
+    /// A version of `Self` that has been "dismantled" in some way. It still
+    /// owns the same resources as `Self`, but is no longer treated as aliasing
+    /// with anything. It is a version of `Self` that "lives on", even though
+    /// its original form is gone.
+    ///
+    /// For example, this would be `(*mut T, usize)` for `&mut [T]`, or just
+    /// `UnsafeCell<[u8; N]>` for `[u8; N]`. Users of `Buf` should take care
+    /// to carry around a [`PhantomData<T>`] corresponding to the dismantled
+    /// type.
+    ///
+    /// The choice of this type should not be considered stable for any
+    /// particular type.
+    type Raw: Sized;
+
+    /// Converts `self` into a [`Buf::Raw`] that represents it.
+    fn into_raw(self) -> Self::Raw
+    where
+        Self: Sized,
+    {
+        panic!("Buf::into_raw() not implemented; this is a bug.")
+    }
+
+    /// Like [`Buf::as_slice_from_raw()`], but callable on a value of type [`Self`].
+    ///
+    /// This function mostly exists to facilitate the blanket impl for
+    /// `&mut impl Buf`.
+    fn as_slice(&mut self) -> (*mut u8, usize);
+
+    /// Drops a [`Self::Raw`] by reconstituting it into a [`Self`].
+    ///
+    /// # Safety
+    ///
+    /// This function should only be called once per value produced by
+    /// [`Buf::into_raw()`], and not on any other values.
+    ///
+    /// Before calling this function, you must call [`mem::forget()`] on
+    /// the value [`Buf::into_raw()`] was called on.
+    unsafe fn drop(#[allow(unused)] raw: &mut Self::Raw) {}
+
+    /// Turns a raw buffer into a raw slice.
+    ///
+    /// # Safety
+    ///
+    /// This function should only be called on values produced from
+    /// [`Buf::into_raw()`], which have not yet been passed to
+    /// [`Buf::destroy()`].
+    #[allow(clippy::wrong_self_convention)]
+    unsafe fn as_slice_from_raw(raw: &Self::Raw) -> (*mut u8, usize);
+}
+
+unsafe impl Buf for [u8] {
+    type Raw = (*mut u8, usize);
+
+    #[inline]
+    unsafe fn as_slice_from_raw(raw: &Self::Raw) -> (*mut u8, usize) {
+        *raw
+    }
+
+    #[inline]
+    fn as_slice(&mut self) -> (*mut u8, usize) {
+        (self.as_mut_ptr(), self.len())
+    }
+}
+
+unsafe impl<const N: usize> Buf for [u8; N] {
+    type Raw = UnsafeCell<Self>;
+
+    #[inline]
+    fn into_raw(self) -> Self::Raw {
+        UnsafeCell::new(self)
+    }
+
+    #[inline]
+    unsafe fn as_slice_from_raw(raw: &Self::Raw) -> (*mut u8, usize) {
+        (raw.get() as *mut u8, N)
+    }
+
+    #[inline]
+    fn as_slice(&mut self) -> (*mut u8, usize) {
+        (self.as_mut_ptr(), N)
+    }
+}
+
+unsafe impl<B: Buf + ?Sized> Buf for &mut B {
+    type Raw = (*mut u8, usize);
+
+    #[inline]
+    fn into_raw(self) -> Self::Raw {
+        self.as_slice()
+    }
+
+    #[inline]
+    unsafe fn as_slice_from_raw(raw: &Self::Raw) -> (*mut u8, usize) {
+        *raw
+    }
+
+    #[inline]
+    fn as_slice(&mut self) -> (*mut u8, usize) {
+        self.into_raw()
+    }
+}
+
+#[cfg(feature = "std")]
+unsafe impl Buf for Vec<u8> {
+    // Ptr, len, cap.
+    type Raw = (*mut u8, usize, usize);
+
+    #[inline]
+    fn into_raw(mut self) -> Self::Raw {
+        let raw = (self.as_mut_ptr(), self.len(), self.capacity());
+        mem::forget(self);
+        raw
+    }
+
+    #[inline]
+    unsafe fn drop(&mut (ptr, len, cap): &mut Self::Raw) {
+        let _ = Vec::from_raw_parts(ptr, len, cap);
+    }
+
+    #[inline]
+    unsafe fn as_slice_from_raw(
+        &(ptr, len, _): &Self::Raw,
+    ) -> (*mut u8, usize) {
+        (ptr, len)
+    }
+
+    #[inline]
+    fn as_slice(&mut self) -> (*mut u8, usize) {
+        (self.as_mut_ptr(), self.len())
+    }
+}
+
+#[cfg(feature = "std")]
+unsafe impl Buf for Box<[u8]> {
+    type Raw = (*mut u8, usize);
+
+    #[inline]
+    fn into_raw(mut self) -> Self::Raw {
+        let raw = (self.as_mut_ptr(), self.len());
+        mem::forget(self);
+        raw
+    }
+
+    #[inline]
+    unsafe fn drop(&mut (ptr, len): &mut Self::Raw) {
+        let slice = slice::from_raw_parts_mut(ptr, len);
+        let _ = Box::from_raw(slice);
+    }
+
+    #[inline]
+    unsafe fn as_slice_from_raw(raw: &Self::Raw) -> (*mut u8, usize) {
+        *raw
+    }
+
+    #[inline]
+    fn as_slice(&mut self) -> (*mut u8, usize) {
+        (self.as_mut_ptr(), self.len())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn complex_alignments() {
+    fn bump_array() {
+        let arena = BumpArena::<[u8; 128]>::new([0; 128]);
+
+        let buf = arena.alloc_aligned(1, 1).unwrap();
+        assert_eq!(buf.len(), 1);
+
+        let buf = arena.alloc_aligned(1, 4).unwrap();
+        assert_eq!(buf.len(), 1);
+        assert_eq!(buf.as_ptr() as usize % 4, 0);
+
+        let buf = arena.alloc_aligned(0, 4).unwrap();
+        assert_eq!(buf.len(), 0);
+        assert_eq!(buf.as_ptr() as usize % 4, 0);
+    }
+
+    #[test]
+    fn bump_slice() {
         let mut data = [0; 128];
-        let arena = BumpArena::new(&mut data);
+        let arena = BumpArena::<&mut [u8]>::new(data.as_mut());
 
         let buf = arena.alloc_aligned(1, 1).unwrap();
         assert_eq!(buf.len(), 1);
