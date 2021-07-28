@@ -4,6 +4,9 @@
 
 //! A virtual PA-RoT that can be spoken to over local TCP.
 
+use std::env;
+use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::io::BufRead as _;
 use std::io::BufReader;
 use std::process::Child;
@@ -88,13 +91,47 @@ impl Drop for Virtual {
 }
 
 impl Virtual {
+    /// Extracts the name of the binary-under-test from the environment.
+    ///
+    /// If missing, aborts the process. This will bypass the Rust test harness's
+    /// attempt to continue running other tests.
+    pub fn target_binary() -> &'static OsStr {
+        const TARGET_BINARY: &str = "MANTICORE_E2E_TARGET_BINARY";
+        lazy_static::lazy_static! {
+            static ref BINARY_PATH: OsString = match env::var_os(TARGET_BINARY) {
+                Some(bin) => bin,
+                None => {
+                    // In order to blow up the test binary, we need to call
+                    // abort ourselves. Not only that, but we need to be clever
+                    // to defeat the standard library's test output capture...
+                    use std::os::unix::io::FromRawFd;
+                    use std::io::Write;
+                    use std::fs::File;
+                    use std::process;
+
+                    #[allow(unsafe_code)]
+                    let mut stderr = unsafe { File::from_raw_fd(2) };
+                    let _ = writeln!(
+                        stderr,
+                        "Could not find environment variable {}; aborting.",
+                        TARGET_BINARY
+                    );
+                    let _ = writeln!(
+                        stderr,
+                        "Consider using the e2e/run.sh script, instead."
+                    );
+                    process::abort();
+                }
+            };
+        }
+        &BINARY_PATH
+    }
+
     /// Spawns a virtual PA-RoT subprocess as described by `opts`.
     pub fn spawn(opts: &Options) -> Virtual {
         log::info!("spawning server: {:#?}", opts);
-        // Get argv[0]. We assume this is the path to the executable.
-        let exe = std::env::args_os().next().unwrap();
         let opts = serde_json::to_string(opts).unwrap();
-        let mut child = Command::new(exe)
+        let mut child = Command::new(Self::target_binary())
             .args(&["--start-pa-rot-with-options", &opts])
             .stdout(Stdio::piped())
             .spawn()
