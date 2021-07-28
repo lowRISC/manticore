@@ -6,6 +6,7 @@
 
 #![allow(clippy::from_str_radix_10)]
 
+use core::fmt;
 use core::fmt::Binary;
 use core::fmt::LowerHex;
 use core::marker::PhantomData;
@@ -17,6 +18,13 @@ use serde::de;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serializer;
+
+struct ExpectedByDisplay<T>(T);
+impl<T: fmt::Display> de::Expected for ExpectedByDisplay<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 /// For defaulting a field to `true`.
 pub fn default_to_true() -> bool {
@@ -47,6 +55,40 @@ where
     S: Serializer,
 {
     s.serialize_bytes(bytes)
+}
+
+/// For deserializing an `&[u8; N]`.
+pub fn de_u8_array_ref<'de: 'a, 'a, D: Deserializer<'de>, const N: usize>(
+    d: D,
+) -> Result<&'a [u8; N], D::Error> {
+    use core::convert::TryInto as _;
+
+    let slice: &'a [u8] = Deserialize::deserialize(d)?;
+    slice.try_into().map_err(|_| {
+        <D::Error as serde::de::Error>::invalid_length(
+            slice.len(),
+            &ExpectedByDisplay(N),
+        )
+    })
+}
+
+/// For deserializing an `&[[u8; N]]`.
+pub fn de_slice_of_u8_arrays<
+    'de: 'a,
+    'a,
+    D: Deserializer<'de>,
+    const N: usize,
+>(
+    d: D,
+) -> Result<&'a [[u8; N]], D::Error> {
+    let slice: &'a [u8] = Deserialize::deserialize(d)?;
+    let lv = zerocopy::LayoutVerified::new_slice(slice).ok_or_else(|| {
+        <D::Error as serde::de::Error>::invalid_length(
+            slice.len(),
+            &ExpectedByDisplay(format_args!("multiple of {}", N)),
+        )
+    })?;
+    Ok(lv.into_slice())
 }
 
 /// Helper for `de_radix`.
