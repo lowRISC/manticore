@@ -25,7 +25,7 @@ use crate::protocol::Response;
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 /// A command for challenging an RoT.
 ///
@@ -45,7 +45,8 @@ make_fuzz_safe! {
         /// The slot number of the chain to read from.
         pub slot: u8,
         /// A requester-chosen random nonce.
-        #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_u8x32"))]
+        #[cfg_attr(feature = "serde",
+                   serde(deserialize_with = "crate::serde::de_u8_array_ref"))]
         #[cfg_attr(feature = "serde", serde(borrow))]
         pub nonce: (&'a [u8; 32]),
     }
@@ -93,7 +94,8 @@ make_fuzz_safe! {
         /// Manticore ignores this value.
         pub protocol_range: (u8, u8),
         /// A responder-chosen random nonce.
-        #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_u8x32"))]
+        #[cfg_attr(feature = "serde",
+                   serde(deserialize_with = "crate::serde::de_u8_array_ref"))]
         #[cfg_attr(feature = "serde", serde(borrow))]
         pub nonce: (&'a [u8; 32]),
         /// The number of "components" used to generate PMR0.
@@ -108,19 +110,6 @@ make_fuzz_safe! {
         #[cfg_attr(feature = "serde", serde(borrow))]
         pub signature: (&'a [u8]),
     }
-}
-
-// NOTE: This function exists to work around the fact that serde does not
-// provide Deserialize implementations for reference-to-array, even though it
-// totally could.
-#[cfg(feature = "serde")]
-fn deserialize_u8x32<'de: 'a, 'a, D: Deserializer<'de>>(
-    d: D,
-) -> Result<&'a [u8; 32], D::Error> {
-    let slice: &'a [u8] = Deserialize::deserialize(d)?;
-    slice.try_into().map_err(|_| {
-        <D::Error as serde::de::Error>::invalid_length(slice.len(), &"32")
-    })
 }
 
 impl<'a> Response<'a> for ChallengeResponse<'a> {

@@ -29,7 +29,7 @@ use crate::protocol::Response;
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 /// A command for requesting certificate hashes.
 ///
@@ -98,28 +98,10 @@ make_fuzz_safe! {
         /// The digests of each certificate in the chain, starting from the
         /// root.
         #[cfg_attr(feature = "serde",
-                   serde(deserialize_with = "deserialize_digests"))]
+                   serde(deserialize_with = "crate::serde::de_slice_of_u8_arrays"))]
         #[cfg_attr(feature = "serde", serde(borrow))]
         pub digests: (&'a [sha256::Digest]),
     }
-}
-
-// NOTE: This function exists to work around the fact that serde does not
-// provide Deserialize implementations for reference-to-array, even though it
-// totally could.
-#[cfg(feature = "serde")]
-fn deserialize_digests<'de: 'a, 'a, D: Deserializer<'de>>(
-    d: D,
-) -> Result<&'a [sha256::Digest], D::Error> {
-    let slice: &'a [u8] = Deserialize::deserialize(d)?;
-    let lv = zerocopy::LayoutVerified::<_, [sha256::Digest]>::new_slice(slice)
-        .ok_or_else(|| {
-            <D::Error as serde::de::Error>::invalid_length(
-                slice.len(),
-                &"multiple of 32",
-            )
-        })?;
-    Ok(lv.into_slice())
 }
 
 impl<'a> Response<'a> for GetDigestsResponse<'a> {
