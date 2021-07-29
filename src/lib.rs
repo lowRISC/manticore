@@ -42,6 +42,7 @@
 //! [`protocol` module]: protocol/index.html
 //! [`crypto::ring` module]: crypto/ring/index.html
 
+#![allow(clippy::unusual_byte_groupings)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(missing_docs)]
 #![deny(warnings)]
