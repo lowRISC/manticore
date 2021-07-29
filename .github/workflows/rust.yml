@@ -22,7 +22,7 @@ jobs:
     - name: Check format
       run: cargo fmt -- --check --files-with-diff
     - name: Check clippy lints
-      run: cargo clippy --verbose
+      run: cargo clippy --all-targets --verbose
 
   build_and_test:
     runs-on: ubuntu-latest
