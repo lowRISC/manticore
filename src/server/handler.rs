@@ -15,8 +15,8 @@
 //! let server = ...;  // Your "server context" type.
 //! let req = ...;     // A `Read` with an incoming message.
 //! let resp = ...;    // A `Write` to write a response to.
-//! Handler::<Server>::new()
-//!   .handle::<MyCommand, _>(|server, req| {
+//! Handler::<Server, _>::new()
+//!   .handle::<MyCommand, _>(|ctx| {
 //!     // Do stuff...
 //!     Ok(response)
 //!   })
@@ -44,7 +44,7 @@
 //! Suppose we have types `A, B, C: Command<'req>` which we want to handle, so
 //! we write the following code:
 //! ```text
-//! Handler::<Server>::new()
+//! Handler::<Server, _>::new()
 //!   .handle::<A, _>(...)
 //!   .handle::<B, _>(...)
 //!   .handle::<C, _>(...)
@@ -68,7 +68,7 @@
 
 use core::marker::PhantomData;
 
-use crate::mem::Arena;
+use crate::mem;
 use crate::net;
 use crate::protocol;
 use crate::protocol::wire;
@@ -126,11 +126,11 @@ impl From<net::Error> for Error {
 /// Note: the type parameter on this type is only necessary to make type
 /// inference work out. It can be left off, but rustc will complain about
 /// missing type annotations.
-pub struct Handler<Server> {
-    _ph: PhantomData<fn(Server)>,
+pub struct Handler<Server, Arena> {
+    _ph: PhantomData<fn(Server, Arena)>,
 }
 
-impl<Server> Handler<Server> {
+impl<Server, Arena> Handler<Server, Arena> {
     /// Creates a new, default `Handler`.
     pub fn new() -> Self {
         Self { _ph: PhantomData }
@@ -162,13 +162,20 @@ pub type ReqOf<'a, C> = <C as protocol::Command<'a>>::Req;
 #[doc(hidden)]
 pub type RespOf<'a, C> = <C as protocol::Command<'a>>::Resp;
 
+/// Context for a request, i.e., all relevant variables for handling a request.
+pub struct Context<'req, Req, Server, Arena> {
+    pub req: Req,
+    pub server: Server,
+    pub arena: &'req Arena,
+}
+
 /// The core trait that makes handler building possible.
 ///
 /// The lifetime `'req` represents the lifetime of the request. This lifetime
 /// must be placed here to ensure that all inputs into a request handling
 /// operation (including the `FromWire` and `Command` traits, which have
 /// lifetimes in them) have a single, coherent lifetime.
-pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
+pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
     Sized + sealed::Sealed
 {
     /// Attaches a new handler function to a `Handler`.
@@ -211,8 +218,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
         // kludge.
         C: for<'c> protocol::Command<'c>,
         F: FnOnce(
-            Server,
-            ReqOf<'req, C>,
+            Context<'req, ReqOf<'req, C>, Server, Arena>,
         ) -> Result<RespOf<'out, C>, protocol::Error>,
         'srv: 'out,
         'req: 'out,
@@ -226,23 +232,23 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
 
     /// The "real" run function.
     #[doc(hidden)]
-    fn run_with_header<A: Arena>(
+    fn run_with_header(
         self,
         server: Server,
         header: Header,
         request: &mut dyn net::HostRequest<'req>,
-        arena: &'req A,
+        arena: &'req Arena,
     ) -> Result<(), Error>;
 
     /// Executes a `Handler` with the given context.
     ///
     /// See the module-level documentation for more information.
     #[inline]
-    fn run<A: Arena>(
+    fn run(
         self,
         server: Server,
         host_port: &mut dyn net::HostPort<'req>,
-        arena: &'req A,
+        arena: &'req Arena,
     ) -> Result<(), Error> {
         let request = host_port.receive()?;
         let header = request.header()?;
@@ -253,26 +259,26 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
     }
 }
 
-impl<'req, 'srv, 'out, Server, Prev, Command, F>
-    HandlerMethods<'req, 'srv, Server> for Cons<Prev, Command, F>
+impl<'req, 'srv, 'out, Server, Arena, Prev, Command, F>
+    HandlerMethods<'req, 'srv, Server, Arena> for Cons<Prev, Command, F>
 where
     // See `HandlerMethods::handle` for an explanation of these
     // where-clauses.
+    Arena: 'req + mem::Arena,
     Server: 'srv,
-    Prev: HandlerMethods<'req, 'srv, Server>,
+    Prev: HandlerMethods<'req, 'srv, Server, Arena>,
     Command: for<'c> protocol::Command<'c>,
     F: FnOnce(
-        Server,
-        ReqOf<'req, Command>,
+        Context<'req, ReqOf<'req, Command>, Server, Arena>,
     ) -> Result<RespOf<'out, Command>, protocol::Error>,
 {
     #[inline]
-    fn run_with_header<A: Arena>(
+    fn run_with_header(
         self,
         server: Server,
         header: Header,
         request: &mut dyn net::HostRequest<'req>,
-        arena: &'req A,
+        arena: &'req Arena,
     ) -> Result<(), Error> {
         if header.command != ReqOf::<'req, Command>::TYPE {
             // Recurse into the next handler case. Note that this cannot be
@@ -280,9 +286,9 @@ where
             return self.prev.run_with_header(server, header, request, arena);
         }
 
-        let msg = FromWire::from_wire(request.payload()?, arena)?;
+        let req = FromWire::from_wire(request.payload()?, arena)?;
 
-        match (self.handler)(server, msg) {
+        match (self.handler)(Context { req, server, arena }) {
             Ok(msg) => {
                 let header = Header {
                     is_request: false,
@@ -309,23 +315,23 @@ where
     }
 }
 
-impl<'req, 'srv, Server: 'srv> HandlerMethods<'req, 'srv, Server>
-    for Handler<Server>
+impl<'req, 'srv, Server: 'srv, Arena: 'req>
+    HandlerMethods<'req, 'srv, Server, Arena> for Handler<Server, Arena>
 {
     #[inline]
-    fn run_with_header<A: Arena>(
+    fn run_with_header(
         self,
         _: Server,
         header: Header,
         _: &mut dyn net::HostRequest<'req>,
-        _: &'req A,
+        _: &'req Arena,
     ) -> Result<(), Error> {
         Err(Error::UnhandledCommand(header.command))
     }
 }
 
 impl<P, C, F> sealed::Sealed for Cons<P, C, F> {}
-impl<Server> sealed::Sealed for Handler<Server> {}
+impl<S, A> sealed::Sealed for Handler<S, A> {}
 
 #[cfg(test)]
 mod test {
@@ -340,8 +346,8 @@ mod test {
         'a,
         C: protocol::Command<'a>,
         T: 'a,
-        H: HandlerMethods<'a, 'a, T>,
-        A: Arena,
+        H: HandlerMethods<'a, 'a, T, A>,
+        A: mem::Arena,
     >(
         scratch_space: &'a mut [u8],
         port_out: &'a mut Option<net::InMemHost<'a>>,
@@ -380,7 +386,7 @@ mod test {
 
     #[test]
     fn empty_handler() {
-        let handler = Handler::<()>::new();
+        let handler = Handler::<(), _>::new();
 
         let mut scratch = [0; 1024];
         let mut port = None;
@@ -405,11 +411,11 @@ mod test {
     #[test]
     fn single_handler() {
         let mut handler_called = false;
-        let handler = Handler::<&str>::new()
-            .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
+        let handler = Handler::<&str, _>::new()
+            .handle::<protocol::FirmwareVersion, _>(|ctx| {
                 handler_called = true;
-                assert_eq!(zelf, "server state");
-                assert_eq!(req.index, 42);
+                assert_eq!(ctx.server, "server state");
+                assert_eq!(ctx.req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
                     version: VERSION1,
@@ -437,11 +443,11 @@ mod test {
     #[test]
     fn single_handler_wrong() {
         let mut handler_called = false;
-        let handler = Handler::<&str>::new()
-            .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
+        let handler = Handler::<&str, _>::new()
+            .handle::<protocol::FirmwareVersion, _>(|ctx| {
                 handler_called = true;
-                assert_eq!(zelf, "server state");
-                assert_eq!(req.index, 42);
+                assert_eq!(ctx.server, "server state");
+                assert_eq!(ctx.req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
                     version: VERSION1,
@@ -471,17 +477,17 @@ mod test {
     #[test]
     fn double_handler() {
         let mut handler_called = false;
-        let handler = Handler::<&str>::new()
-            .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
+        let handler = Handler::<&str, _>::new()
+            .handle::<protocol::FirmwareVersion, _>(|ctx| {
                 handler_called = true;
-                assert_eq!(zelf, "server state");
-                assert_eq!(req.index, 42);
+                assert_eq!(ctx.server, "server state");
+                assert_eq!(ctx.req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
                     version: VERSION1,
                 })
             })
-            .handle::<protocol::DeviceId, _>(|_, _| {
+            .handle::<protocol::DeviceId, _>(|_| {
                 panic!("called the wrong handler")
             });
 
@@ -506,14 +512,14 @@ mod test {
     #[test]
     fn double_swapped() {
         let mut handler_called = false;
-        let handler = Handler::<&str>::new()
-            .handle::<protocol::DeviceId, _>(|_, _| {
+        let handler = Handler::<&str, _>::new()
+            .handle::<protocol::DeviceId, _>(|_| {
                 panic!("called the wrong handler")
             })
-            .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
+            .handle::<protocol::FirmwareVersion, _>(|ctx| {
                 handler_called = true;
-                assert_eq!(zelf, "server state");
-                assert_eq!(req.index, 42);
+                assert_eq!(ctx.server, "server state");
+                assert_eq!(ctx.req.index, 42);
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
                     version: VERSION1,
@@ -542,18 +548,18 @@ mod test {
     fn duplicate_handler() {
         let mut handler1_called = false;
         let mut handler2_called = false;
-        let handler = Handler::<&str>::new()
-            .handle::<protocol::FirmwareVersion, _>(|_, _| {
+        let handler = Handler::<&str, _>::new()
+            .handle::<protocol::FirmwareVersion, _>(|_| {
                 handler1_called = true;
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
                     version: VERSION1,
                 })
             })
-            .handle::<protocol::DeviceId, _>(|_, _| {
+            .handle::<protocol::DeviceId, _>(|_| {
                 panic!("called the wrong handler")
             })
-            .handle::<protocol::FirmwareVersion, _>(|_, _| {
+            .handle::<protocol::FirmwareVersion, _>(|_| {
                 handler2_called = true;
 
                 Ok(protocol::firmware_version::FirmwareVersionResponse {
