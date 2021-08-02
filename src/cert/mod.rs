@@ -42,6 +42,7 @@ pub enum CertFormat {
 /// certificate chain.
 #[derive(Debug)]
 pub struct Cert<'cert> {
+    raw: &'cert [u8],
     format: CertFormat,
     issuer: Name<'cert>,
     subject: Name<'cert>,
@@ -121,6 +122,11 @@ impl<'cert> Cert<'cert> {
             CertFormat::RiotX509 => x509::parse(cert, format, key, ciphers),
             CertFormat::OpenDiceCwt => cwt::parse(cert, key, ciphers),
         }
+    }
+
+    /// Returns the slice this certificate was parsed from.
+    pub fn raw(&self) -> &'cert [u8] {
+        self.raw
     }
 
     /// Returns the format this certificate was parsed from.

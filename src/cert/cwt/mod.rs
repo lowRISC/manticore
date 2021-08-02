@@ -132,6 +132,7 @@ pub fn parse<'cert>(
     let _ = (verifier, cose.signature, cose.protected_bytes);
 
     Ok(Cert {
+        raw: cert,
         format: cert::CertFormat::OpenDiceCwt,
         issuer,
         subject,
