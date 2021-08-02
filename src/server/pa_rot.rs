@@ -7,9 +7,12 @@
 //! This module provides structures for serving responses to a host making
 //! requests to a PA-RoT.
 
+use crate::cert;
+use crate::crypto::sha256;
 use crate::crypto::sig;
 use crate::hardware;
 use crate::mem::Arena;
+use crate::mem::ArenaExt as _;
 use crate::net;
 use crate::protocol;
 use crate::protocol::capabilities;
@@ -19,15 +22,19 @@ use crate::server::Error;
 use crate::server::handler::prelude::*;
 
 /// Options struct for initializing a [`PaRot`].
-pub struct Options<'a, Identity, Reset, Ciphers> {
+pub struct Options<'a, Identity, Reset, Sha, Ciphers, TrustChain> {
     /// A handle to the "hardware identity" of the device.
     pub identity: &'a Identity,
     /// A handle for looking up reset-related information for the current
     /// device.
     pub reset: &'a Reset,
 
+    /// A handle to a SHA-256 engine.
+    pub sha: &'a Sha,
     /// A handle to a signature verification engine,
     pub ciphers: &'a mut Ciphers,
+    /// The trust chain to use for the challenge.
+    pub trust_chain: &'a TrustChain,
 
     /// This device's silicon identifier.
     pub device_id: device_id::DeviceIdentifier,
@@ -43,20 +50,25 @@ pub struct Options<'a, Identity, Reset, Ciphers> {
 /// This type implements the request -> response "business logic" of the
 /// host <-> PA-RoT interaction. That is, it accepts input and output buffers,
 /// and from those, parses incoming requests and processes them into responses.
-pub struct PaRot<'a, Identity, Reset, Ciphers> {
-    opts: Options<'a, Identity, Reset, Ciphers>,
+pub struct PaRot<'a, Identity, Reset, Sha, Ciphers, TrustChain> {
+    opts: Options<'a, Identity, Reset, Sha, Ciphers, TrustChain>,
     ok_count: u16,
     err_count: u16,
 }
 
-impl<'a, Identity, Reset, Ciphers> PaRot<'a, Identity, Reset, Ciphers>
+impl<'a, Identity, Reset, Sha, Ciphers, TrustChain>
+    PaRot<'a, Identity, Reset, Sha, Ciphers, TrustChain>
 where
     Identity: hardware::Identity,
     Reset: hardware::Reset,
+    Sha: sha256::Builder,
     Ciphers: sig::Ciphers,
+    TrustChain: cert::TrustChain,
 {
     /// Create a new `PaRot` with the given `Options`.
-    pub fn new(opts: Options<'a, Identity, Reset, Ciphers>) -> Self {
+    pub fn new(
+        opts: Options<'a, Identity, Reset, Sha, Ciphers, TrustChain>,
+    ) -> Self {
         Self {
             opts,
             ok_count: 0,
@@ -69,12 +81,12 @@ where
     /// The request message will be read from `req`, while the response
     /// message will be written to `resp`.
     #[cfg_attr(test, inline(never))]
-    pub fn process_request<'req>(
+    pub fn process_request<'req, A: Arena>(
         &mut self,
         host_port: &mut dyn net::HostPort<'req>,
-        arena: &'req impl Arena,
+        arena: &'req A,
     ) -> Result<(), Error> {
-        let result = Handler::<&mut Self, _>::new()
+        let result = Handler::<&mut Self, A>::new()
             .handle::<protocol::FirmwareVersion, _>(|ctx| {
                 use protocol::firmware_version::FirmwareVersionResponse;
                 if ctx.req.index == 0 {
@@ -124,6 +136,33 @@ where
                 Ok(protocol::device_info::DeviceInfoResponse {
                     info: ctx.server.opts.identity.unique_device_identity(),
                 })
+            })
+            .handle::<protocol::GetDigests, _>(|ctx| {
+                let digests_len = ctx
+                    .server
+                    .opts
+                    .trust_chain
+                    .chain_len(ctx.req.slot)
+                    .ok_or(UNSPECIFIED)?
+                    .get();
+                let digests = ctx
+                    .arena
+                    .alloc_slice::<sha256::Digest>(digests_len)
+                    .map_err(|_| UNSPECIFIED)?;
+                for (i, digest) in digests.iter_mut().enumerate() {
+                    let cert = ctx
+                        .server
+                        .opts
+                        .trust_chain
+                        .cert(ctx.req.slot, i)
+                        .ok_or(UNSPECIFIED)?;
+                    ctx.server
+                        .opts
+                        .sha
+                        .hash_contiguous(cert.raw(), digest)
+                        .map_err(|_| UNSPECIFIED)?;
+                }
+                Ok(protocol::get_digests::GetDigestsResponse { digests })
             })
             .handle::<protocol::ResetCounter, _>(|ctx| {
                 use protocol::reset_counter::*;
@@ -194,7 +233,6 @@ mod test {
     use crate::hardware::fake;
     use crate::hardware::Identity as _;
     use crate::io::Cursor;
-    use crate::mem::ArenaExt as _;
     use crate::mem::BumpArena;
     use crate::net::DevicePort;
     use crate::protocol::capabilities::*;
@@ -226,7 +264,13 @@ mod test {
         scratch_space: &'a mut [u8],
         port_out: &'a mut Option<net::InMemHost<'a>>,
         arena: &'a mut A,
-        server: &mut PaRot<fake::Identity, fake::Reset, ring::sig::Ciphers>,
+        server: &mut PaRot<
+            fake::Identity,
+            fake::Reset,
+            ring::sha256::Builder,
+            ring::sig::Ciphers,
+            cert::SimpleChain<0>,
+        >,
         request: C::Req,
     ) -> Result<Result<C::Resp, protocol::Error>, Error> {
         use crate::protocol::Response;
@@ -321,10 +365,19 @@ mod test {
         );
         let reset = fake::Reset::new(0, Duration::from_millis(1));
         let mut ciphers = ring::sig::Ciphers::new();
+        let sha = ring::sha256::Builder::new();
+        let trust_chain = cert::SimpleChain::parse(
+            &[],
+            cert::CertFormat::RiotX509,
+            &mut ciphers,
+        )
+        .unwrap();
         let mut server = PaRot::new(Options {
             identity: &identity,
             reset: &reset,
+            sha: &sha,
             ciphers: &mut ciphers,
+            trust_chain: &trust_chain,
             device_id: DEVICE_ID,
             networking: NETWORKING,
             timeouts: TIMEOUTS,

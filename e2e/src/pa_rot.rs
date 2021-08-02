@@ -16,6 +16,7 @@ use std::str;
 use std::time::Duration;
 use std::time::Instant;
 
+use manticore::cert;
 use manticore::crypto::ring;
 use manticore::mem::Arena;
 use manticore::mem::BumpArena;
@@ -226,12 +227,21 @@ pub fn serve(opts: Options) -> ! {
         resets_since_power_on: opts.resets_since_power_on,
     };
 
+    let sha = ring::sha256::Builder::new();
     let mut ciphers = ring::sig::Ciphers::new();
+    let trust_chain = cert::SimpleChain::<0>::parse(
+        &[],
+        cert::CertFormat::RiotX509,
+        &mut ciphers,
+    )
+    .unwrap();
 
     let mut server = PaRot::new(manticore::server::pa_rot::Options {
         identity: &identity,
         reset: &reset,
+        sha: &sha,
         ciphers: &mut ciphers,
+        trust_chain: &trust_chain,
         device_id: opts.device_id,
         networking,
         timeouts,
