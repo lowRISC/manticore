@@ -83,18 +83,13 @@ where
                     });
                 }
 
-                match ctx
+                let version = ctx
                     .server
                     .opts
                     .identity
                     .vendor_firmware_version(ctx.req.index)
-                {
-                    Some(version) => Ok(FirmwareVersionResponse { version }),
-                    None => Err(protocol::Error {
-                        code: protocol::ErrorCode::Unspecified,
-                        data: [0; 4],
-                    }),
-                }
+                    .ok_or(UNSPECIFIED)?;
+                Ok(FirmwareVersionResponse { version })
             })
             .handle::<protocol::DeviceCapabilities, _>(|ctx| {
                 use protocol::capabilities::*;
@@ -137,10 +132,7 @@ where
                 if ctx.req.reset_type != ResetType::Local
                     || ctx.req.port_id != 0
                 {
-                    return Err(protocol::Error {
-                        code: protocol::ErrorCode::Unspecified,
-                        data: [0; 4],
-                    });
+                    return Err(UNSPECIFIED);
                 }
 
                 Ok(ResetCounterResponse {
@@ -151,10 +143,7 @@ where
                 use protocol::device_uptime::*;
                 // NOTE: CUrrently, we only handle port 0, the "self" port.
                 if ctx.req.port_id != 0 {
-                    return Err(protocol::Error {
-                        code: protocol::ErrorCode::Unspecified,
-                        data: [0; 4],
-                    });
+                    return Err(UNSPECIFIED);
                 }
                 Ok(DeviceUptimeResponse {
                     uptime: ctx.server.opts.reset.uptime(),
@@ -189,6 +178,12 @@ where
         unimplemented!()
     }
 }
+
+/// Stopgap error code until we have richer errors for Manticore and Cerberus.
+const UNSPECIFIED: protocol::Error = protocol::Error {
+    code: protocol::ErrorCode::Unspecified,
+    data: [0; 4],
+};
 
 #[cfg(test)]
 mod test {
