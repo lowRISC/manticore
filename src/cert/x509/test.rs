@@ -28,7 +28,7 @@ fn self_signed() {
 
     assert_eq!(cert.subject(), cert.issuer());
     assert!(cert.supports_cert_signing());
-    assert!(cert.is_explicit_ca_cert());
+    assert!(cert.is_ca_cert().unwrap());
     assert!(!cert.is_within_path_len_constraint(2));
 }
 
@@ -48,7 +48,7 @@ fn explicit_key() {
 
     assert_eq!(cert.subject(), cert.issuer());
     assert!(cert.supports_cert_signing());
-    assert!(cert.is_explicit_ca_cert());
+    assert!(cert.is_ca_cert().unwrap());
     assert!(!cert.is_within_path_len_constraint(2));
 }
 

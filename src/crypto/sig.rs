@@ -74,7 +74,7 @@ pub trait SignFor<Algo>: Sign {}
 ///
 /// This must be paired with a compatible [`Algo`] (which specifies *algorithm*
 /// parameters) to be usable for signature verification.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum PublicKeyParams<'cert> {
     /// RSA in an unspecified form with an unspecified hash function.
     Rsa {
