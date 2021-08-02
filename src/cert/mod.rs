@@ -18,6 +18,9 @@ use crate::io;
 mod cwt;
 mod x509;
 
+mod chain;
+pub use chain::*;
+
 /// A certificate format understood by Manticore.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum CertFormat {
@@ -81,6 +84,10 @@ pub enum Error {
     WrongAlgorithm,
     /// The certificate being verified had a bad signature.
     BadSignature,
+    /// Two adjacent certificates in a certificate chain were incompatible.
+    BadChainLink,
+    /// A certificate chain was shorter than it was expected to be.
+    ChainTooShort,
 }
 
 impl From<io::Error> for Error {
@@ -152,11 +159,8 @@ impl<'cert> Cert<'cert> {
     /// Some formats do not include this information. When validating a trust
     /// chain, this value should be checked if and only if the format includes
     /// it.
-    pub fn is_explicit_ca_cert(&self) -> bool {
-        match &self.basic_constraints {
-            Some(bc) => bc.is_ca,
-            None => false,
-        }
+    pub fn is_ca_cert(&self) -> Option<bool> {
+        self.basic_constraints.as_ref().map(|bc| bc.is_ca)
     }
 
     /// Returns whether `len` is within the path length constraint for this
