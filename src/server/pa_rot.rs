@@ -164,6 +164,22 @@ where
                 }
                 Ok(protocol::get_digests::GetDigestsResponse { digests })
             })
+            .handle::<protocol::GetCert, _>(|ctx| {
+                let cert = ctx
+                    .server
+                    .opts
+                    .trust_chain
+                    .cert(ctx.req.slot, ctx.req.cert_number as usize)
+                    .ok_or(UNSPECIFIED)?;
+
+                let start = cert.raw().len().min(ctx.req.offset as usize);
+                let end = cert.raw().len().min(ctx.req.len as usize);
+                Ok(protocol::get_cert::GetCertResponse {
+                    slot: ctx.req.slot,
+                    cert_number: ctx.req.cert_number,
+                    data: &cert.raw()[start..end],
+                })
+            })
             .handle::<protocol::ResetCounter, _>(|ctx| {
                 use protocol::reset_counter::*;
                 // NOTE: Currently, we only handle "local resets" for port 0,
