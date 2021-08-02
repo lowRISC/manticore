@@ -74,16 +74,21 @@ where
         host_port: &mut dyn net::HostPort<'req>,
         arena: &'req impl Arena,
     ) -> Result<(), Error> {
-        let result = Handler::<&mut Self>::new()
-            .handle::<protocol::FirmwareVersion, _>(|zelf, req| {
+        let result = Handler::<&mut Self, _>::new()
+            .handle::<protocol::FirmwareVersion, _>(|ctx| {
                 use protocol::firmware_version::FirmwareVersionResponse;
-                if req.index == 0 {
+                if ctx.req.index == 0 {
                     return Ok(FirmwareVersionResponse {
-                        version: zelf.opts.identity.firmware_version(),
+                        version: ctx.server.opts.identity.firmware_version(),
                     });
                 }
 
-                match zelf.opts.identity.vendor_firmware_version(req.index) {
+                match ctx
+                    .server
+                    .opts
+                    .identity
+                    .vendor_firmware_version(ctx.req.index)
+                {
                     Some(version) => Ok(FirmwareVersionResponse { version }),
                     None => Err(protocol::Error {
                         code: protocol::ErrorCode::Unspecified,
@@ -91,16 +96,16 @@ where
                     }),
                 }
             })
-            .handle::<protocol::DeviceCapabilities, _>(|zelf, req| {
+            .handle::<protocol::DeviceCapabilities, _>(|ctx| {
                 use protocol::capabilities::*;
-                let mut crypto = req.capabilities.crypto;
+                let mut crypto = ctx.req.capabilities.crypto;
 
-                zelf.opts.ciphers.negotiate(&mut crypto);
+                ctx.server.opts.ciphers.negotiate(&mut crypto);
                 crypto.has_aes = false;
                 crypto.aes_strength = AesKeyStrength::empty();
 
                 let capabilities = Capabilities {
-                    networking: zelf.opts.networking,
+                    networking: ctx.server.opts.networking,
                     security: Security::empty(),
 
                     has_pfm_support: false,
@@ -112,24 +117,26 @@ where
 
                 Ok(protocol::capabilities::DeviceCapabilitiesResponse {
                     capabilities,
-                    timeouts: zelf.opts.timeouts,
+                    timeouts: ctx.server.opts.timeouts,
                 })
             })
-            .handle::<protocol::DeviceId, _>(|zelf, _| {
+            .handle::<protocol::DeviceId, _>(|ctx| {
                 Ok(protocol::device_id::DeviceIdResponse {
-                    id: zelf.opts.device_id,
+                    id: ctx.server.opts.device_id,
                 })
             })
-            .handle::<protocol::DeviceInfo, _>(|zelf, _| {
+            .handle::<protocol::DeviceInfo, _>(|ctx| {
                 Ok(protocol::device_info::DeviceInfoResponse {
-                    info: zelf.opts.identity.unique_device_identity(),
+                    info: ctx.server.opts.identity.unique_device_identity(),
                 })
             })
-            .handle::<protocol::ResetCounter, _>(|zelf, req| {
+            .handle::<protocol::ResetCounter, _>(|ctx| {
                 use protocol::reset_counter::*;
                 // NOTE: Currently, we only handle "local resets" for port 0,
                 // the "self" port.
-                if req.reset_type != ResetType::Local || req.port_id != 0 {
+                if ctx.req.reset_type != ResetType::Local
+                    || ctx.req.port_id != 0
+                {
                     return Err(protocol::Error {
                         code: protocol::ErrorCode::Unspecified,
                         data: [0; 4],
@@ -137,27 +144,27 @@ where
                 }
 
                 Ok(ResetCounterResponse {
-                    count: zelf.opts.reset.resets_since_power_on() as u16,
+                    count: ctx.server.opts.reset.resets_since_power_on() as u16,
                 })
             })
-            .handle::<protocol::DeviceUptime, _>(|zelf, req| {
+            .handle::<protocol::DeviceUptime, _>(|ctx| {
                 use protocol::device_uptime::*;
                 // NOTE: CUrrently, we only handle port 0, the "self" port.
-                if req.port_id != 0 {
+                if ctx.req.port_id != 0 {
                     return Err(protocol::Error {
                         code: protocol::ErrorCode::Unspecified,
                         data: [0; 4],
                     });
                 }
                 Ok(DeviceUptimeResponse {
-                    uptime: zelf.opts.reset.uptime(),
+                    uptime: ctx.server.opts.reset.uptime(),
                 })
             })
-            .handle::<protocol::RequestCounter, _>(|zelf, _| {
+            .handle::<protocol::RequestCounter, _>(|ctx| {
                 use protocol::request_counter::*;
                 Ok(RequestCounterResponse {
-                    ok_count: zelf.ok_count,
-                    err_count: zelf.err_count,
+                    ok_count: ctx.server.ok_count,
+                    err_count: ctx.server.err_count,
                 })
             })
             .run(self, host_port, arena);
