@@ -53,13 +53,13 @@ fn parse_algo(buf: &mut untrusted::Reader) -> Result<sig::Algo, Error> {
 ///
 /// All of the above are treated as encoding errors.
 pub fn parse<'cert>(
-    cert: &'cert [u8],
+    raw_cert: &'cert [u8],
     format: cert::CertFormat,
     key: Option<&sig::PublicKeyParams<'_>>,
     ciphers: &mut impl sig::Ciphers,
 ) -> Result<Cert<'cert>, Error> {
-    let buf = untrusted::Input::from(cert);
-    let (cert, tbs, sig_algo, sig) =
+    let buf = untrusted::Input::from(raw_cert);
+    let (mut cert, tbs, sig_algo, sig) =
         buf.read_all(Error::BadEncoding, |buf| {
             der::tagged(Tag::SEQUENCE, buf, |buf| {
                 let mark = buf.mark();
@@ -84,6 +84,7 @@ pub fn parse<'cert>(
                 ))
             })
         })?;
+    cert.raw = raw_cert;
 
     let key = key.unwrap_or_else(|| cert.subject_key());
     if !key.is_params_for(sig_algo) {
@@ -205,6 +206,7 @@ fn parse_tbs<'cert>(
     }
 
     Ok(Cert {
+        raw: &[],
         format,
         issuer,
         subject,
