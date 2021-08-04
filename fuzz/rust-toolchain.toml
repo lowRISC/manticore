@@ -3,5 +3,5 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [toolchain]
-channel = "nightly-2020-07-26"
+channel = "nightly-2021-07-26"
 profile = "default"
