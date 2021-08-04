@@ -180,15 +180,15 @@ pub enum EncodingError {
     SigError(sig::Error),
 }
 
-impl<E> From<sha256::Error<E>> for EncodingError {
-    fn from(e: sha256::Error<E>) -> Self {
-        Self::HashError(e.erased())
+impl From<sha256::Error> for EncodingError {
+    fn from(e: sha256::Error) -> Self {
+        Self::HashError(e)
     }
 }
 
-impl<E> From<sig::Error<E>> for EncodingError {
-    fn from(e: sig::Error<E>) -> Self {
-        Self::SigError(e.erased())
+impl From<sig::Error> for EncodingError {
+    fn from(e: sig::Error) -> Self {
+        Self::SigError(e)
     }
 }
 

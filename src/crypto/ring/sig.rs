@@ -7,7 +7,6 @@
 //! Requires the `std` feature flag to be enabled.
 
 use crate::crypto::ring::rsa;
-use crate::crypto::ring::Unspecified;
 use crate::crypto::rsa::Builder as _;
 use crate::crypto::sig;
 use crate::protocol::capabilities;
@@ -18,7 +17,7 @@ use crate::crypto;
 /// A [`sig::Ciphers`] built on top of `ring`.
 #[derive(Default)]
 pub struct Ciphers {
-    verifier: Option<Box<dyn sig::Verify<Error = Unspecified>>>,
+    verifier: Option<Box<dyn sig::Verify>>,
 }
 
 impl Ciphers {
@@ -29,8 +28,6 @@ impl Ciphers {
 }
 
 impl sig::Ciphers for Ciphers {
-    type Error = Unspecified;
-
     fn negotiate(&self, caps: &mut capabilities::Crypto) {
         use capabilities::*;
         *caps = Crypto {
@@ -48,7 +45,7 @@ impl sig::Ciphers for Ciphers {
         &'a mut self,
         algo: sig::Algo,
         key: &sig::PublicKeyParams,
-    ) -> Option<&'a mut dyn sig::Verify<Error = Unspecified>> {
+    ) -> Option<&'a mut dyn sig::Verify> {
         match (algo, key) {
             (
                 sig::Algo::RsaPkcs1Sha256,

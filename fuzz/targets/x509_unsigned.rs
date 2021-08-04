@@ -18,7 +18,6 @@ use manticore::protocol::capabilities;
 struct NoVerify;
 
 impl sig::Verify for NoVerify {
-    type Error = ();
     fn verify(
         &mut self,
         _: &[&[u8]],
@@ -35,7 +34,7 @@ impl sig::Ciphers for NoVerify {
         &'a mut self,
         _: sig::Algo,
         _: &sig::PublicKeyParams,
-    ) -> Option<&'a mut dyn sig::Verify<Error = ()>> {
+    ) -> Option<&'a mut dyn sig::Verify> {
         Some(self)
     }
 }

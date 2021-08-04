@@ -182,10 +182,10 @@ pub enum Error {
     BadSignatureLen,
 
     /// Indicates that an error occured inside of a hashing engine.
-    HashingError(sha256::Error),
+    HashError(sha256::Error),
 
     /// Indicates that a signature operation failed for some reason.
-    SignatureFailure,
+    SigError(sig::Error),
 }
 
 impl From<io::Error> for Error {
@@ -206,15 +206,15 @@ impl From<OutOfMemory> for Error {
     }
 }
 
-impl<E> From<sig::Error<E>> for Error {
-    fn from(_: sig::Error<E>) -> Self {
-        Self::SignatureFailure
+impl From<sig::Error> for Error {
+    fn from(e: sig::Error) -> Self {
+        Self::SigError(e)
     }
 }
 
-impl<E> From<sha256::Error<E>> for Error {
-    fn from(e: sha256::Error<E>) -> Self {
-        Self::HashingError(e.erased())
+impl From<sha256::Error> for Error {
+    fn from(e: sha256::Error) -> Self {
+        Self::HashError(e)
     }
 }
 

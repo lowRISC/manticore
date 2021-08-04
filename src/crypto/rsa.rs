@@ -115,15 +115,12 @@ pub trait Builder<Algo> {
 
     /// Creates a new [`Verify`], primed with the given key, which may be used
     /// repeatedly to perform operations.
-    fn new_verifier(
-        &self,
-        key: Self::Key,
-    ) -> Result<Self::Verify, sig::VerifyError<Self::Verify>>;
+    fn new_verifier(&self, key: Self::Key) -> Result<Self::Verify, sig::Error>;
 
     /// Creates a new [`Sign`], primed with the given keypair, which may be
     /// used repeatedly to perform operations.
     fn new_signer(
         &self,
         keypair: Self::KeyPair,
-    ) -> Result<Self::Sign, sig::SignError<Self::Sign>>;
+    ) -> Result<Self::Sign, sig::Error>;
 }
