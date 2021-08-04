@@ -4,8 +4,6 @@
 
 //! Implementations of [`crypto::sha256`] based on `ring`.
 
-use core::convert::Infallible;
-
 use ring::digest;
 
 use crate::crypto::sha256;
@@ -34,7 +32,7 @@ impl Default for Builder {
 impl sha256::Builder for Builder {
     type Hasher = Hasher;
 
-    fn new_hasher(&self) -> Result<Hasher, sha256::Error<Infallible>> {
+    fn new_hasher(&self) -> Result<Hasher, sha256::Error> {
         Ok(Hasher {
             ctx: digest::Context::new(&digest::SHA256),
         })
@@ -49,17 +47,12 @@ pub struct Hasher {
 }
 
 impl sha256::Hasher for Hasher {
-    type Error = Infallible;
-
-    fn write(&mut self, bytes: &[u8]) -> Result<(), sha256::Error<Infallible>> {
+    fn write(&mut self, bytes: &[u8]) -> Result<(), sha256::Error> {
         self.ctx.update(bytes);
         Ok(())
     }
 
-    fn finish(
-        self,
-        out: &mut sha256::Digest,
-    ) -> Result<(), sha256::Error<Infallible>> {
+    fn finish(self, out: &mut sha256::Digest) -> Result<(), sha256::Error> {
         let digest = self.ctx.finish();
         out.copy_from_slice(digest.as_ref());
         Ok(())

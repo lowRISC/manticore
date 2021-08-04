@@ -7,41 +7,16 @@
 use crate::protocol::capabilities;
 
 /// An error returned by a signature operation.
-///
-/// This type serves as a combination of built-in error types known to
-/// Manticore, plus a "custom error" component for surfacing
-/// implementation-specific errors that Manticore can treat as a black box.
-///
-/// This type has the benefit that, unlike a pure associated type, `From`
-/// implementations for error-handling can be implemented on it.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum Error<E = ()> {
-    /// The "custom" error type, which is treated by Manticore as a black box.
-    Custom(E),
+pub enum Error {
+    /// Indicates an unspecified, internal error.
+    Unspecified,
 }
-
-impl<E> Error<E> {
-    /// Erases the custom error type from this `Error`, replacing it with `()`.
-    pub fn erased(self) -> Error {
-        match self {
-            Self::Custom(_) => Error::Custom(()),
-        }
-    }
-}
-
-/// Convenience type for the error returned by [`Verify::verify()`].
-pub type VerifyError<V> = Error<<V as Verify>::Error>;
-
-/// Convenience type for the error returned by [`Sign::sign()`].
-pub type SignError<S> = Error<<S as Sign>::Error>;
 
 /// A signature-verification engine, already primed with a key.
 ///
 /// There is no way to extract the key back out of a `Verify` value.
 pub trait Verify {
-    /// The error returned when an operation fails.
-    type Error;
-
     /// Verifies that `signature` is a valid signature for `message_vec`.
     ///
     /// `message_vec` is an iovec-like structure: the message is split across
@@ -55,7 +30,7 @@ pub trait Verify {
         &mut self,
         message_vec: &[&[u8]],
         signature: &[u8],
-    ) -> Result<(), VerifyError<Self>>;
+    ) -> Result<(), Error>;
 }
 
 /// Marker trait for specifying a bound on a [`Verify`] to specify that it can
@@ -71,9 +46,6 @@ pub trait VerifyFor<Algo>: Verify {}
 ///
 /// There is no way to extract the keypair back out of a `Sign` value.
 pub trait Sign {
-    /// The error returned when an operation fails.
-    type Error;
-
     /// Returns the number of bytes a signature produced by this signer needs.
     fn sig_bytes(&self) -> usize;
 
@@ -89,7 +61,7 @@ pub trait Sign {
         &mut self,
         message_vec: &[&[u8]],
         signature: &mut [u8],
-    ) -> Result<(), SignError<Self>>;
+    ) -> Result<(), Error>;
 }
 
 /// Marker trait for specifying a bound on a [`Sign`] to specify that it can
@@ -137,9 +109,6 @@ pub enum Algo {
 /// Users are expected to implement this trait to efficiently describe to
 /// Manticore which algorithms they consider acceptable and how to access them.
 pub trait Ciphers {
-    /// The error returned by verifiers on failure.
-    type Error;
-
     /// Performs cryptographic capabilities negotiation.
     ///
     /// This function populates `caps` with whatever asymmetric cryptography
@@ -154,7 +123,7 @@ pub trait Ciphers {
         &'a mut self,
         algo: Algo,
         key: &PublicKeyParams,
-    ) -> Option<&'a mut dyn Verify<Error = Self::Error>>;
+    ) -> Option<&'a mut dyn Verify>;
 }
 
 /// A [`Ciphers`] that blindly accepts all signatures, for testing purposes.
@@ -163,7 +132,6 @@ pub(crate) struct NoVerify;
 
 #[cfg(test)]
 impl Verify for NoVerify {
-    type Error = ();
     fn verify(&mut self, _: &[&[u8]], _: &[u8]) -> Result<(), Error> {
         Ok(())
     }
@@ -171,13 +139,12 @@ impl Verify for NoVerify {
 
 #[cfg(test)]
 impl Ciphers for NoVerify {
-    type Error = ();
     fn negotiate(&self, _: &mut capabilities::Crypto) {}
     fn verifier<'a>(
         &'a mut self,
         _: Algo,
         _: &PublicKeyParams,
-    ) -> Option<&'a mut dyn Verify<Error = ()>> {
+    ) -> Option<&'a mut dyn Verify> {
         Some(self)
     }
 }

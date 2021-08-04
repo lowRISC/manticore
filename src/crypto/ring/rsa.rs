@@ -6,7 +6,6 @@
 //!
 //! Requires the `std` feature flag to be enabled.
 
-use ring::error::Unspecified;
 use ring::signature::KeyPair as _;
 use ring::signature::RsaPublicKeyComponents;
 
@@ -127,7 +126,7 @@ impl rsa::Builder<rsa::RsaPkcs1Sha256> for Builder {
     fn new_signer(
         &self,
         keypair: Self::KeyPair,
-    ) -> Result<Self::Sign, sig::SignError<Self::Sign>> {
+    ) -> Result<Self::Sign, sig::Error> {
         Ok(Self::Sign { keypair })
     }
 
@@ -135,10 +134,7 @@ impl rsa::Builder<rsa::RsaPkcs1Sha256> for Builder {
         true
     }
 
-    fn new_verifier(
-        &self,
-        key: PublicKey,
-    ) -> Result<Self::Verify, sig::VerifyError<Self::Verify>> {
+    fn new_verifier(&self, key: PublicKey) -> Result<Self::Verify, sig::Error> {
         Ok(Self::Verify { key })
     }
 }
@@ -149,13 +145,11 @@ pub struct Verify256 {
 }
 
 impl sig::Verify for Verify256 {
-    type Error = Unspecified;
-
     fn verify(
         &mut self,
         message_vec: &[&[u8]],
         signature: &[u8],
-    ) -> Result<(), sig::VerifyError<Self>> {
+    ) -> Result<(), sig::Error> {
         let mut message = Vec::new();
         for bytes in message_vec {
             message.extend_from_slice(bytes);
@@ -165,7 +159,7 @@ impl sig::Verify for Verify256 {
         self.key
             .key
             .verify(scheme, &message, signature)
-            .map_err(sig::Error::Custom)
+            .map_err(|_| sig::Error::Unspecified)
     }
 }
 impl sig::VerifyFor<rsa::RsaPkcs1Sha256> for Verify256 {}
@@ -176,8 +170,6 @@ pub struct Sign256 {
 }
 
 impl sig::Sign for Sign256 {
-    type Error = Unspecified;
-
     fn sig_bytes(&self) -> usize {
         use crate::crypto::rsa::KeyPair as _;
         self.keypair.pub_len().byte_len()
@@ -187,7 +179,7 @@ impl sig::Sign for Sign256 {
         &mut self,
         message_vec: &[&[u8]],
         signature: &mut [u8],
-    ) -> Result<(), sig::SignError<Self>> {
+    ) -> Result<(), sig::Error> {
         let mut message = Vec::new();
         for bytes in message_vec {
             message.extend_from_slice(bytes);
@@ -198,7 +190,7 @@ impl sig::Sign for Sign256 {
         self.keypair
             .keypair
             .sign(scheme, &rng, &message, signature)
-            .map_err(sig::Error::Custom)
+            .map_err(|_| sig::Error::Unspecified)
     }
 }
 impl sig::SignFor<rsa::RsaPkcs1Sha256> for Sign256 {}

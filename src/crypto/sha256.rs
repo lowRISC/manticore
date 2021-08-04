@@ -13,26 +13,10 @@ use std::convert::Infallible;
 pub type Digest = [u8; 32];
 
 /// An error returned by a SHA-256 function.
-///
-/// This type serves as a combination of built-in error types known to
-/// Manticore, plus a "custom error" component for surfacing
-/// implementation-specific errors that Manticore can treat as a black box.
-///
-/// This type has the benefit that, unlike a pure associated type, `From`
-/// implementations for error-handling can be implemented on it.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum Error<E = ()> {
-    /// The "custom" error type, which is treated by Manticore as a black box.
-    Custom(E),
-}
-
-impl<E> Error<E> {
-    /// Erases the custom error type from this `Error`, replacing it with `()`.
-    pub fn erased(self) -> Error {
-        match self {
-            Self::Custom(_) => Error::Custom(()),
-        }
-    }
+pub enum Error {
+    /// Indicates an unspecified, internal error.
+    Unspecified,
 }
 
 /// A builder for creating new [`Hasher`]s.
@@ -45,9 +29,7 @@ pub trait Builder {
 
     /// Begins a new hashing operation, returning a new [`Hasher`] to manage
     /// the computation.
-    fn new_hasher(
-        &self,
-    ) -> Result<Self::Hasher, Error<<Self::Hasher as Hasher>::Error>>;
+    fn new_hasher(&self) -> Result<Self::Hasher, Error>;
 
     /// Convenience function for hashing a contiguous buffer without having
     /// to deal with a hasher directly.
@@ -55,7 +37,7 @@ pub trait Builder {
         &self,
         bytes: &[u8],
         out: &mut Digest,
-    ) -> Result<(), Error<<Self::Hasher as Hasher>::Error>> {
+    ) -> Result<(), Error> {
         let mut hasher = self.new_hasher()?;
         hasher.write(bytes)?;
         hasher.finish(out)
@@ -66,15 +48,10 @@ pub trait Builder {
 ///
 /// Compare Rust's [`Hasher`] trait.
 pub trait Hasher {
-    /// A custom error type. If there isn't a meaningful one, use [`Infallible`].
-    ///
-    /// See [`Error`].
-    type Error;
-
     /// Feeds more data into the current hashing operation.
-    fn write(&mut self, bytes: &[u8]) -> Result<(), Error<Self::Error>>;
+    fn write(&mut self, bytes: &[u8]) -> Result<(), Error>;
 
     /// Finishes the current hashing operation, writing the result to the given
     /// buffer.
-    fn finish(self, out: &mut Digest) -> Result<(), Error<Self::Error>>;
+    fn finish(self, out: &mut Digest) -> Result<(), Error>;
 }
