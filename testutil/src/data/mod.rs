@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Project-wide test utilities.
+//! Test data of all kinds, ranging from manifest, to keys, to certificates.
 
-pub mod data;
+pub mod der;
+pub mod keys;
+pub mod x509;
