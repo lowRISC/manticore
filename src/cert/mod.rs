@@ -18,9 +18,6 @@ use crate::io;
 mod cwt;
 mod x509;
 
-#[cfg(test)]
-mod testdata;
-
 /// A certificate format understood by Manticore.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum CertFormat {
