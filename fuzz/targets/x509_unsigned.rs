@@ -28,7 +28,6 @@ impl sig::Verify for NoVerify {
 }
 
 impl sig::Ciphers for NoVerify {
-    type Error = ();
     fn negotiate(&self, _: &mut capabilities::Crypto) {}
     fn verifier<'a>(
         &'a mut self,
