@@ -39,6 +39,11 @@ jobs:
       run: cargo build -v -p manticore --no-default-features --target riscv32imc-unknown-none-elf
     - name: Build CLI tool
       run: cargo build -v -p manticore-tool
+    - name: Build (but don't run!) fuzz tests
+      run: |
+        cd fuzz
+        cargo install cargo-fuzz
+        cargo fuzz build -v
 
     - name: Build docs
       run: cargo doc --verbose
