@@ -54,6 +54,9 @@ check_dep ascii2der https://github.com/google/der-ascii
 REPO_TOP="$(git rev-parse --show-toplevel)"
 DATA_DIR="$REPO_TOP/testutil/src/data"
 
+SCRATCH="$(mktemp /tmp/manticore-der-ascii-hack.XXX)"
+trap 'rm -f -- "$SCRATCH"' INT TERM HUP EXIT
+
 ## Generate public keys from keypairs.
 KEYS_RS="$DATA_DIR/keys.rs"
 clear_rust_file "$KEYS_RS"
@@ -104,6 +107,10 @@ done
 ## Generate X.509 certs using der-ascii.
 # Right now we do a gross hack to sign the certs. We can get rid
 # of it once https://github.com/google/der-ascii/pull/18 is merged.
+#
+# There is a separate, similarly gross hack to work around not being
+# able to include external blobs, like keys, into der-ascii files.
+# This will also be fixed in the above PR.
 X509_RS="$DATA_DIR/x509.rs"
 clear_rust_file "$X509_RS"
 
@@ -123,10 +130,18 @@ for tbs in $(find "$DATA_DIR/x509" -name '*.tbs' -type f | sort); do
   alg="$(grep '# sign-alg:' "$tbs" | cut -d: -f2)"
   key="$DATA_DIR/$(grep '# sign-key:' "$tbs" | cut -d: -f2)"
 
+  # Next, expand all # include: directives.
+  cat "$tbs" > "$SCRATCH"
+  for include in $(grep '# include:' "$tbs" | sort -u | cut -d: -f2); do
+    included="$DATA_DIR/$include"
+    hex_encoded="$(xxd -p "$included" | tr -d '\n')"
+    perl -pi -e 's!\Q# include:'"$include"'\E!`'"$hex_encoded"'`!g' "$SCRATCH"
+  done
+
   # Then, sign the to-be-signed portion of the cert.
   # This currently assumes RSA; it may be worth doing a `case` on
   # `$alg`.
-  ascii2der -i "$tbs" | openssl dgst \
+  ascii2der -i "$SCRATCH" | openssl dgst \
     -keyform DER \
     -sign "$key" \
     -sha256 \
@@ -135,7 +150,7 @@ for tbs in $(find "$DATA_DIR/x509" -name '*.tbs' -type f | sort); do
   # Now, input the contents of the signature into the real cert.
   ascii2der -o "$bin" <<DER
     SEQUENCE {
-      $(cat "$tbs")
+      $(cat "$SCRATCH")
       $alg
       BIT_STRING {
         \`00\` \`$(
@@ -151,3 +166,5 @@ DER
     "X509 certificate generated from \`$(basename "$tbs")\`."
   echo >> "$X509_RS"
 done
+
+cargo fmt

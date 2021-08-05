@@ -49,21 +49,7 @@ SEQUENCE {
   }
 
   # subjectPublicKeyInfo
-  # This is `src/crypto/testdata/rsa_2048_public_key.pk8`.
-  SEQUENCE {
-    SEQUENCE {
-      # rsaEncryption
-      OBJECT_IDENTIFIER { 1.2.840.113549.1.1.1 }
-      NULL {}
-    }
-    BIT_STRING {
-      `00`
-      SEQUENCE {
-        INTEGER { `00a6be96e18c5c826a748b887b194ed3f6daaa8897cdbaee69e5a980b9dab5af7e5f4fed0236d78400837b28229fd4ee241c0d6f3178651265a2762aa1f449dcec2a8b679058f9c97a3ba93a7c2bb6d62d3baaa70a47991ee6f0daefc55892035fa4f4d1c493a73bf61018c6cf86bb43aa151f9f0bfa5f474a7fa2bba6a1c77e17e160cee2387586e43ff78efd95327d220fc12b0e717089b18cf667ce672d6351d187d9330b8777cbe2fb28fccba0b2adc560c9d03e2cba50d624736545c587cc0f1d3ef3d7ec69f4108fff270455155bd9a3d72c41a397915bad3c9aba753e7bf91614d25642cd968816108647e2f7a8580e4c05ff0a7f233beba82ca8569a53` }
-        INTEGER { 65537 }
-      }
-    }
-  }
+  # include:keys/key1.rsa.pub.pk8
 
   # extensions
   [3] {
