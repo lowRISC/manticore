@@ -6,9 +6,10 @@
 //!
 //! These are hung off to the side to avoid cluttering the main cwt.rs.
 
+use testutil::data::keys;
+
 use crate::cert::Cert;
 use crate::cert::CertFormat;
-use crate::crypto;
 use crate::crypto::ring;
 use crate::crypto::sig::Sign as _;
 
@@ -73,7 +74,7 @@ fn self_signed() {
         BYTES {payload},
     ]);
 
-    let (_, mut signer) = crypto::testdata::rsa();
+    let (_, mut signer) = ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
     let mut sig = vec![0; signer.sig_bytes()];
     signer.sign(&[&tbs], &mut sig).unwrap();
 

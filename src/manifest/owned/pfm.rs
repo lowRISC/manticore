@@ -356,14 +356,15 @@ impl<'f, F: 'f + Flash> owned::FromUnowned<'f, F> for Element {
 mod test {
     use super::*;
 
+    use pretty_assertions::assert_eq;
+    use serde_json::from_str;
+    use testutil::data::keys;
+
+    use crate::crypto::ring::rsa;
     use crate::crypto::ring::sha256;
-    use crate::crypto::testdata;
     use crate::manifest::owned;
     use crate::manifest::owned::Pfm;
     use crate::manifest::Metadata;
-
-    use pretty_assertions::assert_eq;
-    use serde_json::from_str;
 
     #[test]
     fn parse_empty() {
@@ -580,7 +581,7 @@ mod test {
             ],
         };
         let sha = sha256::Builder::new();
-        let (mut rsa, mut signer) = testdata::rsa();
+        let (mut rsa, mut signer) = rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
         let bytes = pfm.sign(0x00, &sha, &mut signer).unwrap();
         let pfm2 =

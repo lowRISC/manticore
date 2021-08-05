@@ -540,15 +540,15 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
 pub(crate) mod test {
     use super::*;
 
+    use serde_json::from_str;
+    use testutil::data::keys;
+
     use crate::crypto::ring;
-    use crate::crypto::testdata;
     use crate::hardware::flash::Ram;
     use crate::manifest::owned;
     use crate::manifest::pfm;
     use crate::manifest::pfm::Pfm;
     use crate::mem::OutOfMemory;
-
-    use serde_json::from_str;
 
     // NOTE: To effectively run these tests, we use PFM-from-JSON to generate
     // some of the tests, but they're intended to be independent of the actual
@@ -558,7 +558,8 @@ pub(crate) mod test {
     #[cfg_attr(miri, ignore)]
     fn empty() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = testdata::rsa();
+        let (mut rsa, mut signer) =
+            ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
@@ -589,7 +590,8 @@ pub(crate) mod test {
     #[cfg_attr(miri, ignore)]
     fn one_element() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = testdata::rsa();
+        let (mut rsa, mut signer) =
+            ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
@@ -627,7 +629,8 @@ pub(crate) mod test {
     #[cfg_attr(miri, ignore)]
     fn with_child() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = testdata::rsa();
+        let (mut rsa, mut signer) =
+            ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{

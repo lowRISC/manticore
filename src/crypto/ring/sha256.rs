@@ -62,10 +62,12 @@ impl sha256::Hasher for Hasher {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use testutil::data::misc_crypto;
+
     use crate::crypto::sha256;
     use crate::crypto::sha256::Builder as _;
     use crate::crypto::sha256::Hasher as _;
-    use crate::crypto::testdata;
 
     #[test]
     #[cfg_attr(miri, ignore)]
@@ -74,14 +76,14 @@ mod tests {
         let mut digest = sha256::Digest::default();
 
         let mut hasher = sha.new_hasher().unwrap();
-        hasher.write(testdata::PLAIN_TEXT).unwrap();
+        hasher.write(misc_crypto::PLAIN_TEXT).unwrap();
         hasher.finish(&mut digest).unwrap();
-        assert_eq!(&digest, testdata::PLAIN_SHA256);
+        assert_eq!(&digest, misc_crypto::PLAIN_SHA256);
 
         let mut hasher = sha.new_hasher().unwrap();
-        hasher.write(&testdata::PLAIN_TEXT[..16]).unwrap();
-        hasher.write(&testdata::PLAIN_TEXT[16..]).unwrap();
+        hasher.write(&misc_crypto::PLAIN_TEXT[..16]).unwrap();
+        hasher.write(&misc_crypto::PLAIN_TEXT[16..]).unwrap();
         hasher.finish(&mut digest).unwrap();
-        assert_eq!(&digest, testdata::PLAIN_SHA256);
+        assert_eq!(&digest, misc_crypto::PLAIN_SHA256);
     }
 }

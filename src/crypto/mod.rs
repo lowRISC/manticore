@@ -43,6 +43,3 @@ pub mod sig;
 
 #[cfg(feature = "ring")]
 pub mod ring;
-
-#[cfg(test)]
-pub(crate) mod testdata;

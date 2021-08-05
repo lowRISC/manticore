@@ -7,10 +7,10 @@
 //! These are hung off to the side to avoid cluttering the main x509.rs.
 
 use testutil::data;
+use testutil::data::keys;
 
 use crate::cert::Cert;
 use crate::cert::CertFormat;
-use crate::crypto;
 use crate::crypto::ring;
 use crate::crypto::rsa::KeyPair as _;
 use crate::crypto::sig::NoVerify;
@@ -36,8 +36,7 @@ fn self_signed() {
 #[cfg_attr(miri, ignore)]
 fn explicit_key() {
     let keypair =
-        ring::rsa::KeyPair::from_pkcs8(crypto::testdata::RSA_2048_PRIV_PKCS8)
-            .unwrap();
+        ring::rsa::KeyPair::from_pkcs8(keys::KEY1_RSA_KEYPAIR).unwrap();
 
     let cert = Cert::parse(
         data::x509::SUB_SIGNED,

@@ -818,9 +818,11 @@ impl FwRegion<'_> {
 mod test {
     use super::*;
 
+    use serde_json::from_str;
+    use testutil::data::keys;
+
     use crate::crypto::ring;
     use crate::crypto::sha256::Builder as _;
-    use crate::crypto::testdata::rsa as test_rsa;
     use crate::hardware::flash::Ram;
     use crate::io::Write as _;
     use crate::manifest::owned;
@@ -830,13 +832,12 @@ mod test {
     use crate::mem::BumpArena;
     use crate::mem::OutOfMemory;
 
-    use serde_json::from_str;
-
     #[test]
     #[cfg_attr(miri, ignore)]
     fn empty() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = test_rsa();
+        let (mut rsa, mut signer) =
+            ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
@@ -864,7 +865,8 @@ mod test {
     #[cfg_attr(miri, ignore)]
     fn platform_id() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = test_rsa();
+        let (mut rsa, mut signer) =
+            ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
@@ -891,7 +893,8 @@ mod test {
     #[cfg_attr(miri, ignore)]
     fn fw_versions() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = test_rsa();
+        let (mut rsa, mut signer) =
+            ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
         #[rustfmt::skip]
         let pfm: owned::Pfm = from_str(r#"{
@@ -1011,7 +1014,8 @@ mod test {
     #[cfg_attr(miri, ignore)]
     fn baked_pfm1() {
         let sha = ring::sha256::Builder::new();
-        let (mut rsa, mut signer) = test_rsa();
+        let (mut rsa, mut signer) =
+            ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
         let mut arena = vec![0; 1024];
         let arena = BumpArena::new(&mut arena);
 
