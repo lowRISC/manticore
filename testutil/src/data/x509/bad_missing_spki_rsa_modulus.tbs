@@ -49,7 +49,7 @@ SEQUENCE {
   }
 
   # subjectPublicKeyInfo
-  # This is `src/crypto/testdata/rsa_2048_public_key_2.pk8`.
+  # Note that the modulus is missing from this key.
   SEQUENCE {
     SEQUENCE {
       # rsaEncryption
