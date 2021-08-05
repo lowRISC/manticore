@@ -6,4 +6,5 @@
 
 pub mod der;
 pub mod keys;
+pub mod misc_crypto;
 pub mod x509;

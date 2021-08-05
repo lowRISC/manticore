@@ -195,40 +195,52 @@ impl sig::Sign for Sign256 {
 }
 impl sig::SignFor<rsa::RsaPkcs1Sha256> for Sign256 {}
 
+/// Generates an RSA engine and signer out of test-only data.
+#[cfg(test)]
+pub fn from_keypair(keypair: &[u8]) -> (Verify256, Sign256) {
+    use crate::crypto::rsa::Builder as _;
+    use crate::crypto::rsa::KeyPair as _;
+    let keypair = KeyPair::from_pkcs8(keypair).unwrap();
+    let pub_key = keypair.public();
+    let rsa_builder = Builder::new();
+    let rsa = rsa_builder.new_verifier(pub_key).unwrap();
+    let signer = rsa_builder.new_signer(keypair).unwrap();
+    (rsa, signer)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use testutil::data::keys;
+    use testutil::data::misc_crypto;
+
     use crate::crypto::rsa::Builder as _;
     use crate::crypto::rsa::KeyPair as _;
     use crate::crypto::rsa::ModulusLength;
     use crate::crypto::sig::Sign as _;
     use crate::crypto::sig::Verify as _;
-    use crate::crypto::testdata;
 
     #[test]
     #[cfg_attr(miri, ignore)]
     fn rsa() {
-        let keypair =
-            KeyPair::from_pkcs8(testdata::RSA_2048_PRIV_PKCS8).unwrap();
+        let keypair = KeyPair::from_pkcs8(keys::KEY1_RSA_KEYPAIR).unwrap();
         assert_eq!(keypair.pub_len(), ModulusLength::Bits2048);
 
         let rsa = Builder::new();
         let mut engine = rsa.new_verifier(keypair.public()).unwrap();
 
         engine
-            .verify(
-                &[testdata::PLAIN_TEXT],
-                testdata::RSA_2048_SHA256_SIG_PKCS1,
-            )
+            .verify(&[misc_crypto::PLAIN_TEXT], misc_crypto::KEY1_SHA256_SIG)
             .unwrap();
 
         let mut signer = rsa.new_signer(keypair).unwrap();
         let mut generated_sig = vec![0; signer.sig_bytes()];
         signer
-            .sign(&[testdata::PLAIN_TEXT], &mut generated_sig)
+            .sign(&[misc_crypto::PLAIN_TEXT], &mut generated_sig)
             .unwrap();
         engine
-            .verify(&[testdata::PLAIN_TEXT], &generated_sig)
+            .verify(&[misc_crypto::PLAIN_TEXT], &generated_sig)
             .unwrap();
     }
 }
