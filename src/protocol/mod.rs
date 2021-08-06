@@ -49,9 +49,7 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::protocol::wire::FromWire;
-use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
-use crate::protocol::wire::ToWireError;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -236,18 +234,18 @@ impl<'a> FromWire<'a> for Header {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         a: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let mut magic = [0; 3];
         r.read_bytes(&mut magic)?;
         if magic != HEADER_MAGIC {
-            return Err(FromWireError::OutOfRange);
+            return Err(wire::Error::OutOfRange);
         }
 
         let request_byte = r.read_le::<u8>()?;
         let is_request = match request_byte {
             0b0000_0000 => false,
             0b1000_0000 => true,
-            _ => return Err(FromWireError::OutOfRange),
+            _ => return Err(wire::Error::OutOfRange),
         };
 
         let command = CommandType::from_wire(r, a)?;
@@ -259,7 +257,7 @@ impl<'a> FromWire<'a> for Header {
 }
 
 impl ToWire for Header {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_bytes(HEADER_MAGIC)?;
         w.write_le((self.is_request as u8) << 7)?;
         self.command.to_wire(w)?;
@@ -322,7 +320,7 @@ impl<'a> FromWire<'a> for Error {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         a: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let code = ErrorCode::from_wire(&mut r, a)?;
         let mut data = [0; 4];
         r.read_bytes(&mut data)?;
@@ -332,7 +330,7 @@ impl<'a> FromWire<'a> for Error {
 }
 
 impl ToWire for Error {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         self.code.to_wire(&mut w)?;
         w.write_bytes(&self.data[..])?;
         Ok(())

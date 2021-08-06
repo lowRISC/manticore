@@ -14,10 +14,10 @@
 //! conjunction with [`ToWire`]:
 //! ```
 //! # use manticore::io::*;
-//! # use manticore::protocol::wire::*;
+//! # use manticore::protocol::wire::{self, *};
 //! # struct MyMessage;
 //! # impl ToWire for MyMessage {
-//! #     fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+//! #     fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
 //! #         w.write_bytes(&[1, 2, 3, 4]);
 //! #         Ok(())
 //! #     }

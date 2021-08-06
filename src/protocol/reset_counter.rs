@@ -11,10 +11,9 @@
 use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
+use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
-use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
-use crate::protocol::wire::ToWireError;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Request;
@@ -75,7 +74,7 @@ impl<'a> FromWire<'a> for ResetCounterRequest {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         a: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let reset_type = ResetType::from_wire(&mut r, a)?;
         let port_id = r.read_le::<u8>()?;
         Ok(Self {
@@ -86,7 +85,7 @@ impl<'a> FromWire<'a> for ResetCounterRequest {
 }
 
 impl<'a> ToWire for ResetCounterRequest {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         self.reset_type.to_wire(&mut w)?;
         w.write_le(self.port_id)?;
         Ok(())
@@ -111,14 +110,14 @@ impl<'a> FromWire<'a> for ResetCounterResponse {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         _: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let count = r.read_le::<u16>()?;
         Ok(Self { count })
     }
 }
 
 impl ToWire for ResetCounterResponse {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.count)?;
         Ok(())
     }

@@ -71,10 +71,9 @@ use core::marker::PhantomData;
 use crate::mem::Arena;
 use crate::net;
 use crate::protocol;
+use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
-use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire as _;
-use crate::protocol::wire::ToWireError;
 use crate::protocol::CommandType;
 use crate::protocol::Header;
 use crate::protocol::Request as _;
@@ -93,10 +92,8 @@ pub enum Error {
     /// Indicates an error originating from a network connection.
     Network(net::Error),
 
-    /// Represents a failure during deserialization.
-    FromWireError(FromWireError),
-    /// Represents a failure during serialization.
-    ToWireError(ToWireError),
+    /// Represents a failure during marshalling.
+    Wire(wire::Error),
 
     /// Indicates that a request message was too long: after successful parse
     /// of a header and a body, we still had unread bytes remaining, indicating
@@ -110,15 +107,9 @@ pub enum Error {
     UnhandledCommand(CommandType),
 }
 
-impl From<FromWireError> for Error {
-    fn from(e: FromWireError) -> Error {
-        Error::FromWireError(e)
-    }
-}
-
-impl From<ToWireError> for Error {
-    fn from(e: ToWireError) -> Error {
-        Error::ToWireError(e)
+impl From<wire::Error> for Error {
+    fn from(e: wire::Error) -> Error {
+        Error::Wire(e)
     }
 }
 
@@ -256,7 +247,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
         let request = host_port.receive()?;
         let header = request.header()?;
         if !header.is_request {
-            return Err(FromWireError::OutOfRange.into());
+            return Err(wire::Error::OutOfRange.into());
         }
         self.run_with_header(server, header, request, arena)
     }
