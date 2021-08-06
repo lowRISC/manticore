@@ -12,7 +12,6 @@ use core::convert::TryInto as _;
 use zerocopy::AsBytes as _;
 
 use crate::crypto::sha256;
-use crate::io;
 use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
@@ -132,7 +131,7 @@ impl ToWire for GetDigestsResponse<'_> {
             .digests
             .len()
             .try_into()
-            .map_err(|_| wire::Error::Io(io::Error::BufferExhausted))?;
+            .map_err(|_| wire::Error::OutOfRange)?;
         w.write_le(digests_len)?;
         w.write_bytes(self.digests.as_bytes())?;
         Ok(())
