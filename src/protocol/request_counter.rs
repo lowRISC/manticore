@@ -12,10 +12,9 @@
 use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
+use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
-use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
-use crate::protocol::wire::ToWireError;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Request;
@@ -51,13 +50,13 @@ impl<'a> FromWire<'a> for RequestCounterRequest {
     fn from_wire<R: Read, A: Arena>(
         _: R,
         _: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         Ok(RequestCounterRequest)
     }
 }
 
 impl<'a> ToWire for RequestCounterRequest {
-    fn to_wire<W: Write>(&self, _: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, _: W) -> Result<(), wire::Error> {
         Ok(())
     }
 }
@@ -82,7 +81,7 @@ impl<'a> FromWire<'a> for RequestCounterResponse {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         _: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let ok_count = r.read_le::<u16>()?;
         let err_count = r.read_le::<u16>()?;
         Ok(Self {
@@ -93,7 +92,7 @@ impl<'a> FromWire<'a> for RequestCounterResponse {
 }
 
 impl ToWire for RequestCounterResponse {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.ok_count)?;
         w.write_le(self.err_count)?;
         Ok(())

@@ -13,10 +13,9 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
+use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
-use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
-use crate::protocol::wire::ToWireError;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Request;
@@ -60,7 +59,7 @@ impl<'a> FromWire<'a> for ChallengeRequest<'a> {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         arena: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let slot = r.read_le()?;
         let _: u8 = r.read_le()?;
         let nonce = arena.alloc::<[u8; 32]>()?;
@@ -70,7 +69,7 @@ impl<'a> FromWire<'a> for ChallengeRequest<'a> {
 }
 
 impl ToWire for ChallengeRequest<'_> {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.slot)?;
         w.write_le(0u8)?;
         w.write_bytes(self.nonce)?;
@@ -120,7 +119,7 @@ impl<'a> FromWire<'a> for ChallengeResponse<'a> {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         arena: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let slot = r.read_le()?;
         let slot_mask = r.read_le()?;
         let min_version = r.read_le()?;
@@ -149,7 +148,7 @@ impl<'a> FromWire<'a> for ChallengeResponse<'a> {
 }
 
 impl ToWire for ChallengeResponse<'_> {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.slot)?;
         w.write_le(self.slot_mask)?;
         w.write_le(self.protocol_range.0)?;
@@ -161,7 +160,7 @@ impl ToWire for ChallengeResponse<'_> {
             self.pmr0
                 .len()
                 .try_into()
-                .map_err(|_| ToWireError::Io(io::Error::BufferExhausted))?,
+                .map_err(|_| wire::Error::Io(io::Error::BufferExhausted))?,
         )?;
         w.write_bytes(self.pmr0)?;
         w.write_bytes(self.signature)?;

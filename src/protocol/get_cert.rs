@@ -10,10 +10,9 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
+use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
-use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
-use crate::protocol::wire::ToWireError;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Request;
@@ -58,7 +57,7 @@ impl<'a> FromWire<'a> for GetCertRequest {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         _: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let slot = r.read_le()?;
         let cert_number = r.read_le()?;
         let offset = r.read_le()?;
@@ -73,7 +72,7 @@ impl<'a> FromWire<'a> for GetCertRequest {
 }
 
 impl<'a> ToWire for GetCertRequest {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.slot)?;
         w.write_le(self.cert_number)?;
         w.write_le(self.offset)?;
@@ -105,7 +104,7 @@ impl<'a> FromWire<'a> for GetCertResponse<'a> {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         arena: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let slot = r.read_le()?;
         let cert_number = r.read_le()?;
 
@@ -121,7 +120,7 @@ impl<'a> FromWire<'a> for GetCertResponse<'a> {
 }
 
 impl ToWire for GetCertResponse<'_> {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.slot)?;
         w.write_le(self.cert_number)?;
         w.write_bytes(self.data)?;

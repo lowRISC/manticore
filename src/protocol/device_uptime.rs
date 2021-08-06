@@ -14,10 +14,9 @@ use core::time::Duration;
 use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
+use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
-use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
-use crate::protocol::wire::ToWireError;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Request;
@@ -61,14 +60,14 @@ impl<'a> FromWire<'a> for DeviceUptimeRequest {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         _: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let port_id = r.read_le::<u8>()?;
         Ok(Self { port_id })
     }
 }
 
 impl<'a> ToWire for DeviceUptimeRequest {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.port_id)?;
         Ok(())
     }
@@ -95,7 +94,7 @@ impl<'a> FromWire<'a> for DeviceUptimeResponse {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         _: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let micros = r.read_le::<u32>()?;
         let uptime = Duration::from_micros(micros as u64);
         Ok(Self { uptime })
@@ -103,7 +102,7 @@ impl<'a> FromWire<'a> for DeviceUptimeResponse {
 }
 
 impl ToWire for DeviceUptimeResponse {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         let micros = self.uptime.as_micros() as u32;
         w.write_le(micros)?;
         Ok(())

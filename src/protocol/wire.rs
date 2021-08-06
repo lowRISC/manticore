@@ -27,12 +27,12 @@ pub trait FromWire<'wire>: Sized {
     fn from_wire<R: Read, A: Arena>(
         r: R,
         arena: &'wire A,
-    ) -> Result<Self, FromWireError>;
+    ) -> Result<Self, Error>;
 }
 
-/// An deserialization error.
+/// A marshalling error.
 #[derive(Clone, Copy, Debug)]
-pub enum FromWireError {
+pub enum Error {
     /// Indicates that something went wrong in an `io` operation.
     Io(io::Error),
 
@@ -45,13 +45,13 @@ pub enum FromWireError {
     OutOfRange,
 }
 
-impl From<io::Error> for FromWireError {
+impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
     }
 }
 
-impl From<OutOfMemory> for FromWireError {
+impl From<OutOfMemory> for Error {
     fn from(_: OutOfMemory) -> Self {
         Self::OutOfMemory
     }
@@ -60,20 +60,7 @@ impl From<OutOfMemory> for FromWireError {
 /// A type which can be serialized into the Cerberus wire format.
 pub trait ToWire: Sized {
     /// Serializes `self` into `w`.
-    fn to_wire<W: Write>(&self, w: W) -> Result<(), ToWireError>;
-}
-
-/// A serializerion error.
-#[derive(Clone, Copy, Debug)]
-pub enum ToWireError {
-    /// Indicates that something went wrong in an [`io`] operation.
-    Io(io::Error),
-}
-
-impl From<io::Error> for ToWireError {
-    fn from(e: io::Error) -> Self {
-        Self::Io(e)
-    }
+    fn to_wire<W: Write>(&self, w: W) -> Result<(), Error>;
 }
 
 /// Represents a C-like enum that can be converted to and from a wire
@@ -126,9 +113,9 @@ where
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         _: &'wire A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, Error> {
         let wire = <Self as WireEnum>::Wire::read_from(&mut r)?;
-        Self::from_wire_value(wire).ok_or(FromWireError::OutOfRange)
+        Self::from_wire_value(wire).ok_or(Error::OutOfRange)
     }
 }
 
@@ -137,7 +124,7 @@ where
     E: WireEnum,
     E::Wire: LeInt,
 {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), Error> {
         self.to_wire_value().write_to(&mut w)?;
         Ok(())
     }

@@ -104,7 +104,7 @@ macro_rules! make_fuzz_safe {
         #[cfg(feature = "arbitrary-derive")]
         impl $crate::protocol::wire::ToWire for $wrapper_name {
             fn to_wire<W: $crate::io::Write>(&self, w: W)
-                -> Result<(), $crate::protocol::wire::ToWireError> {
+                -> Result<(), $crate::protocol::wire> {
                 $crate::protocol::wire::ToWire::to_wire(&$name {$(
                     $field: make_fuzz_safe!(@extract_ty,
                                             self.$field: $field_ty),

@@ -10,10 +10,9 @@
 use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
+use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
-use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
-use crate::protocol::wire::ToWireError;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Request;
@@ -54,13 +53,13 @@ impl<'a> FromWire<'a> for DeviceIdRequest {
     fn from_wire<R: Read, A: Arena>(
         _: R,
         _: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         Ok(DeviceIdRequest)
     }
 }
 
 impl ToWire for DeviceIdRequest {
-    fn to_wire<W: Write>(&self, _: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, _: W) -> Result<(), wire::Error> {
         Ok(())
     }
 }
@@ -83,14 +82,14 @@ impl<'a> FromWire<'a> for DeviceIdResponse {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         a: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let id = DeviceIdentifier::from_wire(&mut r, a)?;
         Ok(Self { id })
     }
 }
 
 impl ToWire for DeviceIdResponse {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         self.id.to_wire(&mut w)?;
         Ok(())
     }
@@ -120,7 +119,7 @@ impl<'a> FromWire<'a> for DeviceIdentifier {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         _: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let vendor_id = r.read_le::<u16>()?;
         let device_id = r.read_le::<u16>()?;
         let subsys_vendor_id = r.read_le::<u16>()?;
@@ -135,7 +134,7 @@ impl<'a> FromWire<'a> for DeviceIdentifier {
 }
 
 impl ToWire for DeviceIdentifier {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.vendor_id)?;
         w.write_le(self.device_id)?;
         w.write_le(self.subsys_vendor_id)?;

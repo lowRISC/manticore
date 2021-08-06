@@ -17,10 +17,9 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
+use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
-use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
-use crate::protocol::wire::ToWireError;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Request;
@@ -75,7 +74,7 @@ impl<'a> FromWire<'a> for GetDigestsRequest {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         a: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let slot = r.read_le()?;
         let key_exchange = KeyExchangeAlgo::from_wire(&mut r, a)?;
         Ok(Self { slot, key_exchange })
@@ -83,7 +82,7 @@ impl<'a> FromWire<'a> for GetDigestsRequest {
 }
 
 impl<'a> ToWire for GetDigestsRequest {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.slot)?;
         self.key_exchange.to_wire(w)?;
         Ok(())
@@ -112,10 +111,10 @@ impl<'a> FromWire<'a> for GetDigestsResponse<'a> {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         arena: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let capabilities = r.read_le::<u8>()?;
         if capabilities != 1 {
-            return Err(FromWireError::OutOfRange);
+            return Err(wire::Error::OutOfRange);
         }
 
         let digests =
@@ -126,14 +125,14 @@ impl<'a> FromWire<'a> for GetDigestsResponse<'a> {
 }
 
 impl ToWire for GetDigestsResponse<'_> {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(1u8)?; // "Capabilities" byte; must be one.
 
         let digests_len: u8 = self
             .digests
             .len()
             .try_into()
-            .map_err(|_| ToWireError::Io(io::Error::BufferExhausted))?;
+            .map_err(|_| wire::Error::Io(io::Error::BufferExhausted))?;
         w.write_le(digests_len)?;
         w.write_bytes(self.digests.as_bytes())?;
         Ok(())

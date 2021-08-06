@@ -11,10 +11,9 @@ use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
+use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
-use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
-use crate::protocol::wire::ToWireError;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Request;
@@ -60,14 +59,14 @@ impl<'a> FromWire<'a> for FirmwareVersionRequest {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         _: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let index = r.read_le()?;
         Ok(Self { index })
     }
 }
 
 impl<'a> ToWire for FirmwareVersionRequest {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.index)?;
         Ok(())
     }
@@ -94,7 +93,7 @@ impl<'a> FromWire<'a> for FirmwareVersionResponse<'a> {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         arena: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let version: &mut [u8; 32] = arena.alloc::<[u8; 32]>()?;
         r.read_bytes(version)?;
         Ok(Self { version })
@@ -102,7 +101,7 @@ impl<'a> FromWire<'a> for FirmwareVersionResponse<'a> {
 }
 
 impl ToWire for FirmwareVersionResponse<'_> {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_bytes(self.version)?;
         Ok(())
     }

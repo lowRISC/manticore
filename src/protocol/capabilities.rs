@@ -18,10 +18,9 @@ use crate::io::bit_buf::BitBuf;
 use crate::io::Read;
 use crate::io::Write;
 use crate::mem::Arena;
+use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
-use crate::protocol::wire::FromWireError;
 use crate::protocol::wire::ToWire;
-use crate::protocol::wire::ToWireError;
 use crate::protocol::wire::WireEnum;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
@@ -61,14 +60,14 @@ impl<'a> FromWire<'a> for DeviceCapabilitiesRequest {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         a: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let capabilities = Capabilities::from_wire(&mut r, a)?;
         Ok(Self { capabilities })
     }
 }
 
 impl ToWire for DeviceCapabilitiesRequest {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         self.capabilities.to_wire(&mut w)
     }
 }
@@ -93,7 +92,7 @@ impl<'a> FromWire<'a> for DeviceCapabilitiesResponse {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         a: &'a A,
-    ) -> Result<Self, FromWireError> {
+    ) -> Result<Self, wire::Error> {
         let capabilities = Capabilities::from_wire(&mut r, a)?;
         let response_timeout =
             Duration::from_millis((10 * (r.read_le::<u8>()? as u32)) as _);
@@ -110,7 +109,7 @@ impl<'a> FromWire<'a> for DeviceCapabilitiesResponse {
 }
 
 impl ToWire for DeviceCapabilitiesResponse {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         self.capabilities.to_wire(&mut w)?;
         // Carefully compress the millisecond cound (which is a u128!) down
         // to a byte, saturating when possible, and avoiding expensive
@@ -335,7 +334,7 @@ impl<'a> FromWire<'a> for Capabilities {
     fn from_wire<R: Read, A: Arena>(
         mut r: R,
         _: &'a A,
-    ) -> Result<Capabilities, FromWireError> {
+    ) -> Result<Capabilities, wire::Error> {
         use consts::*;
         let max_message_size = r.read_le::<u16>()?;
         let max_packet_size = r.read_le::<u16>()?;
@@ -349,9 +348,9 @@ impl<'a> FromWire<'a> for Capabilities {
         let security_bits = byte_five.read_bits(SEC_SIZE)?;
 
         let mode = RotMode::from_wire_value(mode_bits)
-            .ok_or(FromWireError::OutOfRange)?;
+            .ok_or(wire::Error::OutOfRange)?;
         let roles =
-            BusRole::from_bits(bus_bits).ok_or(FromWireError::OutOfRange)?;
+            BusRole::from_bits(bus_bits).ok_or(wire::Error::OutOfRange)?;
         let networking = Networking {
             max_message_size,
             max_packet_size,
@@ -360,7 +359,7 @@ impl<'a> FromWire<'a> for Capabilities {
         };
 
         let security = Security::from_bits(security_bits)
-            .ok_or(FromWireError::OutOfRange)?;
+            .ok_or(wire::Error::OutOfRange)?;
 
         // The sixth byte consists of five reserved bits, and the PFM, policy,
         // and firmware protection bits.
@@ -379,9 +378,9 @@ impl<'a> FromWire<'a> for Capabilities {
         let rsa_bits = byte_seven.read_bits(RSA_SIZE)?;
 
         let rsa_strength = RsaKeyStrength::from_bits(rsa_bits)
-            .ok_or(FromWireError::OutOfRange)?;
+            .ok_or(wire::Error::OutOfRange)?;
         let ecc_strength = EccKeyStrength::from_bits(ecc_bits)
-            .ok_or(FromWireError::OutOfRange)?;
+            .ok_or(wire::Error::OutOfRange)?;
 
         // The eighth byte consists of the aes strength, four reserved bits,
         // and the ecc bit.
@@ -391,7 +390,7 @@ impl<'a> FromWire<'a> for Capabilities {
         let aes_bits = byte_eight.read_bits(AES_SIZE)?;
 
         let aes_strength = AesKeyStrength::from_bits(aes_bits)
-            .ok_or(FromWireError::OutOfRange)?;
+            .ok_or(wire::Error::OutOfRange)?;
 
         Ok(Capabilities {
             networking,
@@ -416,7 +415,7 @@ impl<'a> FromWire<'a> for Capabilities {
 }
 
 impl ToWire for Capabilities {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), ToWireError> {
+    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         use consts::*;
         w.write_le(self.networking.max_message_size)?;
         w.write_le(self.networking.max_packet_size)?;
