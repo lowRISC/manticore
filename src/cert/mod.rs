@@ -104,6 +104,8 @@ impl From<untrusted::EndOfInput> for Error {
     }
 }
 
+debug_from!(Error => io::Error, untrusted::EndOfInput);
+
 impl<'cert> Cert<'cert> {
     /// Parses `cert`, producing a parsed certificate in the given format.
     ///

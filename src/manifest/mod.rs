@@ -274,6 +274,8 @@ impl From<hash::Error> for Error {
     }
 }
 
+debug_from!(Error => io::Error, flash::Error, OutOfMemory, sig::Error, hash::Error);
+
 /// A manifest type.
 ///
 /// A type that implements this trait is not itself a "parsed" instance of the

@@ -50,6 +50,8 @@ impl From<io::Error> for Error {
     }
 }
 
+debug_from!(Error => io::Error);
+
 /// A header type, which represents a protocol over the wire.
 pub trait Header: Copy {
     /// The command type enum associated with this header.

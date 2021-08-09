@@ -53,11 +53,11 @@
 // `debug`.
 #[cfg(feature = "log")]
 extern crate log as __raw_log;
+#[macro_use]
+mod debug;
 
 #[macro_use]
 pub mod protocol;
-#[macro_use]
-mod debug;
 
 #[cfg(feature = "serde")]
 mod serde;
@@ -71,3 +71,12 @@ pub mod mem;
 pub mod net;
 pub mod server;
 pub mod session;
+
+pub use debug::Error;
+
+/// [`Result`] type to use throughout Manticore, which incorporates the
+/// [`manticore::Error`] type.
+///
+/// [`Result`]: std::result::Result
+/// [`manticore::Error`]: crate::Error
+pub type Result<T, E> = core::result::Result<T, Error<E>>;

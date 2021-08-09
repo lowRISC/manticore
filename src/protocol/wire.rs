@@ -58,6 +58,8 @@ impl From<OutOfMemory> for Error {
     }
 }
 
+debug_from!(Error => io::Error, OutOfMemory);
+
 /// A type which can be serialized into the Cerberus wire format.
 pub trait ToWire: Sized {
     /// Serializes `self` into `w`.
@@ -207,7 +209,12 @@ macro_rules! wire_enum {
         impl core::str::FromStr for $name {
             type Err = $crate::protocol::wire::WireEnumFromStrError;
 
-            fn from_str(s: &str) -> Result<Self, $crate::protocol::wire::WireEnumFromStrError> {
+            fn from_str(
+                s: &str
+            ) -> core::result::Result<
+                Self,
+                $crate::protocol::wire::WireEnumFromStrError
+            > {
                 match s {
                     $(stringify!($variant) => Ok(Self::$variant),)*
                     _ => Err($crate::protocol::wire::WireEnumFromStrError),
