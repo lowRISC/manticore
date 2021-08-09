@@ -30,6 +30,8 @@
 //! - `ring` (default) enables the [`crypto::ring` module], which provides
 //!   software implementations for cryptography traits used by `manticore`.
 //!   This feature is not intended for on-device use-cases either.
+//! - `log` (default) enables debug logging throughout manticore, via the `log`
+//!   crate. This feature can be disabled to redact all logging.
 //! - `serde` enables implementations of `serde`'s (de)serialization traits.
 //! - `arbitrary-derive` enables implementations of fuzz-testing-related
 //!   traits.
@@ -46,8 +48,16 @@
 #![deny(unused)]
 #![deny(unsafe_code)]
 
+// Pull in the `log` crate via a different name, to help prevent code from
+// accidentally using it without going through the redactable versions in
+// `debug`.
+#[cfg(feature = "log")]
+extern crate log as __raw_log;
+
 #[macro_use]
 pub mod protocol;
+#[macro_use]
+mod debug;
 
 #[cfg(feature = "serde")]
 mod serde;
