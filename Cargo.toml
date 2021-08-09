@@ -30,6 +30,10 @@ version = "0.3"
 optional = true
 features = ["arbitrary-derive"]
 
+[dependencies.log]
+version = "0.4"
+optional = true
+
 [dependencies.ring]
 version = "0.16.11"
 optional = true
@@ -42,13 +46,15 @@ default-features = false
 features = ["derive"]
 
 [dev-dependencies]
+ctor = "0.1"
+env_logger = "0.8"
 pretty_assertions = "0.6.1"
 ring = "0.16.11"
 serde_json = "1.0"
 testutil = { path = "testutil" }
 
 [features]
-default = ["std", "ring"]
+default = ["std", "ring", "log"]
 
 # Enables deriving `arbitrary::Arbitrary` for various manticore types.
 arbitrary-derive = ["libfuzzer-sys", "std"]
