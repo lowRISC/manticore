@@ -123,6 +123,8 @@ impl<H: net::Header> From<net::Error> for Error<H> {
     }
 }
 
+debug_from!(Error<H: net::Header> => wire::Error, net::Error);
+
 /// A request handler builder.
 ///
 /// See the module documentation for more information.
