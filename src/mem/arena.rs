@@ -6,10 +6,10 @@
 
 #![allow(unsafe_code)]
 
+use core::alloc::Layout;
 use core::cell::Cell;
 use core::cell::UnsafeCell;
 use core::marker::PhantomData;
-use core::mem;
 use core::slice;
 
 use static_assertions::assert_obj_safe;
@@ -19,6 +19,9 @@ use zerocopy::FromBytes;
 use zerocopy::LayoutVerified;
 
 use crate::mem::align_to;
+
+#[cfg(doc)]
+use core::mem;
 
 /// An error indicating that an [`Arena`] has run out of allocatable
 /// memory or that memory that is more aligned than is supported
@@ -31,21 +34,18 @@ use crate::mem::align_to;
 pub struct OutOfMemory;
 
 unsafe impl Arena for OutOfMemory {
-    fn alloc_aligned(
-        &self,
-        len: usize,
-        align: usize,
-    ) -> Result<&mut [u8], OutOfMemory> {
-        assert!(align.is_power_of_two());
-        if len == 0 {
+    fn alloc_raw(&self, layout: Layout) -> Result<&mut [u8], OutOfMemory> {
+        if layout.size() == 0 {
             // SAFE: zero-length slices have no restrictions on the pointer
             // beyond non-null-ness and well-aligned-ness, so we materialize
             // one out of thin air.
             //
-            // NonNull::dangling() is optimial, but that required having a
+            // NonNull::dangling() is optimal, but that requires having a
             // concrete type. See the note on zero-length slices in
             // https://doc.rust-lang.org/std/slice/fn.from_raw_parts_mut.html
-            Ok(unsafe { slice::from_raw_parts_mut(align as *mut u8, 0) })
+            Ok(unsafe {
+                slice::from_raw_parts_mut(layout.align() as *mut u8, 0)
+            })
         } else {
             Err(*self)
         }
@@ -65,11 +65,11 @@ unsafe impl Arena for OutOfMemory {
 ///
 /// # Safety
 ///
-/// `alloc_aligned()` is required to return memory with certain size and
+/// [`Arena::alloc_raw()`] is required to return memory with certain size and
 /// alignment guarantees. While it itself is a safe function, unsafe code
 /// is permitted to rely on these guarantees.
 pub unsafe trait Arena {
-    /// Allocates `len` bytes of `align`-a`igned memory from this arena.
+    /// Allocates memory with the given `layout`.
     ///
     /// This is a low-level function: prefer instead to use the helpers defined
     /// in [`ArenaExt`].
@@ -77,14 +77,15 @@ pub unsafe trait Arena {
     /// This function may be called multiple times, and the returned slices
     /// will be disjoint.
     ///
-    /// After reset is called, this function is permited to return
+    /// After reset is called, this function is permitted to return
     /// previously-allocated memory gain, in a way that is visible to Rust.
     /// As such, "poisoned bits", such as the padding bits of Rust structs,
     /// should never be written to memory returned by this function.
     ///
-    /// Calling `alloc(0, 1)` must never fail. Note that there is no
-    /// requirement that calling `alloc(0, n)` will not return a subslice
-    /// of previously returned memory.
+    /// Calling with a zero-sized, unaligned layout (e.g.,
+    /// `Layout::new::<()>()`) must never fail. Note that there is no
+    /// note that there is no requirement that calling with a zero-sized
+    /// layout will return unique addresses.
     ///
     /// # Panics
     ///
@@ -92,12 +93,8 @@ pub unsafe trait Arena {
     ///
     /// This function is permitted to panic under catastrophic failure
     /// conditions, such as completely running out of program memory.
-    /// Implementations must advertize whether they panic.
-    fn alloc_aligned(
-        &self,
-        len: usize,
-        align: usize,
-    ) -> Result<&mut [u8], OutOfMemory>;
+    /// Implementations must advertise whether they panic.
+    fn alloc_raw(&self, layout: Layout) -> Result<&mut [u8], OutOfMemory>;
 
     /// Resets this arena, essentially freeing all memory that was given out
     /// and allowing it to be allocated once more.
@@ -111,12 +108,13 @@ pub unsafe trait Arena {
     /// the following behavior holds:
     /// ```
     /// # use manticore::mem::*;
+    /// # use core::alloc::Layout;
     /// # let mut arena = BumpArena::new([0; 128]);
     /// // If the first alloc succeeds (regardless of the value of `len`), then
     /// // the subsequent alloc after resetting the arena must also succeed.
-    /// assert!(arena.alloc_aligned(64, 1).is_ok());
+    /// assert!(arena.alloc_raw(Layout::new::<[u8; 64]>()).is_ok());
     /// arena.reset();
-    /// assert!(arena.alloc_aligned(64, 1).is_ok());
+    /// assert!(arena.alloc_raw(Layout::new::<[u8; 64]>()).is_ok());
     /// ```
     fn reset(&mut self);
 }
@@ -165,11 +163,10 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
     fn alloc<T: AsBytes + FromBytes + Copy>(
         self,
     ) -> Result<&'arena mut T, OutOfMemory> {
-        let bytes =
-            self.alloc_aligned(mem::size_of::<T>(), mem::align_of::<T>())?;
+        let bytes = self.alloc_raw(Layout::new::<T>())?;
 
         let lv = LayoutVerified::<_, T>::new(bytes)
-            .expect("alloc_aligned() implemented incorrectly");
+            .expect("alloc_raw() implemented incorrectly");
         Ok(lv.into_mut())
     }
 
@@ -177,13 +174,11 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
         self,
         n: usize,
     ) -> Result<&'arena mut [T], OutOfMemory> {
-        let bytes_requested =
-            mem::size_of::<T>().checked_mul(n).ok_or(OutOfMemory)?;
         let bytes =
-            self.alloc_aligned(bytes_requested, mem::align_of::<T>())?;
+            self.alloc_raw(Layout::array::<T>(n).map_err(|_| OutOfMemory)?)?;
 
         let lv = LayoutVerified::<_, [T]>::new_slice(bytes)
-            .expect("alloc_aligned() implemented incorrectly");
+            .expect("alloc_raw() implemented incorrectly");
         Ok(lv.into_mut_slice())
     }
 }
@@ -224,7 +219,7 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
 ///
 /// # Panics
 ///
-/// `BumpArena::alloc_aligned()` will never panic.
+/// `BumpArena::alloc_raw()` will never panic.
 #[derive(Default)]
 pub struct BumpArena<B: Buf> {
     buf: B::Raw,
@@ -281,7 +276,7 @@ struct BumpArenaRef<'arena> {
 impl<'arena> BumpArenaRef<'arena> {
     /// Allocates unaligned memory of the given length, moving the cursor
     /// forward as necessary.
-    fn alloc_raw(self, len: usize) -> Result<&'arena mut [u8], OutOfMemory> {
+    fn alloc_inner(self, len: usize) -> Result<&'arena mut [u8], OutOfMemory> {
         if len == 0 {
             return Ok(&mut []);
         }
@@ -327,26 +322,22 @@ impl<'arena> BumpArenaRef<'arena> {
         }
         let misalignment = aligned - current_addr;
 
-        self.alloc_raw(misalignment)?;
+        self.alloc_inner(misalignment)?;
         Ok(())
     }
 }
 
 unsafe impl<B: Buf> Arena for BumpArena<B> {
-    fn alloc_aligned(
-        &self,
-        len: usize,
-        align: usize,
-    ) -> Result<&mut [u8], OutOfMemory> {
-        if len == 0 {
+    fn alloc_raw(&self, layout: Layout) -> Result<&mut [u8], OutOfMemory> {
+        if layout.size() == 0 {
             // Forward to OutOfMemory, which will always succeed on zero-length
             // allocations.
-            return OutOfMemory.alloc_aligned(0, align);
+            return OutOfMemory.alloc_raw(layout);
         }
 
         let a = self.as_ref();
-        a.align_to(align)?;
-        a.alloc_raw(len)
+        a.align_to(layout.align())?;
+        a.alloc_inner(layout.size())
     }
 
     // NOTE: because this function takes `self` by unique reference, no mutable
@@ -490,7 +481,7 @@ unsafe impl Buf for Vec<u8> {
     #[inline]
     fn into_raw(mut self) -> Self::Raw {
         let raw = (self.as_mut_ptr(), self.len(), self.capacity());
-        mem::forget(self);
+        core::mem::forget(self);
         raw
     }
 
@@ -519,7 +510,7 @@ unsafe impl Buf for Box<[u8]> {
     #[inline]
     fn into_raw(mut self) -> Self::Raw {
         let raw = (self.as_mut_ptr(), self.len());
-        mem::forget(self);
+        core::mem::forget(self);
         raw
     }
 
@@ -548,14 +539,20 @@ mod test {
     fn bump_array() {
         let arena = BumpArena::<[u8; 128]>::new([0; 128]);
 
-        let buf = arena.alloc_aligned(1, 1).unwrap();
+        let buf = arena
+            .alloc_raw(Layout::from_size_align(1, 1).unwrap())
+            .unwrap();
         assert_eq!(buf.len(), 1);
 
-        let buf = arena.alloc_aligned(1, 4).unwrap();
+        let buf = arena
+            .alloc_raw(Layout::from_size_align(1, 4).unwrap())
+            .unwrap();
         assert_eq!(buf.len(), 1);
         assert_eq!(buf.as_ptr() as usize % 4, 0);
 
-        let buf = arena.alloc_aligned(0, 4).unwrap();
+        let buf = arena
+            .alloc_raw(Layout::from_size_align(0, 4).unwrap())
+            .unwrap();
         assert_eq!(buf.len(), 0);
         assert_eq!(buf.as_ptr() as usize % 4, 0);
     }
@@ -565,14 +562,20 @@ mod test {
         let mut data = [0; 128];
         let arena = BumpArena::<&mut [u8]>::new(data.as_mut());
 
-        let buf = arena.alloc_aligned(1, 1).unwrap();
+        let buf = arena
+            .alloc_raw(Layout::from_size_align(1, 1).unwrap())
+            .unwrap();
         assert_eq!(buf.len(), 1);
 
-        let buf = arena.alloc_aligned(1, 4).unwrap();
+        let buf = arena
+            .alloc_raw(Layout::from_size_align(1, 4).unwrap())
+            .unwrap();
         assert_eq!(buf.len(), 1);
         assert_eq!(buf.as_ptr() as usize % 4, 0);
 
-        let buf = arena.alloc_aligned(0, 4).unwrap();
+        let buf = arena
+            .alloc_raw(Layout::from_size_align(0, 4).unwrap())
+            .unwrap();
         assert_eq!(buf.len(), 0);
         assert_eq!(buf.as_ptr() as usize % 4, 0);
     }

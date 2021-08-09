@@ -12,6 +12,7 @@
 
 #![allow(unsafe_code)]
 
+use core::alloc::Layout;
 use core::convert::TryInto;
 use core::mem;
 
@@ -28,6 +29,9 @@ use crate::io;
 use crate::io::Read as _;
 use crate::mem::Arena;
 use crate::mem::OutOfMemory;
+
+#[cfg(doc)]
+use crate::mem::ArenaExt;
 
 /// A [`Flash`] error.
 ///
@@ -91,6 +95,7 @@ pub unsafe trait Flash {
     /// This function is not provided with a default implementation, though
     /// the following should be a sufficient starting point:
     /// ```
+    /// # use core::alloc::Layout;
     /// # use manticore::mem::*;
     /// # use manticore::hardware::flash::*;
     /// # struct Foo;
@@ -104,7 +109,8 @@ pub unsafe trait Flash {
     ///     arena: &'b dyn Arena,
     ///     align: usize,
     /// ) -> Result<&'c [u8], Error> {
-    ///     let mut buf = arena.alloc_aligned(region.len as usize, align)?;
+    ///     let layout = Layout::from_size_align(region.len as usize, align).unwrap();
+    ///     let mut buf = arena.alloc_raw(layout)?;
     ///     self.read(region.offset, &mut buf)?;
     ///     Ok(buf)
     /// }
@@ -210,7 +216,7 @@ unsafe impl<F: Flash> Flash for &mut F {
 pub trait FlashExt<'flash> {
     /// Reads a value of type `T`.
     ///
-    /// See [`ArenaExt::alloc()`](../../mem/arena/trait.ArenaExt.html#tymethod.alloc).
+    /// See [`ArenaExt::alloc()`].
     fn read_object<'b: 'c, 'c, T>(
         self,
         offset: u32,
@@ -222,7 +228,7 @@ pub trait FlashExt<'flash> {
 
     /// Reads a slice of type `[T]`.
     ///
-    /// See [`ArenaExt::alloc_slice()`](../../mem/arena/trait.ArenaExt.html#tymethod.alloc_slice).
+    /// See [`ArenaExt::alloc_slice()`].
     fn read_slice<'b: 'c, 'c, T>(
         self,
         offset: u32,
@@ -251,7 +257,7 @@ impl<'flash, F: Flash> FlashExt<'flash> for &'flash F {
         )?;
 
         let lv = LayoutVerified::<_, T>::new(bytes)
-            .expect("alloc_aligned() implemented incorrectly");
+            .expect("read_direct() implemented incorrectly");
         Ok(lv.into_ref())
     }
 
@@ -274,7 +280,7 @@ impl<'flash, F: Flash> FlashExt<'flash> for &'flash F {
         )?;
 
         let lv = LayoutVerified::<_, [T]>::new_slice(bytes)
-            .expect("alloc_aligned() implemented incorrectly");
+            .expect("read_direct() implemented incorrectly");
         Ok(lv.into_slice())
     }
 }
@@ -320,12 +326,12 @@ unsafe impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
         }
 
         let slice = &self.0.as_ref()[start..end];
-        assert!(align.is_power_of_two());
+        let layout = Layout::from_size_align(slice.len(), align).unwrap();
         if slice.as_ptr() as usize & (align - 1) == 0 {
             return Ok(slice);
         }
 
-        let buf = arena.alloc_aligned(slice.len(), align)?;
+        let buf = arena.alloc_raw(layout)?;
         buf.copy_from_slice(slice);
         Ok(buf)
     }
@@ -376,12 +382,12 @@ unsafe impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
         }
 
         let slice = &self.0.as_ref()[start..end];
-        assert!(align.is_power_of_two());
+        let layout = Layout::from_size_align(slice.len(), align).unwrap();
         if slice.as_ptr() as usize & (align - 1) == 0 {
             return Ok(slice);
         }
 
-        let buf = arena.alloc_aligned(slice.len(), align)?;
+        let buf = arena.alloc_raw(layout)?;
         buf.copy_from_slice(slice);
         Ok(buf)
     }
