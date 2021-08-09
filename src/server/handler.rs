@@ -128,6 +128,8 @@ impl From<net::Error> for Error {
     }
 }
 
+debug_from!(Error => FromWireError, ToWireError, net::Error);
+
 /// A request handler builder.
 ///
 /// See the module documentation for more information.

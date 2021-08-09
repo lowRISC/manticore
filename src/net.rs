@@ -50,6 +50,8 @@ impl From<io::Error> for Error {
     }
 }
 
+debug_from!(Error => io::Error);
+
 /// Represents a physical port that can be used to interact with host devices.
 ///
 /// This trait provides a generic mechanism for recieving and responding to
