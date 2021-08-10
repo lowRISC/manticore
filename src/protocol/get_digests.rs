@@ -12,8 +12,8 @@ use core::convert::TryInto as _;
 use zerocopy::AsBytes as _;
 
 use crate::crypto::sha256;
-use crate::io::Read;
 use crate::io::ReadInt as _;
+use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
@@ -35,9 +35,9 @@ use serde::{Deserialize, Serialize};
 /// Corresponds to [`CommandType::GetDigests`].
 pub enum GetDigests {}
 
-impl<'a> Command<'a> for GetDigests {
+impl<'wire> Command<'wire> for GetDigests {
     type Req = GetDigestsRequest;
-    type Resp = GetDigestsResponse<'a>;
+    type Resp = GetDigestsResponse<'wire>;
 }
 
 wire_enum! {
@@ -70,18 +70,18 @@ impl Request<'_> for GetDigestsRequest {
     const TYPE: CommandType = CommandType::GetDigests;
 }
 
-impl<'a> FromWire<'a> for GetDigestsRequest {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        a: &'a A,
+impl<'wire> FromWire<'wire> for GetDigestsRequest {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        a: &'wire A,
     ) -> Result<Self, wire::Error> {
         let slot = r.read_le()?;
-        let key_exchange = KeyExchangeAlgo::from_wire(&mut r, a)?;
+        let key_exchange = KeyExchangeAlgo::from_wire(r, a)?;
         Ok(Self { slot, key_exchange })
     }
 }
 
-impl<'a> ToWire for GetDigestsRequest {
+impl ToWire for GetDigestsRequest {
     fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.slot)?;
         self.key_exchange.to_wire(w)?;
@@ -93,24 +93,24 @@ make_fuzz_safe! {
     /// The [`GetDigests`] response.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct GetDigestsResponse<'a> as FVRWrap {
+    pub struct GetDigestsResponse<'wire> as FVRWrap {
         /// The digests of each certificate in the chain, starting from the
         /// root.
         #[cfg_attr(feature = "serde",
                    serde(deserialize_with = "crate::serde::de_slice_of_u8_arrays"))]
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub digests: (&'a [sha256::Digest]),
+        pub digests: (&'wire [sha256::Digest]),
     }
 }
 
-impl<'a> Response<'a> for GetDigestsResponse<'a> {
+impl<'wire> Response<'wire> for GetDigestsResponse<'wire> {
     const TYPE: CommandType = CommandType::GetDigests;
 }
 
-impl<'a> FromWire<'a> for GetDigestsResponse<'a> {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        arena: &'a A,
+impl<'wire> FromWire<'wire> for GetDigestsResponse<'wire> {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        arena: &'wire A,
     ) -> Result<Self, wire::Error> {
         let capabilities = r.read_le::<u8>()?;
         if capabilities != 1 {

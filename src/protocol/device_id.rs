@@ -7,8 +7,8 @@
 //! This module provides a Cerberus command that allows requesting a unique
 //! "device ID" from an RoT.
 
-use crate::io::Read;
 use crate::io::ReadInt as _;
+use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::protocol::wire;
@@ -50,10 +50,10 @@ impl Request<'_> for DeviceIdRequest {
     const TYPE: CommandType = CommandType::DeviceId;
 }
 
-impl<'a> FromWire<'a> for DeviceIdRequest {
-    fn from_wire<R: Read, A: Arena>(
-        _: R,
-        _: &'a A,
+impl<'wire> FromWire<'wire> for DeviceIdRequest {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        _: &mut R,
+        _: &'wire A,
     ) -> Result<Self, wire::Error> {
         Ok(DeviceIdRequest)
     }
@@ -79,12 +79,12 @@ impl Response<'_> for DeviceIdResponse {
     const TYPE: CommandType = CommandType::DeviceId;
 }
 
-impl<'a> FromWire<'a> for DeviceIdResponse {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        a: &'a A,
+impl<'wire> FromWire<'wire> for DeviceIdResponse {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        a: &'wire A,
     ) -> Result<Self, wire::Error> {
-        let id = DeviceIdentifier::from_wire(&mut r, a)?;
+        let id = DeviceIdentifier::from_wire(r, a)?;
         Ok(Self { id })
     }
 }
@@ -116,10 +116,10 @@ pub struct DeviceIdentifier {
     pub subsys_id: u16,
 }
 
-impl<'a> FromWire<'a> for DeviceIdentifier {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        _: &'a A,
+impl<'wire> FromWire<'wire> for DeviceIdentifier {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        _: &'wire A,
     ) -> Result<Self, wire::Error> {
         let vendor_id = r.read_le::<u16>()?;
         let device_id = r.read_le::<u16>()?;

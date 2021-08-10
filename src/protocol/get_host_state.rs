@@ -7,7 +7,8 @@
 //! This module provides a Cerberus command that allows the querying of
 //! the reset state of the host processor protected by Cerberus.
 
-use crate::io::Read;
+use crate::io::ReadInt as _;
+use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::protocol::wire::Error;
@@ -28,7 +29,7 @@ use serde::{Deserialize, Serialize};
 /// Corresponds to [`CommandType::GetHostState`].
 pub enum GetHostState {}
 
-impl<'a> Command<'a> for GetHostState {
+impl Command<'_> for GetHostState {
     type Req = GetHostStateRequest;
     type Resp = GetHostStateResponse;
 }
@@ -47,14 +48,17 @@ impl Request<'_> for GetHostStateRequest {
     const TYPE: CommandType = CommandType::GetHostState;
 }
 
-impl<'a> FromWire<'a> for GetHostStateRequest {
-    fn from_wire<R: Read, A: Arena>(mut r: R, _: &'a A) -> Result<Self, Error> {
+impl<'wire> FromWire<'wire> for GetHostStateRequest {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        _: &'wire A,
+    ) -> Result<Self, Error> {
         let port_id = r.read_le()?;
         Ok(Self { port_id })
     }
 }
 
-impl<'a> ToWire for GetHostStateRequest {
+impl ToWire for GetHostStateRequest {
     fn to_wire<W: Write>(&self, mut w: W) -> Result<(), Error> {
         w.write_le(self.port_id)?;
         Ok(())
@@ -67,7 +71,7 @@ impl<'a> ToWire for GetHostStateRequest {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct GetHostStateResponse {
     /// The returned state.
-    host_reset_state: HostResetState,
+    pub host_reset_state: HostResetState,
 }
 make_fuzz_safe!(GetHostStateResponse);
 
@@ -85,16 +89,16 @@ wire_enum! {
     }
 }
 
-impl<'a> Response<'a> for GetHostStateResponse {
+impl Response<'_> for GetHostStateResponse {
     const TYPE: CommandType = CommandType::GetHostState;
 }
 
-impl<'a> FromWire<'a> for GetHostStateResponse {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        arena: &'a A,
+impl<'wire> FromWire<'wire> for GetHostStateResponse {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        arena: &'wire A,
     ) -> Result<Self, Error> {
-        let host_reset_state = HostResetState::from_wire(&mut r, arena)?;
+        let host_reset_state = HostResetState::from_wire(r, arena)?;
         Ok(Self { host_reset_state })
     }
 }

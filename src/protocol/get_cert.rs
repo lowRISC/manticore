@@ -6,8 +6,8 @@
 //!
 //! This module provides a Cerberus command for requesting certificates.
 
-use crate::io::Read;
 use crate::io::ReadInt as _;
+use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
@@ -29,9 +29,9 @@ use serde::{Deserialize, Serialize};
 /// Corresponds to [`CommandType::GetCert`].
 pub enum GetCert {}
 
-impl<'a> Command<'a> for GetCert {
+impl<'wire> Command<'wire> for GetCert {
     type Req = GetCertRequest;
-    type Resp = GetCertResponse<'a>;
+    type Resp = GetCertResponse<'wire>;
 }
 
 /// The [`GetCert`] request.
@@ -54,10 +54,10 @@ impl Request<'_> for GetCertRequest {
     const TYPE: CommandType = CommandType::GetCert;
 }
 
-impl<'a> FromWire<'a> for GetCertRequest {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        _: &'a A,
+impl<'wire> FromWire<'wire> for GetCertRequest {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        _: &'wire A,
     ) -> Result<Self, wire::Error> {
         let slot = r.read_le()?;
         let cert_number = r.read_le()?;
@@ -72,7 +72,7 @@ impl<'a> FromWire<'a> for GetCertRequest {
     }
 }
 
-impl<'a> ToWire for GetCertRequest {
+impl ToWire for GetCertRequest {
     fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.slot)?;
         w.write_le(self.cert_number)?;
@@ -86,25 +86,25 @@ make_fuzz_safe! {
     /// The [`GetCert`] response.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct GetCertResponse<'a> as GCRWrap {
+    pub struct GetCertResponse<'wire> as GCRWrap {
         /// The slot number of the chain to read from.
         pub slot: u8,
         /// The number of the cert to request, indexed from the root.
         pub cert_number: u8,
         /// The data read from the certificate.
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub data: (&'a [u8]),
+        pub data: (&'wire [u8]),
     }
 }
 
-impl<'a> Response<'a> for GetCertResponse<'a> {
+impl<'wire> Response<'wire> for GetCertResponse<'wire> {
     const TYPE: CommandType = CommandType::GetCert;
 }
 
-impl<'a> FromWire<'a> for GetCertResponse<'a> {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        arena: &'a A,
+impl<'wire> FromWire<'wire> for GetCertResponse<'wire> {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        arena: &'wire A,
     ) -> Result<Self, wire::Error> {
         let slot = r.read_le()?;
         let cert_number = r.read_le()?;
