@@ -71,7 +71,7 @@ where
     #[cfg_attr(test, inline(never))]
     pub fn process_request<'req>(
         &mut self,
-        host_port: &mut dyn net::HostPort,
+        host_port: &mut dyn net::HostPort<'req>,
         arena: &'req impl Arena,
     ) -> Result<(), Error> {
         let result = Handler::<&mut Self>::new()

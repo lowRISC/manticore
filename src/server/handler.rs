@@ -230,7 +230,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
         self,
         server: Server,
         header: Header,
-        request: &mut dyn net::HostRequest,
+        request: &mut dyn net::HostRequest<'req>,
         arena: &'req A,
     ) -> Result<(), Error>;
 
@@ -241,7 +241,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
     fn run<A: Arena>(
         self,
         server: Server,
-        host_port: &mut dyn net::HostPort,
+        host_port: &mut dyn net::HostPort<'req>,
         arena: &'req A,
     ) -> Result<(), Error> {
         let request = host_port.receive()?;
@@ -271,7 +271,7 @@ where
         self,
         server: Server,
         header: Header,
-        request: &mut dyn net::HostRequest,
+        request: &mut dyn net::HostRequest<'req>,
         arena: &'req A,
     ) -> Result<(), Error> {
         if header.command != ReqOf::<'req, Command>::TYPE {
@@ -317,7 +317,7 @@ impl<'req, 'srv, Server: 'srv> HandlerMethods<'req, 'srv, Server>
         self,
         _: Server,
         header: Header,
-        _: &mut dyn net::HostRequest,
+        _: &mut dyn net::HostRequest<'req>,
         _: &'req A,
     ) -> Result<(), Error> {
         Err(Error::UnhandledCommand(header.command))

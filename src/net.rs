@@ -21,6 +21,7 @@ use static_assertions::assert_obj_safe;
 use crate::io;
 use crate::io::Cursor;
 use crate::io::Read;
+use crate::io::ReadZero;
 use crate::io::Write;
 
 pub use crate::protocol::Header;
@@ -62,7 +63,7 @@ impl From<io::Error> for Error {
 /// a generic state machine, where a request is processed and replied to.
 /// ```
 /// # use manticore::net::*;
-/// fn process_request(port: &mut impl HostPort) -> Result<(), Error> {
+/// fn process_request<'req>(port: &mut impl HostPort<'req>) -> Result<(), Error> {
 ///     let req = port.receive()?;
 ///     let header = req.header()?;
 ///     let message = req.payload()?;
@@ -117,7 +118,7 @@ impl From<io::Error> for Error {
 /// Implementing this trait in a way that makes the borrow checker happy is
 /// non-trivial, so [`InMemHost`] is also a useful example of how to build the
 /// required "Russian nesting dolls" of trait objects.
-pub trait HostPort {
+pub trait HostPort<'req> {
     /// Receives an incomming message from a connected host device.
     ///
     /// This function will block until a host device indicates that it wishes
@@ -127,14 +128,14 @@ pub trait HostPort {
     ///
     /// When a request begins, this function returns a [`HostRequest`], which
     /// can be used to respond to the request.
-    fn receive(&mut self) -> Result<&mut dyn HostRequest, Error>;
+    fn receive(&mut self) -> Result<&mut dyn HostRequest<'req>, Error>;
 }
 assert_obj_safe!(HostPort);
 
 /// Provides the "request" half of a transaction with a host.
 ///
 /// See [`HostPort`](trait.HostPort.html) for more information.
-pub trait HostRequest {
+pub trait HostRequest<'req> {
     /// Returns the header sent by the host for this request.
     ///
     /// This function should not be called after calling `reply()`.
@@ -143,21 +144,23 @@ pub trait HostRequest {
     /// Returns the raw byte stream for the payload of the request.
     ///
     /// This function should not be called after calling `reply()`.
-    fn payload(&mut self) -> Result<&mut dyn Read, Error>;
+    fn payload(&mut self) -> Result<&mut dyn ReadZero<'req>, Error>;
 
     /// Replies to this request..
     ///
     /// Calling this function performs sufficient transport-level operations to
     /// begin a response, before handing off actually composing the payload to
     /// the caller via the returned [`HostResponse`].
-    fn reply(&mut self, header: Header)
-        -> Result<&mut dyn HostResponse, Error>;
+    fn reply(
+        &mut self,
+        header: Header,
+    ) -> Result<&mut dyn HostResponse<'req>, Error>;
 }
 
 /// Provides the "reponse" half of a transaction with a host.
 ///
 /// See [`HostPort`](trait.HostPort.html) for more information.
-pub trait HostResponse {
+pub trait HostResponse<'req> {
     /// Returns the raw byte stream for building the payload of the response.
     ///
     /// This function should not be called after calling `finish()`.
@@ -342,8 +345,8 @@ impl<'buf> InMemHost<'buf> {
     }
 }
 
-impl HostPort for InMemHost<'_> {
-    fn receive(&mut self) -> Result<&mut dyn HostRequest, Error> {
+impl<'req, 'buf: 'req> HostPort<'req> for InMemHost<'buf> {
+    fn receive(&mut self) -> Result<&mut dyn HostRequest<'req>, Error> {
         if self.0.rx_header.is_none() {
             return Err(Error::Disconnected);
         }
@@ -351,12 +354,12 @@ impl HostPort for InMemHost<'_> {
     }
 }
 
-impl HostRequest for InMemInner<'_> {
+impl<'req, 'buf: 'req> HostRequest<'req> for InMemInner<'buf> {
     fn header(&self) -> Result<Header, Error> {
         self.rx_header.ok_or(Error::OutOfOrder)
     }
 
-    fn payload(&mut self) -> Result<&mut dyn Read, Error> {
+    fn payload(&mut self) -> Result<&mut dyn ReadZero<'req>, Error> {
         if self.rx_header.is_none() {
             return Err(Error::OutOfOrder);
         }
@@ -366,14 +369,14 @@ impl HostRequest for InMemInner<'_> {
     fn reply(
         &mut self,
         header: Header,
-    ) -> Result<&mut dyn HostResponse, Error> {
+    ) -> Result<&mut dyn HostResponse<'req>, Error> {
         self.rx_header = None;
         self.tx_header = Some(header);
         Ok(self)
     }
 }
 
-impl HostResponse for InMemInner<'_> {
+impl<'req, 'buf: 'req> HostResponse<'req> for InMemInner<'buf> {
     fn sink(&mut self) -> Result<&mut dyn Write, Error> {
         if self.finished {
             return Err(Error::OutOfOrder);
