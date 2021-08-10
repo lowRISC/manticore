@@ -101,7 +101,7 @@ impl<W: std::io::Write> Write for StdWrite<W> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::io::Read;
+    use crate::io::ReadInt as _;
 
     #[test]
     fn read_and_write_bytes() {

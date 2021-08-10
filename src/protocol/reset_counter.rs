@@ -9,6 +9,7 @@
 //! powered on.
 
 use crate::io::Read;
+use crate::io::ReadInt as _;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::protocol::wire;

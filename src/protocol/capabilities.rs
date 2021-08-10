@@ -16,6 +16,7 @@ use bitflags::bitflags;
 use crate::crypto::rsa;
 use crate::io::bit_buf::BitBuf;
 use crate::io::Read;
+use crate::io::ReadInt as _;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::protocol::wire;
