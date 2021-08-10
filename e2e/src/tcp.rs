@@ -235,8 +235,8 @@ impl TcpHostPort {
     }
 }
 
-impl HostPort for TcpHostPort {
-    fn receive(&mut self) -> Result<&mut dyn HostRequest, net::Error> {
+impl<'req> HostPort<'req> for TcpHostPort {
+    fn receive(&mut self) -> Result<&mut dyn HostRequest<'req>, net::Error> {
         let inner = &mut self.0;
         inner.stream = None;
 
@@ -254,7 +254,7 @@ impl HostPort for TcpHostPort {
     }
 }
 
-impl HostRequest for Inner {
+impl<'req> HostRequest<'req> for Inner {
     fn header(&self) -> Result<Header, net::Error> {
         if self.output_buffer.is_some() {
             log::error!("header() called out-of-order");
@@ -266,7 +266,7 @@ impl HostRequest for Inner {
             .ok_or(net::Error::Disconnected)
     }
 
-    fn payload(&mut self) -> Result<&mut dyn io::Read, net::Error> {
+    fn payload(&mut self) -> Result<&mut dyn io::ReadZero<'req>, net::Error> {
         if self.stream.is_none() {
             log::error!("payload() called out-of-order");
             return Err(net::Error::Disconnected);
@@ -282,7 +282,7 @@ impl HostRequest for Inner {
     fn reply(
         &mut self,
         header: Header,
-    ) -> Result<&mut dyn HostResponse, net::Error> {
+    ) -> Result<&mut dyn HostResponse<'req>, net::Error> {
         if self.stream.is_none() {
             log::error!("payload() called out-of-order");
             return Err(net::Error::Disconnected);
@@ -297,7 +297,7 @@ impl HostRequest for Inner {
     }
 }
 
-impl HostResponse for Inner {
+impl HostResponse<'_> for Inner {
     fn sink(&mut self) -> Result<&mut dyn io::Write, net::Error> {
         if self.stream.is_none() {
             log::error!("sink() called out-of-order");
@@ -351,3 +351,5 @@ impl io::Read for Inner {
         self.stream.as_ref().map(|(_, len, _)| *len).unwrap_or(0)
     }
 }
+#[allow(unsafe_code)]
+unsafe impl io::ReadZero<'_> for Inner {}
