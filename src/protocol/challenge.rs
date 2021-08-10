@@ -10,6 +10,7 @@ use core::convert::TryInto as _;
 
 use crate::io;
 use crate::io::Read;
+use crate::io::ReadInt as _;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::mem::ArenaExt as _;

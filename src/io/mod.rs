@@ -16,6 +16,8 @@ pub mod write;
 
 pub use cursor::Cursor;
 pub use read::Read;
+pub use read::ReadInt;
+pub use read::ReadZero;
 pub use write::Write;
 
 /// A generic, low-level I/O error.

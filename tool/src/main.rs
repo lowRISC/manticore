@@ -26,7 +26,7 @@ use manticore::crypto::ring;
 use manticore::crypto::rsa::Builder as _;
 use manticore::crypto::rsa::KeyPair as _;
 use manticore::io::write::StdWrite;
-use manticore::io::Read as _;
+use manticore::io::ReadInt as _;
 use manticore::manifest::owned;
 use manticore::manifest::ManifestType;
 use manticore::mem::BumpArena;
