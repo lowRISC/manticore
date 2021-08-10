@@ -11,8 +11,8 @@
 
 use core::time::Duration;
 
-use crate::io::Read;
 use crate::io::ReadInt as _;
+use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::protocol::wire;
@@ -38,7 +38,7 @@ use crate::hardware::Reset;
 /// See [`Reset::uptime()`].
 pub enum DeviceUptime {}
 
-impl<'a> Command<'a> for DeviceUptime {
+impl<'wire> Command<'wire> for DeviceUptime {
     type Req = DeviceUptimeRequest;
     type Resp = DeviceUptimeResponse;
 }
@@ -57,17 +57,17 @@ impl Request<'_> for DeviceUptimeRequest {
     const TYPE: CommandType = CommandType::DeviceUptime;
 }
 
-impl<'a> FromWire<'a> for DeviceUptimeRequest {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        _: &'a A,
+impl<'wire> FromWire<'wire> for DeviceUptimeRequest {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        _: &'wire A,
     ) -> Result<Self, wire::Error> {
         let port_id = r.read_le::<u8>()?;
         Ok(Self { port_id })
     }
 }
 
-impl<'a> ToWire for DeviceUptimeRequest {
+impl ToWire for DeviceUptimeRequest {
     fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.port_id)?;
         Ok(())
@@ -91,10 +91,10 @@ impl Response<'_> for DeviceUptimeResponse {
     const TYPE: CommandType = CommandType::DeviceUptime;
 }
 
-impl<'a> FromWire<'a> for DeviceUptimeResponse {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        _: &'a A,
+impl<'wire> FromWire<'wire> for DeviceUptimeResponse {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        _: &'wire A,
     ) -> Result<Self, wire::Error> {
         let micros = r.read_le::<u32>()?;
         let uptime = Duration::from_micros(micros as u64);

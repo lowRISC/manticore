@@ -8,8 +8,8 @@
 //! number of resets a device the RoT is connected to has undergone since it
 //! powered on.
 
-use crate::io::Read;
 use crate::io::ReadInt as _;
+use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::protocol::wire;
@@ -35,7 +35,7 @@ use crate::hardware::Reset;
 /// See [`Reset::resets_since_power_on()`].
 pub enum ResetCounter {}
 
-impl<'a> Command<'a> for ResetCounter {
+impl<'wire> Command<'wire> for ResetCounter {
     type Req = ResetCounterRequest;
     type Resp = ResetCounterResponse;
 }
@@ -71,12 +71,12 @@ impl Request<'_> for ResetCounterRequest {
     const TYPE: CommandType = CommandType::ResetCounter;
 }
 
-impl<'a> FromWire<'a> for ResetCounterRequest {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        a: &'a A,
+impl<'wire> FromWire<'wire> for ResetCounterRequest {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        a: &'wire A,
     ) -> Result<Self, wire::Error> {
-        let reset_type = ResetType::from_wire(&mut r, a)?;
+        let reset_type = ResetType::from_wire(r, a)?;
         let port_id = r.read_le::<u8>()?;
         Ok(Self {
             reset_type,
@@ -85,7 +85,7 @@ impl<'a> FromWire<'a> for ResetCounterRequest {
     }
 }
 
-impl<'a> ToWire for ResetCounterRequest {
+impl ToWire for ResetCounterRequest {
     fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         self.reset_type.to_wire(&mut w)?;
         w.write_le(self.port_id)?;
@@ -107,10 +107,10 @@ impl Response<'_> for ResetCounterResponse {
     const TYPE: CommandType = CommandType::ResetCounter;
 }
 
-impl<'a> FromWire<'a> for ResetCounterResponse {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        _: &'a A,
+impl<'wire> FromWire<'wire> for ResetCounterResponse {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        _: &'wire A,
     ) -> Result<Self, wire::Error> {
         let count = r.read_le::<u16>()?;
         Ok(Self { count })

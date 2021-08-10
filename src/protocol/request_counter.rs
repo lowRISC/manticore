@@ -9,8 +9,8 @@
 //!
 //! Note that the command exposed by this module is a `manticore` extension.
 
-use crate::io::Read;
 use crate::io::ReadInt as _;
+use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::protocol::wire;
@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 /// Corresponds to [`CommandType::RequestCounter`].
 pub enum RequestCounter {}
 
-impl<'a> Command<'a> for RequestCounter {
+impl<'wire> Command<'wire> for RequestCounter {
     type Req = RequestCounterRequest;
     type Resp = RequestCounterResponse;
 }
@@ -47,16 +47,16 @@ impl Request<'_> for RequestCounterRequest {
     const TYPE: CommandType = CommandType::RequestCounter;
 }
 
-impl<'a> FromWire<'a> for RequestCounterRequest {
-    fn from_wire<R: Read, A: Arena>(
-        _: R,
-        _: &'a A,
+impl<'wire> FromWire<'wire> for RequestCounterRequest {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        _: &mut R,
+        _: &'wire A,
     ) -> Result<Self, wire::Error> {
         Ok(RequestCounterRequest)
     }
 }
 
-impl<'a> ToWire for RequestCounterRequest {
+impl ToWire for RequestCounterRequest {
     fn to_wire<W: Write>(&self, _: W) -> Result<(), wire::Error> {
         Ok(())
     }
@@ -78,10 +78,10 @@ impl Response<'_> for RequestCounterResponse {
     const TYPE: CommandType = CommandType::RequestCounter;
 }
 
-impl<'a> FromWire<'a> for RequestCounterResponse {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        _: &'a A,
+impl<'wire> FromWire<'wire> for RequestCounterResponse {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        _: &'wire A,
     ) -> Result<Self, wire::Error> {
         let ok_count = r.read_le::<u16>()?;
         let err_count = r.read_le::<u16>()?;

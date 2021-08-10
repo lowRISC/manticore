@@ -9,8 +9,8 @@
 use core::convert::TryInto as _;
 
 use crate::io;
-use crate::io::Read;
 use crate::io::ReadInt as _;
+use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
@@ -32,34 +32,34 @@ use serde::{Deserialize, Serialize};
 /// Corresponds to [`CommandType::Challenge`].
 pub enum Challenge {}
 
-impl<'a> Command<'a> for Challenge {
-    type Req = ChallengeRequest<'a>;
-    type Resp = ChallengeResponse<'a>;
+impl<'wire> Command<'wire> for Challenge {
+    type Req = ChallengeRequest<'wire>;
+    type Resp = ChallengeResponse<'wire>;
 }
 
 make_fuzz_safe! {
     /// The [`Challenge`] request.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct ChallengeRequest<'a> as CRWrap {
+    pub struct ChallengeRequest<'wire> as CRWrap {
         /// The slot number of the chain to read from.
         pub slot: u8,
         /// A requester-chosen random nonce.
         #[cfg_attr(feature = "serde",
                    serde(deserialize_with = "crate::serde::de_u8_array_ref"))]
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub nonce: (&'a [u8; 32]),
+        pub nonce: (&'wire [u8; 32]),
     }
 }
 
-impl<'a> Request<'a> for ChallengeRequest<'a> {
+impl<'wire> Request<'wire> for ChallengeRequest<'wire> {
     const TYPE: CommandType = CommandType::Challenge;
 }
 
-impl<'a> FromWire<'a> for ChallengeRequest<'a> {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        arena: &'a A,
+impl<'wire> FromWire<'wire> for ChallengeRequest<'wire> {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        arena: &'wire A,
     ) -> Result<Self, wire::Error> {
         let slot = r.read_le()?;
         let _: u8 = r.read_le()?;
@@ -82,7 +82,7 @@ make_fuzz_safe! {
     /// The [`Challenge`] response.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct ChallengeResponse<'a> as CR2Wrap {
+    pub struct ChallengeResponse<'wire> as CR2Wrap {
         /// The slot number of the chain to read from.
         pub slot: u8,
         /// The "certificate slot mask" (Cerberus does not elaborate further).
@@ -97,29 +97,29 @@ make_fuzz_safe! {
         #[cfg_attr(feature = "serde",
                    serde(deserialize_with = "crate::serde::de_u8_array_ref"))]
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub nonce: (&'a [u8; 32]),
+        pub nonce: (&'wire [u8; 32]),
         /// The number of "components" used to generate PMR0.
         pub pmr0_components: u8,
         /// The value of the PMR0 measurement.
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub pmr0: (&'a [u8]),
+        pub pmr0: (&'wire [u8]),
         /// The challenge signature.
         ///
         /// This is a signature over the concatenation of the corresponding
         /// request and the response up to the signature.
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub signature: (&'a [u8]),
+        pub signature: (&'wire [u8]),
     }
 }
 
-impl<'a> Response<'a> for ChallengeResponse<'a> {
+impl<'wire> Response<'wire> for ChallengeResponse<'wire> {
     const TYPE: CommandType = CommandType::Challenge;
 }
 
-impl<'a> FromWire<'a> for ChallengeResponse<'a> {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        arena: &'a A,
+impl<'wire> FromWire<'wire> for ChallengeResponse<'wire> {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        arena: &'wire A,
     ) -> Result<Self, wire::Error> {
         let slot = r.read_le()?;
         let slot_mask = r.read_le()?;

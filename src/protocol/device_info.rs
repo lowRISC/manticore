@@ -7,7 +7,7 @@
 //! This module provides a Cerberus command that allows the querying of
 //! Cerberus and vendor-specified information about the device.
 
-use crate::io::Read;
+use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
@@ -29,15 +29,15 @@ use serde::{Deserialize, Serialize};
 /// Corresponds to [`CommandType::DeviceInfo`].
 pub enum DeviceInfo {}
 
-impl<'a> Command<'a> for DeviceInfo {
+impl<'wire> Command<'wire> for DeviceInfo {
     type Req = DeviceInfoRequest;
-    type Resp = DeviceInfoResponse<'a>;
+    type Resp = DeviceInfoResponse<'wire>;
 }
 
 wire_enum! {
     /// A type of "device information" that can be requested.
     #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub enum InfoIndex: u8 {
         /// Represents getting the Unique Chip Identifier for the device.
         UniqueChipIndex = 0x00,
@@ -58,17 +58,17 @@ impl Request<'_> for DeviceInfoRequest {
     const TYPE: CommandType = CommandType::DeviceInfo;
 }
 
-impl<'a> FromWire<'a> for DeviceInfoRequest {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        a: &'a A,
+impl<'wire> FromWire<'wire> for DeviceInfoRequest {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        a: &'wire A,
     ) -> Result<Self, wire::Error> {
-        let index = InfoIndex::from_wire(&mut r, a)?;
+        let index = InfoIndex::from_wire(r, a)?;
         Ok(Self { index })
     }
 }
 
-impl<'a> ToWire for DeviceInfoRequest {
+impl ToWire for DeviceInfoRequest {
     fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         self.index.to_wire(&mut w)?;
         Ok(())
@@ -78,26 +78,26 @@ impl<'a> ToWire for DeviceInfoRequest {
 make_fuzz_safe! {
     /// The [`DeviceInfo`] response.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct DeviceInfoResponse<'a> as DIRWrap {
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct DeviceInfoResponse<'wire> as DIRWrap {
         /// The requested information, in some binary format.
         ///
         /// The format of the response depends on which information index was sent.
         /// Only `0x00` is specified by Cerberus, which is reqired to produce the
         /// "Unique Chip Identifier".
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub info: (&'a [u8]),
+        pub info: (&'wire [u8]),
     }
 }
 
-impl<'a> Response<'a> for DeviceInfoResponse<'a> {
+impl<'wire> Response<'wire> for DeviceInfoResponse<'wire> {
     const TYPE: CommandType = CommandType::DeviceInfo;
 }
 
-impl<'a> FromWire<'a> for DeviceInfoResponse<'a> {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        arena: &'a A,
+impl<'wire> FromWire<'wire> for DeviceInfoResponse<'wire> {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        arena: &'wire A,
     ) -> Result<Self, wire::Error> {
         let len = r.remaining_data();
         let buf = arena.alloc_slice::<u8>(len)?;

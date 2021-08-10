@@ -279,13 +279,13 @@ pub trait DeviceResponse {
 /// host_resp.finish()?;
 ///
 /// // Check that we got the right data back.
-/// let (header, resp_bytes) = host.response().unwrap();
+/// let (header, mut resp_bytes) = host.response().unwrap();
 /// assert_eq!(header.command, CommandType::FirmwareVersion);
 /// assert!(!header.is_request);
 ///
 /// // Now, parse the response.
 /// arena.reset();
-/// let resp = FirmwareVersionResponse::from_wire(resp_bytes, &arena).unwrap();
+/// let resp = FirmwareVersionResponse::from_wire(&mut resp_bytes, &arena).unwrap();
 /// assert_eq!(resp.version, &[0xba; 32]);
 /// # Ok::<(), manticore::net::Error>(())
 /// ```

@@ -7,8 +7,8 @@
 //! This module provides a Cerberus command allowing the versions of various
 //! on-device firmware to be queried.
 
-use crate::io::Read;
 use crate::io::ReadInt as _;
+use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
@@ -35,9 +35,9 @@ use crate::hardware::Identity;
 /// See [`Identity::firmware_version()`].
 pub enum FirmwareVersion {}
 
-impl<'a> Command<'a> for FirmwareVersion {
+impl<'wire> Command<'wire> for FirmwareVersion {
     type Req = FirmwareVersionRequest;
-    type Resp = FirmwareVersionResponse<'a>;
+    type Resp = FirmwareVersionResponse<'wire>;
 }
 
 /// The [`FirmwareVersion`] request.
@@ -56,17 +56,17 @@ impl Request<'_> for FirmwareVersionRequest {
     const TYPE: CommandType = CommandType::FirmwareVersion;
 }
 
-impl<'a> FromWire<'a> for FirmwareVersionRequest {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        _: &'a A,
+impl<'wire> FromWire<'wire> for FirmwareVersionRequest {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        _: &'wire A,
     ) -> Result<Self, wire::Error> {
         let index = r.read_le()?;
         Ok(Self { index })
     }
 }
 
-impl<'a> ToWire for FirmwareVersionRequest {
+impl ToWire for FirmwareVersionRequest {
     fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
         w.write_le(self.index)?;
         Ok(())
@@ -77,23 +77,23 @@ make_fuzz_safe! {
     /// The [`FirmwareVersion`] response.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct FirmwareVersionResponse<'a> as FVRWrap {
+    pub struct FirmwareVersionResponse<'wire> as FVRWrap {
         /// The firmware version. In practice, this is usually an ASCII string.
         #[cfg_attr(feature = "serde",
                    serde(deserialize_with = "crate::serde::de_u8_array_ref"))]
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub version: (&'a [u8; 32]),
+        pub version: (&'wire [u8; 32]),
     }
 }
 
-impl<'a> Response<'a> for FirmwareVersionResponse<'a> {
+impl<'wire> Response<'wire> for FirmwareVersionResponse<'wire> {
     const TYPE: CommandType = CommandType::FirmwareVersion;
 }
 
-impl<'a> FromWire<'a> for FirmwareVersionResponse<'a> {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        arena: &'a A,
+impl<'wire> FromWire<'wire> for FirmwareVersionResponse<'wire> {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        arena: &'wire A,
     ) -> Result<Self, wire::Error> {
         let version: &mut [u8; 32] = arena.alloc::<[u8; 32]>()?;
         r.read_bytes(version)?;

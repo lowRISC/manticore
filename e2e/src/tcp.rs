@@ -68,8 +68,8 @@ where
     writer.finish(&mut conn)?;
 
     /// Helper struct for exposing a TCP stream as a Manticore reader.
-    struct Reader<'a>(&'a mut TcpStream, usize);
-    impl io::Read for Reader<'_> {
+    struct Reader(TcpStream, usize);
+    impl io::Read for Reader {
         fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), io::Error> {
             let Reader(stream, len) = self;
             if *len < out.len() {
@@ -87,9 +87,12 @@ where
             self.1
         }
     }
+    #[allow(unsafe_code)]
+    unsafe impl io::ReadZero<'_> for Reader {}
+
     log::info!("waiting for response");
     let (header, len) = header_from_wire(&mut conn)?;
-    let r = Reader(&mut conn, len);
+    let mut r = Reader(conn, len);
 
     if header.is_request {
         log::error!("unexpected header.is_request: {}", header.is_request);
@@ -97,10 +100,10 @@ where
     }
     if header.command == <Cmd::Resp as Response>::TYPE {
         log::info!("deserializing {}", type_name::<Cmd::Resp>());
-        Ok(Ok(FromWire::from_wire(r, arena)?))
+        Ok(Ok(FromWire::from_wire(&mut r, arena)?))
     } else if header.command == CommandType::Error {
         log::info!("deserializing {}", type_name::<protocol::Error>());
-        Ok(Err(FromWire::from_wire(r, arena)?))
+        Ok(Err(FromWire::from_wire(&mut r, arena)?))
     } else {
         Err(net::Error::BadHeader.into())
     }

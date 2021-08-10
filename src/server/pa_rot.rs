@@ -192,6 +192,7 @@ mod test {
     use crate::hardware::fake;
     use crate::hardware::Identity as _;
     use crate::io::Cursor;
+    use crate::mem::ArenaExt as _;
     use crate::mem::BumpArena;
     use crate::net::DevicePort;
     use crate::protocol::capabilities::*;
@@ -221,6 +222,7 @@ mod test {
 
     fn simulate_request<'a, C: protocol::Command<'a>, A: Arena>(
         scratch_space: &'a mut [u8],
+        port_out: &'a mut Option<net::InMemHost<'a>>,
         arena: &'a mut A,
         server: &mut PaRot<fake::Identity, fake::Reset, ring::sig::Ciphers>,
         request: C::Req,
@@ -243,8 +245,10 @@ mod test {
             },
             request_bytes,
         );
+        *port_out = Some(host_port);
+        let host_port = port_out.as_mut().unwrap();
 
-        server.process_request(&mut host_port, arena)?;
+        server.process_request(host_port, arena)?;
 
         let (header, mut resp) = host_port.response().unwrap();
         assert!(!header.is_request);
@@ -264,6 +268,7 @@ mod test {
 
     fn simulate_response<'a, C: protocol::Command<'a>, A: Arena>(
         scratch_space: &'a mut [u8],
+        port_out: &mut Option<net::InMemDevice<'a>>,
         arena: &'a mut A,
         request: C::Req,
     ) -> Result<C::Resp, Error> {
@@ -280,13 +285,9 @@ mod test {
             command: <C::Req as protocol::Request<'a>>::TYPE,
         };
 
-        // Create the DevicePort
-        let mut device_port = net::InMemDevice::new();
-
-        // Send a request to a device
+        *port_out = Some(net::InMemDevice::new());
+        let device_port = port_out.as_mut().unwrap();
         device_port.send(0x10, header, request_bytes).unwrap();
-
-        // Fake the response
         device_port.response(
             Header {
                 is_request: false,
@@ -294,18 +295,17 @@ mod test {
             },
             &[1, 0, 2, 0, 3, 0, 4, 0],
         );
-
-        // Block until we receive a response
         device_port.wait_for_response(100)?;
 
-        // Get the response
         let response = device_port.receive_response()?;
-
         assert_eq!(response.header().unwrap(), header);
 
         let payload = response.payload().unwrap();
-
-        let resp_val = FromWire::from_wire(payload, arena)
+        // Kludge to work around DevicePort not supporting ReadZero yet.
+        let mut out =
+            arena.alloc_slice::<u8>(payload.remaining_data()).unwrap();
+        payload.read_bytes(out).unwrap();
+        let resp_val = FromWire::from_wire(&mut out, arena)
             .expect("failed to read response");
         Ok(resp_val)
     }
@@ -332,10 +332,12 @@ mod test {
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
 
+        let mut port = None;
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 0 };
         let resp = simulate_request::<protocol::FirmwareVersion, _>(
             &mut scratch,
+            &mut port,
             &mut arena,
             &mut server,
             req,
@@ -346,10 +348,12 @@ mod test {
 
         arena.reset();
 
+        let mut port = None;
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 1 };
         let resp = simulate_request::<protocol::FirmwareVersion, _>(
             &mut scratch,
+            &mut port,
             &mut arena,
             &mut server,
             req,
@@ -360,10 +364,12 @@ mod test {
 
         arena.reset();
 
+        let mut port = None;
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 2 };
         let resp = simulate_request::<protocol::FirmwareVersion, _>(
             &mut scratch,
+            &mut port,
             &mut arena,
             &mut server,
             req,
@@ -374,9 +380,11 @@ mod test {
 
         arena.reset();
 
+        let mut port = None;
         let req = protocol::device_id::DeviceIdRequest;
         let resp = simulate_request::<protocol::DeviceId, _>(
             &mut scratch,
+            &mut port,
             &mut arena,
             &mut server,
             req,
@@ -387,9 +395,11 @@ mod test {
 
         arena.reset();
 
+        let mut port = None;
         let req = protocol::device_id::DeviceIdRequest;
         let resp = simulate_response::<protocol::DeviceId, _>(
             &mut scratch,
+            &mut port,
             &mut arena,
             req,
         )

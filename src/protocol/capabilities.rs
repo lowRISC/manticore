@@ -15,8 +15,8 @@ use bitflags::bitflags;
 
 use crate::crypto::rsa;
 use crate::io::bit_buf::BitBuf;
-use crate::io::Read;
 use crate::io::ReadInt as _;
+use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::protocol::wire;
@@ -57,12 +57,12 @@ impl Request<'_> for DeviceCapabilitiesRequest {
     const TYPE: CommandType = CommandType::DeviceCapabilities;
 }
 
-impl<'a> FromWire<'a> for DeviceCapabilitiesRequest {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        a: &'a A,
+impl<'wire> FromWire<'wire> for DeviceCapabilitiesRequest {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        a: &'wire A,
     ) -> Result<Self, wire::Error> {
-        let capabilities = Capabilities::from_wire(&mut r, a)?;
+        let capabilities = Capabilities::from_wire(r, a)?;
         Ok(Self { capabilities })
     }
 }
@@ -89,12 +89,12 @@ impl Response<'_> for DeviceCapabilitiesResponse {
     const TYPE: CommandType = CommandType::DeviceCapabilities;
 }
 
-impl<'a> FromWire<'a> for DeviceCapabilitiesResponse {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        a: &'a A,
+impl<'wire> FromWire<'wire> for DeviceCapabilitiesResponse {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        a: &'wire A,
     ) -> Result<Self, wire::Error> {
-        let capabilities = Capabilities::from_wire(&mut r, a)?;
+        let capabilities = Capabilities::from_wire(r, a)?;
         let response_timeout =
             Duration::from_millis((10 * (r.read_le::<u8>()? as u32)) as _);
         let crypto_timeout =
@@ -331,10 +331,10 @@ mod consts {
     pub const AES_SIZE: usize = 3;
 }
 
-impl<'a> FromWire<'a> for Capabilities {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        _: &'a A,
+impl<'wire> FromWire<'wire> for Capabilities {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        _: &'wire A,
     ) -> Result<Capabilities, wire::Error> {
         use consts::*;
         let max_message_size = r.read_le::<u16>()?;

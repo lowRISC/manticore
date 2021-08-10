@@ -45,8 +45,8 @@
 // This is required due to the make_fuzz_safe! macro.
 #![allow(unused_parens)]
 
-use crate::io::Read;
 use crate::io::ReadInt as _;
+use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::protocol::wire::FromWire;
@@ -242,10 +242,10 @@ pub const HEADER_LEN: usize = 5;
 /// A magic number required at the start of each `manticore` header.
 const HEADER_MAGIC: &[u8] = &[0b01111110, 0x14, 0x14];
 
-impl<'a> FromWire<'a> for Header {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        a: &'a A,
+impl<'wire> FromWire<'wire> for Header {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        a: &'wire A,
     ) -> Result<Self, wire::Error> {
         let mut magic = [0; 3];
         r.read_bytes(&mut magic)?;
@@ -328,12 +328,12 @@ impl Response<'_> for Error {
     const TYPE: CommandType = CommandType::Error;
 }
 
-impl<'a> FromWire<'a> for Error {
-    fn from_wire<R: Read, A: Arena>(
-        mut r: R,
-        a: &'a A,
+impl<'wire> FromWire<'wire> for Error {
+    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+        r: &mut R,
+        a: &'wire A,
     ) -> Result<Self, wire::Error> {
-        let code = ErrorCode::from_wire(&mut r, a)?;
+        let code = ErrorCode::from_wire(r, a)?;
         let mut data = [0; 4];
         r.read_bytes(&mut data)?;
 

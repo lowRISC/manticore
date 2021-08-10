@@ -344,6 +344,7 @@ mod test {
         A: Arena,
     >(
         scratch_space: &'a mut [u8],
+        port_out: &'a mut Option<net::InMemHost<'a>>,
         arena: &'a mut A,
         server: (H, T),
         request: C::Req,
@@ -356,7 +357,8 @@ mod test {
             .expect("failed to write request");
         let request_bytes = cursor.take_consumed_bytes();
 
-        let mut port = net::InMemHost::new(port_scratch);
+        *port_out = Some(net::InMemHost::new(port_scratch));
+        let port = port_out.as_mut().unwrap();
         port.request(
             Header {
                 is_request: true,
@@ -365,7 +367,7 @@ mod test {
             request_bytes,
         );
 
-        server.0.run(server.1, &mut port, arena)?;
+        server.0.run(server.1, port, arena)?;
 
         let (header, mut resp) = port.response().unwrap();
         assert!(!header.is_request);
@@ -381,12 +383,14 @@ mod test {
         let handler = Handler::<()>::new();
 
         let mut scratch = [0; 1024];
+        let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 0 };
         let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
             &mut scratch,
+            &mut port,
             &mut arena,
             (handler, ()),
             req,
@@ -413,12 +417,14 @@ mod test {
             });
 
         let mut scratch = [0; 1024];
+        let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
         let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
             &mut scratch,
+            &mut port,
             &mut arena,
             (handler, "server state"),
             req,
@@ -443,11 +449,13 @@ mod test {
             });
 
         let mut scratch = [0; 1024];
+        let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
         let req = protocol::device_id::DeviceIdRequest;
         let resp = simulate_request::<protocol::DeviceId, _, _, _>(
             &mut scratch,
+            &mut port,
             &mut arena,
             (handler, "server state"),
             req,
@@ -478,12 +486,14 @@ mod test {
             });
 
         let mut scratch = [0; 1024];
+        let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
         let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
             &mut scratch,
+            &mut port,
             &mut arena,
             (handler, "server state"),
             req,
@@ -511,12 +521,14 @@ mod test {
             });
 
         let mut scratch = [0; 1024];
+        let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
         let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
             &mut scratch,
+            &mut port,
             &mut arena,
             (handler, "server state"),
             req,
@@ -550,12 +562,14 @@ mod test {
             });
 
         let mut scratch = [0; 1024];
+        let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
         let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
             &mut scratch,
+            &mut port,
             &mut arena,
             (handler, "server state"),
             req,
