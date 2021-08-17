@@ -10,6 +10,7 @@ manticore::protocol::device_info::DeviceInfo
 manticore::protocol::device_uptime::DeviceUptime
 manticore::protocol::get_digests::GetDigests
 manticore::protocol::get_cert::GetCert
+manticore::protocol::get_host_state::GetHostState
 manticore::protocol::firmware_version::FirmwareVersion
 manticore::protocol::request_counter::RequestCounter
 manticore::protocol::reset_counter::ResetCounter

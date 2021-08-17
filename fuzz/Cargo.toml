@@ -150,6 +150,22 @@ name = "manticore_protocol_get_cert_GetCert__resp_to_wire"
 path = "gen/manticore_protocol_get_cert_GetCert__resp_to_wire.rs"
 
 [[bin]]
+name = "manticore_protocol_get_host_state_GetHostState__req_to_wire"
+path = "gen/manticore_protocol_get_host_state_GetHostState__req_to_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_get_host_state_GetHostState__req_from_wire"
+path = "gen/manticore_protocol_get_host_state_GetHostState__req_from_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_get_host_state_GetHostState__resp_from_wire"
+path = "gen/manticore_protocol_get_host_state_GetHostState__resp_from_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_get_host_state_GetHostState__resp_to_wire"
+path = "gen/manticore_protocol_get_host_state_GetHostState__resp_to_wire.rs"
+
+[[bin]]
 name = "manticore_protocol_firmware_version_FirmwareVersion__req_to_wire"
 path = "gen/manticore_protocol_firmware_version_FirmwareVersion__req_to_wire.rs"
 
