@@ -11,5 +11,5 @@ cargo +nightly fuzz run <target>
 ```
 
 Many fuzz targets (especially those involving `manticore::protocol` types) are very boilerplatey.
-To make creating fuzz tests for them easier, see the script `util/new_protocol_target.py` under the project root.
+To make creating fuzz tests for them easier, see the script `fuzz/generate_proto_fuzz.py` under the project root.
 This script can both generate fuzz targets and add them to the nightly CI check.
