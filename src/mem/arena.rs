@@ -425,7 +425,7 @@ pub unsafe trait Buf {
     ///
     /// This function should only be called on values produced from
     /// [`Buf::into_raw()`], which have not yet been passed to
-    /// [`Buf::destroy()`].
+    /// [`Buf::drop()`].
     #[allow(clippy::wrong_self_convention)]
     unsafe fn as_slice_from_raw(raw: &Self::Raw) -> (*mut u8, usize);
 }
