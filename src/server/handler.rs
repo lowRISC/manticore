@@ -69,6 +69,7 @@
 use core::marker::PhantomData;
 
 use crate::mem;
+use crate::mem::ArenaExt as _;
 use crate::net;
 use crate::protocol;
 use crate::protocol::wire;
@@ -142,7 +143,10 @@ impl<Server, Arena> Handler<Server, Arena> {
 /// The name "handler cons" comes from the fact that the type that
 /// `run()` is eventually called on looks like a linked list of
 /// `HandlerMethods` implementations.
-pub struct Cons<Prev, Command, F> {
+///
+/// If `REQ_BUFFER` is true, this represents the output of
+/// [`HandlerMethods::handle_buffered()`].
+pub struct Cons<Prev, Command, F, const REQ_BUFFER: bool> {
     prev: Prev,
     handler: F,
     _ph: PhantomData<Command>,
@@ -163,7 +167,8 @@ pub type ReqOf<'a, C> = <C as protocol::Command<'a>>::Req;
 pub type RespOf<'a, C> = <C as protocol::Command<'a>>::Resp;
 
 /// Context for a request, i.e., all relevant variables for handling a request.
-pub struct Context<'req, Req, Server, Arena> {
+pub struct Context<'req, Buf, Req, Server, Arena> {
+    pub req_buf: Buf,
     pub req: Req,
     pub server: Server,
     pub arena: &'req Arena,
@@ -183,7 +188,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
     /// This function should be called as `.handle::<Command, _>(...)` to make
     /// type inference work; the second type paramter can't be named, since
     /// it will be a closure type.
-    fn handle<'out, C, F>(self, handler: F) -> Cons<Self, C, F>
+    fn handle<'out, C, F>(self, handler: F) -> Cons<Self, C, F, false>
     where
         // The following line is a workaround the fact that Rust does not allow
         // the syntax `type Assoc<'a>;` in traits (this feature is sometimes
@@ -218,7 +223,25 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
         // kludge.
         C: for<'c> protocol::Command<'c>,
         F: FnOnce(
-            Context<'req, ReqOf<'req, C>, Server, Arena>,
+            Context<'req, (), ReqOf<'req, C>, Server, Arena>,
+        ) -> Result<RespOf<'out, C>, protocol::Error>,
+        'srv: 'out,
+        'req: 'out,
+    {
+        Cons {
+            prev: self,
+            handler,
+            _ph: PhantomData,
+        }
+    }
+
+    /// Like `handle()`, except it buffers the incoming command completely.
+    fn handle_buffered<'out, C, F>(self, handler: F) -> Cons<Self, C, F, true>
+    where
+        // See above for an explanation of these bounds.
+        C: for<'c> protocol::Command<'c>,
+        F: FnOnce(
+            Context<'req, &'req [u8], ReqOf<'req, C>, Server, Arena>,
         ) -> Result<RespOf<'out, C>, protocol::Error>,
         'srv: 'out,
         'req: 'out,
@@ -259,36 +282,20 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
     }
 }
 
-impl<'req, 'srv, 'out, Server, Arena, Prev, Command, F>
-    HandlerMethods<'req, 'srv, Server, Arena> for Cons<Prev, Command, F>
+impl<Prev, Command, F, const B: bool> Cons<Prev, Command, F, B>
 where
-    // See `HandlerMethods::handle` for an explanation of these
-    // where-clauses.
-    Arena: 'req + mem::Arena,
-    Server: 'srv,
-    Prev: HandlerMethods<'req, 'srv, Server, Arena>,
     Command: for<'c> protocol::Command<'c>,
-    F: FnOnce(
-        Context<'req, ReqOf<'req, Command>, Server, Arena>,
-    ) -> Result<RespOf<'out, Command>, protocol::Error>,
 {
     #[inline]
-    fn run_with_header(
+    fn run_inner<'out, Ctx>(
         self,
-        server: Server,
-        header: Header,
-        request: &mut dyn net::HostRequest<'req>,
-        arena: &'req Arena,
-    ) -> Result<(), Error> {
-        if header.command != ReqOf::<'req, Command>::TYPE {
-            // Recurse into the next handler case. Note that this cannot be
-            // `run`, since that would re-parse the header incorrectly.
-            return self.prev.run_with_header(server, header, request, arena);
-        }
-
-        let req = FromWire::from_wire(request.payload()?, arena)?;
-
-        match (self.handler)(Context { req, server, arena }) {
+        request: &mut dyn net::HostRequest,
+        ctx: Ctx,
+    ) -> Result<(), Error>
+    where
+        F: FnOnce(Ctx) -> Result<RespOf<'out, Command>, protocol::Error>,
+    {
+        match (self.handler)(ctx) {
             Ok(msg) => {
                 let header = Header {
                     is_request: false,
@@ -315,6 +322,96 @@ where
     }
 }
 
+impl<'req, 'srv, 'out, Server, Arena, Prev, Command, F>
+    HandlerMethods<'req, 'srv, Server, Arena> for Cons<Prev, Command, F, false>
+where
+    // See `HandlerMethods::handle` for an explanation of these
+    // where-clauses.
+    Arena: 'req + mem::Arena,
+    Server: 'srv,
+    Prev: HandlerMethods<'req, 'srv, Server, Arena>,
+    Command: for<'c> protocol::Command<'c>,
+    F: FnOnce(
+        Context<'req, (), ReqOf<'req, Command>, Server, Arena>,
+    ) -> Result<RespOf<'out, Command>, protocol::Error>,
+{
+    #[inline]
+    fn run_with_header(
+        self,
+        server: Server,
+        header: Header,
+        request: &mut dyn net::HostRequest<'req>,
+        arena: &'req Arena,
+    ) -> Result<(), Error> {
+        if header.command != ReqOf::<'req, Command>::TYPE {
+            // Recurse into the next handler case. Note that this cannot be
+            // `run`, since that would re-parse the header incorrectly.
+            return self.prev.run_with_header(server, header, request, arena);
+        }
+
+        let req = FromWire::from_wire(request.payload()?, arena)?;
+
+        let ctx = Context {
+            req_buf: (),
+            req,
+            server,
+            arena,
+        };
+        self.run_inner(request, ctx)
+    }
+}
+
+impl<'req, 'srv, 'out, Server, Arena, Prev, Command, F>
+    HandlerMethods<'req, 'srv, Server, Arena> for Cons<Prev, Command, F, true>
+where
+    // See `HandlerMethods::handle` for an explanation of these
+    // where-clauses.
+    Arena: 'req + mem::Arena,
+    Server: 'srv,
+    Prev: HandlerMethods<'req, 'srv, Server, Arena>,
+    Command: for<'c> protocol::Command<'c>,
+    F: FnOnce(
+        Context<'req, &'req [u8], ReqOf<'req, Command>, Server, Arena>,
+    ) -> Result<RespOf<'out, Command>, protocol::Error>,
+{
+    #[inline]
+    fn run_with_header(
+        self,
+        server: Server,
+        header: Header,
+        request: &mut dyn net::HostRequest<'req>,
+        arena: &'req Arena,
+    ) -> Result<(), Error> {
+        if header.command != ReqOf::<'req, Command>::TYPE {
+            // Recurse into the next handler case. Note that this cannot be
+            // `run`, since that would re-parse the header incorrectly.
+            return self.prev.run_with_header(server, header, request, arena);
+        }
+
+        // Buffer the entire request payload; from_wire below will zero-copy
+        // read it.
+        let r = request.payload()?;
+        let req_buf = arena
+            .alloc_slice::<u8>(r.remaining_data())
+            .map_err(wire::Error::from)?;
+        r.read_bytes(req_buf).map_err(wire::Error::from)?;
+
+        // Note: `{ req_buf }` produces a copy of req_buf, so that the from_wire
+        // argument becomes an rvalue. Thus, `from_wire` does not mutate the
+        // original `req_buf` that gets passed to `run_inner()`.
+        let req_buf: &'req [u8] = req_buf;
+        let req = FromWire::from_wire(&mut { req_buf }, arena)?;
+
+        let ctx = Context {
+            req_buf,
+            req,
+            server,
+            arena,
+        };
+        self.run_inner(request, ctx)
+    }
+}
+
 impl<'req, 'srv, Server: 'srv, Arena: 'req>
     HandlerMethods<'req, 'srv, Server, Arena> for Handler<Server, Arena>
 {
@@ -330,7 +427,7 @@ impl<'req, 'srv, Server: 'srv, Arena: 'req>
     }
 }
 
-impl<P, C, F> sealed::Sealed for Cons<P, C, F> {}
+impl<P, C, F, const B: bool> sealed::Sealed for Cons<P, C, F, B> {}
 impl<S, A> sealed::Sealed for Handler<S, A> {}
 
 #[cfg(test)]
