@@ -119,7 +119,7 @@ pub trait ReadZeroExt<'a>: ReadZero<'a> {
         Ok(lv.into_slice())
     }
 }
-impl<'a, R: ReadZero<'a>> ReadZeroExt<'a> for R {}
+impl<'a, R: ReadZero<'a> + ?Sized> ReadZeroExt<'a> for R {}
 
 impl<R: Read + ?Sized> Read for &mut R {
     #[inline]
@@ -130,17 +130,6 @@ impl<R: Read + ?Sized> Read for &mut R {
     #[inline]
     fn remaining_data(&self) -> usize {
         R::remaining_data(*self)
-    }
-}
-
-unsafe impl<'a, 'b: 'a, R: ReadZero<'a> + ?Sized> ReadZero<'a> for &'b mut R {
-    #[inline]
-    fn read_direct(
-        &mut self,
-        arena: &'a dyn Arena,
-        layout: Layout,
-    ) -> Result<&'a [u8], io::Error> {
-        R::read_direct(*self, arena, layout)
     }
 }
 

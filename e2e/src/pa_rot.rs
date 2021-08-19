@@ -17,6 +17,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use manticore::cert;
+use manticore::cert::CertFormat;
 use manticore::crypto::ring;
 use manticore::mem::Arena;
 use manticore::mem::BumpArena;
@@ -57,6 +58,25 @@ pub struct Options {
 
     /// The device identifier to report to the client.
     pub device_id: DeviceIdentifier,
+
+    /// The initial certificate chain to provision to the device.
+    pub cert_chain: Vec<Vec<u8>>,
+
+    /// The certificate format to parse the cert chain with.
+    pub cert_format: CertFormat,
+
+    /// The keypair to use with the certificate chain.
+    pub alias_keypair: KeyPairFormat,
+
+    /// The contents of PMR #0.
+    pub pmr0: Vec<u8>,
+}
+
+/// See [`Options::alias_keypair`].
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub enum KeyPairFormat {
+    /// An RSA PKCS#8-encoded key pair.
+    RsaPkcs8(Vec<u8>),
 }
 
 impl Default for Options {
@@ -75,6 +95,10 @@ impl Default for Options {
                 subsys_vendor_id: 3,
                 subsys_id: 4,
             },
+            cert_chain: vec![],
+            cert_format: CertFormat::RiotX509,
+            alias_keypair: KeyPairFormat::RsaPkcs8(vec![]),
+            pmr0: b"<pmr0 unspecified>".to_vec(),
         }
     }
 }
@@ -229,10 +253,21 @@ pub fn serve(opts: Options) -> ! {
 
     let sha = ring::sha256::Builder::new();
     let mut ciphers = ring::sig::Ciphers::new();
-    let trust_chain = cert::SimpleChain::<0>::parse(
-        &[],
-        cert::CertFormat::RiotX509,
+    let trust_chain_bytes =
+        opts.cert_chain.iter().map(Vec::as_ref).collect::<Vec<_>>();
+    let mut signer = match &opts.alias_keypair {
+        KeyPairFormat::RsaPkcs8(pk8) => {
+            use manticore::crypto::rsa::*;
+            let kp = ring::rsa::KeyPair::from_pkcs8(pk8).unwrap();
+            let builder = ring::rsa::Builder::new();
+            builder.new_signer(kp).unwrap()
+        }
+    };
+    let mut trust_chain = cert::SimpleChain::<8>::parse(
+        &trust_chain_bytes,
+        opts.cert_format,
         &mut ciphers,
+        &mut signer,
     )
     .unwrap();
 
@@ -241,7 +276,8 @@ pub fn serve(opts: Options) -> ! {
         reset: &reset,
         sha: &sha,
         ciphers: &mut ciphers,
-        trust_chain: &trust_chain,
+        trust_chain: &mut trust_chain,
+        pmr0: &opts.pmr0,
         device_id: opts.device_id,
         networking,
         timeouts,

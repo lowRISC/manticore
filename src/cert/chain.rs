@@ -4,6 +4,7 @@
 
 //! Cert chains.
 
+use core::fmt;
 use core::num::NonZeroUsize;
 
 use arrayvec::ArrayVec;
@@ -33,12 +34,26 @@ pub trait TrustChain {
     /// Returns `None` if `index` is out of bounds or if there is no `slot`th
     /// chain. These cases can be distinguished by calling `chain_len()`.
     fn cert(&self, slot: u8, index: usize) -> Option<&Cert>;
+
+    /// Gets the signer for the `slot`th chain.
+    ///
+    /// This value allows the creation of signatures that assert that we have
+    /// custody of the private key corresponding to a leaf certificate.
+    ///
+    /// Returns `None` if no such chain is present.
+    fn signer(&mut self, slot: u8) -> Option<&mut dyn sig::Sign>;
 }
 
-/// A simple trust with only one slot.
-#[derive(Debug)]
+/// A simple trust chain with only one slot.
 pub struct SimpleChain<'cert, const LEN: usize> {
-    chain: [Cert<'cert>; LEN],
+    chain: ArrayVec<Cert<'cert>, LEN>,
+    signer: &'cert mut dyn sig::Sign,
+}
+
+impl<const LEN: usize> fmt::Debug for SimpleChain<'_, LEN> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.chain.fmt(f)
+    }
 }
 
 impl<'cert, const LEN: usize> SimpleChain<'cert, LEN> {
@@ -48,9 +63,10 @@ impl<'cert, const LEN: usize> SimpleChain<'cert, LEN> {
         raw_chain: &[&'cert [u8]],
         format: CertFormat,
         ciphers: &mut impl sig::Ciphers,
+        signer: &'cert mut dyn sig::Sign,
     ) -> Result<Self, Error> {
-        if raw_chain.len() != LEN {
-            return Err(Error::ChainTooShort);
+        if raw_chain.len() > LEN {
+            return Err(Error::ChainTooLong);
         }
 
         let mut chain = ArrayVec::new();
@@ -84,10 +100,7 @@ impl<'cert, const LEN: usize> SimpleChain<'cert, LEN> {
             chain.push(cert);
         }
 
-        // Cannot panic, since we called push() LEN times.
-        Ok(Self {
-            chain: chain.into_inner().unwrap(),
-        })
+        Ok(Self { chain, signer })
     }
 }
 
@@ -105,6 +118,14 @@ impl<const LEN: usize> TrustChain for SimpleChain<'_, LEN> {
         }
         NonZeroUsize::new(self.chain.len())
     }
+
+    fn signer(&mut self, slot: u8) -> Option<&mut dyn sig::Sign> {
+        if slot != 0 {
+            return None;
+        }
+
+        Some(self.signer)
+    }
 }
 
 #[cfg(all(test, not(miri)))] // TODO(#103)
@@ -119,10 +140,12 @@ mod test {
 
     #[test]
     fn x509_chain_parse() {
+        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let chain = SimpleChain::<3>::parse(
             &[x509::CHAIN1, x509::CHAIN2, x509::CHAIN3],
             CertFormat::RiotX509,
             &mut ring::sig::Ciphers::new(),
+            &mut signer,
         )
         .unwrap();
 
@@ -136,17 +159,21 @@ mod test {
 
     #[test]
     fn x509_chain_ooo() {
+        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let result = SimpleChain::<3>::parse(
             &[x509::CHAIN1, x509::CHAIN3, x509::CHAIN2],
             CertFormat::RiotX509,
             &mut ring::sig::Ciphers::new(),
+            &mut signer,
         );
         assert!(result.is_err());
 
+        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let result = SimpleChain::<3>::parse(
             &[x509::CHAIN2, x509::CHAIN1, x509::CHAIN3],
             CertFormat::RiotX509,
             &mut ring::sig::Ciphers::new(),
+            &mut signer,
         );
         assert!(result.is_err());
     }
@@ -186,6 +213,7 @@ mod test {
 
     #[test]
     fn cwt_chain_parse() {
+        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let data = CWT_TEST_CHAIN
             .iter()
             .map(TestCwt::encode)
@@ -195,6 +223,7 @@ mod test {
             &data,
             CertFormat::OpenDiceCwt,
             &mut ring::sig::Ciphers::new(),
+            &mut signer,
         )
         .unwrap();
 
@@ -208,6 +237,7 @@ mod test {
 
     #[test]
     fn cwt_chain_ooo() {
+        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let data = CWT_TEST_CHAIN
             .iter()
             .map(TestCwt::encode)
@@ -218,9 +248,11 @@ mod test {
             &data,
             CertFormat::OpenDiceCwt,
             &mut ring::sig::Ciphers::new(),
+            &mut signer,
         );
         assert!(result.is_err());
 
+        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let data = CWT_TEST_CHAIN
             .iter()
             .map(TestCwt::encode)
@@ -231,6 +263,7 @@ mod test {
             &data,
             CertFormat::OpenDiceCwt,
             &mut ring::sig::Ciphers::new(),
+            &mut signer,
         );
         assert!(result.is_err());
     }

@@ -34,7 +34,13 @@ pub struct Options<'a, Identity, Reset, Sha, Ciphers, TrustChain> {
     /// A handle to a signature verification engine,
     pub ciphers: &'a mut Ciphers,
     /// The trust chain to use for the challenge.
-    pub trust_chain: &'a TrustChain,
+    pub trust_chain: &'a mut TrustChain,
+
+    /// The value of PMR0.
+    ///
+    /// Eventually this should be replaced with a general "PMRs"
+    /// trait.
+    pub pmr0: &'a [u8],
 
     /// This device's silicon identifier.
     pub device_id: device_id::DeviceIdentifier,
@@ -180,6 +186,35 @@ where
                     data: &cert.raw()[start..end],
                 })
             })
+            .handle_buffered::<protocol::Challenge, _>(|ctx| {
+                use protocol::challenge::*;
+                let signer = ctx
+                    .server
+                    .opts
+                    .trust_chain
+                    .signer(ctx.req.slot)
+                    .ok_or(UNSPECIFIED)?;
+                let signature = ctx
+                    .arena
+                    .alloc_slice::<u8>(signer.sig_bytes())
+                    .map_err(|_| UNSPECIFIED)?;
+                let tbs = ChallengeResponseTbs {
+                    slot: ctx.req.slot,
+                    slot_mask: 0, // Currently unspecified?
+                    protocol_range: (0, 0),
+                    nonce: ctx.req.nonce,
+                    pmr0_components: 0,
+                    pmr0: ctx.server.opts.pmr0,
+                };
+
+                let req_buf = ctx.req_buf;
+                tbs.as_iovec_with(|[a, b, c, d]| {
+                    signer.sign(&[req_buf, a, b, c, d], signature)
+                })
+                .map_err(|_| UNSPECIFIED)?;
+
+                Ok(ChallengeResponse { tbs, signature })
+            })
             .handle::<protocol::ResetCounter, _>(|ctx| {
                 use protocol::reset_counter::*;
                 // NOTE: Currently, we only handle "local resets" for port 0,
@@ -244,6 +279,7 @@ const UNSPECIFIED: protocol::Error = protocol::Error {
 mod test {
     use super::*;
     use core::time::Duration;
+    use testutil::data::keys;
 
     use crate::crypto::ring;
     use crate::hardware::fake;
@@ -382,10 +418,12 @@ mod test {
         let reset = fake::Reset::new(0, Duration::from_millis(1));
         let mut ciphers = ring::sig::Ciphers::new();
         let sha = ring::sha256::Builder::new();
-        let trust_chain = cert::SimpleChain::parse(
+        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
+        let mut trust_chain = cert::SimpleChain::parse(
             &[],
             cert::CertFormat::RiotX509,
             &mut ciphers,
+            &mut signer,
         )
         .unwrap();
         let mut server = PaRot::new(Options {
@@ -393,7 +431,8 @@ mod test {
             reset: &reset,
             sha: &sha,
             ciphers: &mut ciphers,
-            trust_chain: &trust_chain,
+            trust_chain: &mut trust_chain,
+            pmr0: "not important".as_bytes(),
             device_id: DEVICE_ID,
             networking: NETWORKING,
             timeouts: TIMEOUTS,
