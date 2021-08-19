@@ -133,17 +133,6 @@ impl<R: Read + ?Sized> Read for &mut R {
     }
 }
 
-unsafe impl<'a, 'b: 'a, R: ReadZero<'a> + ?Sized> ReadZero<'a> for &'b mut R {
-    #[inline]
-    fn read_direct(
-        &mut self,
-        arena: &'a dyn Arena,
-        layout: Layout,
-    ) -> Result<&'a [u8], io::Error> {
-        R::read_direct(*self, arena, layout)
-    }
-}
-
 impl Read for &[u8] {
     fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), io::Error> {
         let n = out.len();

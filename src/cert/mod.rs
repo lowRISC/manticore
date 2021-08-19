@@ -23,6 +23,7 @@ pub use chain::*;
 
 /// A certificate format understood by Manticore.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CertFormat {
     /// An X.509v3 certificate, using the RIoT profile.
     ///
@@ -87,8 +88,8 @@ pub enum Error {
     BadSignature,
     /// Two adjacent certificates in a certificate chain were incompatible.
     BadChainLink,
-    /// A certificate chain was shorter than it was expected to be.
-    ChainTooShort,
+    /// A certificate chain was longer than it was expected to be.
+    ChainTooLong,
 }
 
 impl From<io::Error> for Error {
