@@ -23,11 +23,11 @@ const MAP: u8 = 5;
 
 /// Generator for a test CWT.
 pub struct TestCwt {
-    issuer: &'static str,
-    subject: &'static str,
-    spki: PublicKeyParams<'static>,
-    key_usage: &'static [u8],
-    issuer_key: &'static [u8],
+    pub issuer: &'static str,
+    pub subject: &'static str,
+    pub spki: PublicKeyParams<'static>,
+    pub key_usage: &'static [u8],
+    pub issuer_key: &'static [u8],
 }
 
 impl TestCwt {

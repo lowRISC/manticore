@@ -75,6 +75,18 @@ pub const BAD_UNKNOWN_CRITICAL: &[u8] = include_bytes!("x509/generated/bad_unkno
 #[rustfmt::skip]
 pub const BAD_WRONG_VERSION: &[u8] = include_bytes!("x509/generated/bad_wrong_version.tbs.bin");
 
+/// X509 certificate generated from `chain1.tbs`.
+#[rustfmt::skip]
+pub const CHAIN1: &[u8] = include_bytes!("x509/generated/chain1.tbs.bin");
+
+/// X509 certificate generated from `chain2.tbs`.
+#[rustfmt::skip]
+pub const CHAIN2: &[u8] = include_bytes!("x509/generated/chain2.tbs.bin");
+
+/// X509 certificate generated from `chain3.tbs`.
+#[rustfmt::skip]
+pub const CHAIN3: &[u8] = include_bytes!("x509/generated/chain3.tbs.bin");
+
 /// X509 certificate generated from `ok_no_ca_without_bc.tbs`.
 #[rustfmt::skip]
 pub const OK_NO_CA_WITHOUT_BC: &[u8] = include_bytes!("x509/generated/ok_no_ca_without_bc.tbs.bin");
