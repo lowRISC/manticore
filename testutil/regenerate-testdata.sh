@@ -61,6 +61,10 @@ trap 'rm -f -- "$SCRATCH"' INT TERM HUP EXIT
 KEYS_RS="$DATA_DIR/keys.rs"
 clear_rust_file "$KEYS_RS"
 
+KEYS_GEN="$DATA_DIR/keys/generated"
+rm -r "$KEYS_GEN"
+mkdir -p "$KEYS_GEN"
+
 # RSA keypairs.
 rm "$DATA_DIR"/keys/*.rsa.pub.pk8
 for key in $(find "$DATA_DIR/keys" -name '*.rsa.pk8' -type f | sort); do
@@ -73,6 +77,18 @@ for key in $(find "$DATA_DIR/keys" -name '*.rsa.pk8' -type f | sort); do
     -in "$key" -out "$pub" \
     2> /dev/null
 
+  # Pull out the modulus and exponent. Openssl's commands for this are
+  # awful so we abuse der-ascii instead.
+  ascii="$(der2ascii < "$pub")"
+  mod_ascii="$(grep INTEGER <<< "$ascii" | head -n1)"
+  exp_ascii="$(grep INTEGER <<< "$ascii" | tail -n1)"
+
+  mod="$KEYS_GEN/$(basename "$base").rsa.pub.mod"
+  exp="$KEYS_GEN/$(basename "$base").rsa.pub.exp"
+  unwrap_int='s/INTEGER\s*{\s*(`?)(00)?(\w+)(`?)\s*}/$1$3$4/'
+  perl -pe "$unwrap_int" <<< "$mod_ascii" | ascii2der > "$mod"
+  perl -pe "$unwrap_int" <<< "$exp_ascii" | ascii2der > "$exp"
+
   push_const \
     "$KEYS_RS" "$key" \
     "$(basename "$base")_RSA_KEYPAIR" \
@@ -81,6 +97,14 @@ for key in $(find "$DATA_DIR/keys" -name '*.rsa.pk8' -type f | sort); do
     "$KEYS_RS" "$pub" \
     "$(basename "$base")_RSA_PUBLIC" \
     "Test-only RSA public key generated from \`$(basename "$base").rsa.pk8\`."
+  push_const \
+    "$KEYS_RS" "$mod" \
+    "$(basename "$base")_RSA_MOD" \
+    "RSA modulus of \`$(basename "$base").rsa.pk8\`."
+  push_const \
+    "$KEYS_RS" "$exp" \
+    "$(basename "$base")_RSA_EXP" \
+    "RSA exponent of \`$(basename "$base").rsa.pk8\`."
   echo >> "$KEYS_RS"
 done
 
@@ -167,4 +191,5 @@ DER
   echo >> "$X509_RS"
 done
 
+cd "$(dirname "$0")"
 cargo fmt
