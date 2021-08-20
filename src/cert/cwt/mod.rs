@@ -19,7 +19,7 @@ use crate::crypto::sig;
 mod cbor;
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 // Well-known CBOR labels.
 #[allow(unused)]

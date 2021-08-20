@@ -1,0 +1,80 @@
+# Copyright lowRISC contributors.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# sign-alg:SEQUENCE { OBJECT_IDENTIFIER { 1.2.840.113549.1.1.11 } NULL {} }
+# sign-key:keys/key1.rsa.pk8
+
+# tbsCertificate
+SEQUENCE {
+  # version = v3
+  [0] { INTEGER { 2 } }
+
+  # serialNumber
+  INTEGER { 1 }
+
+  # signature
+  SEQUENCE {
+    # sha256WithRSAEncryption
+    OBJECT_IDENTIFIER { 1.2.840.113549.1.1.11 }
+    NULL {}
+  }
+
+  # issuer (same as subject).
+  SEQUENCE {
+    SET {
+      SEQUENCE {
+        # "organizationName" RDN attr
+        OBJECT_IDENTIFIER { 2.4.5.10 }
+        PrintableString { "Silicon Owner LLC" }
+      }
+    }
+  }
+
+  # validity; this cert is always valid.
+  SEQUENCE {
+    GeneralizedTime { "99991231235959Z" }
+    GeneralizedTime { "99991231235959Z" }
+  }
+
+  # subject
+  SEQUENCE {
+    SET {
+      SEQUENCE {
+        # "organizationName" RDN attr
+        OBJECT_IDENTIFIER { 2.4.5.10 }
+        PrintableString { "Silicon Owner LLC" }
+      }
+    }
+  }
+
+  # subjectPublicKeyInfo
+  # include:keys/key1.rsa.pub.pk8
+
+  # extensions
+  [3] {
+    SEQUENCE {
+      # basicConstraints
+      SEQUENCE {
+        OBJECT_IDENTIFIER { 2.5.29.19 }
+        BOOLEAN { TRUE } # critical
+        OCTET_STRING {
+          SEQUENCE {
+            # cA
+            BOOLEAN { TRUE }
+          }
+        }
+      }
+
+      # keyUsage
+      SEQUENCE {
+        OBJECT_IDENTIFIER { 2.5.29.15 }
+        BOOLEAN { TRUE } # critical
+        OCTET_STRING {
+          # keyCertSign
+          BIT_STRING { `00` `04` }
+        }
+      }
+    }
+  }
+}
