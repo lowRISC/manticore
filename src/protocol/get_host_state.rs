@@ -23,7 +23,7 @@ use libfuzzer_sys::arbitrary::{self, Arbitrary};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// A command for requesting the host reset state
+/// A command for requesting the host reset state.
 ///
 /// Corresponds to [`CommandType::GetHostState`].
 pub enum GetHostState {}
@@ -38,7 +38,8 @@ impl<'a> Command<'a> for GetHostState {
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct GetHostStateRequest {
-    port_id: u8,
+    /// The port that the device whose reset counter is being looked up.
+    pub port_id: u8,
 }
 make_fuzz_safe!(GetHostStateRequest);
 
@@ -60,14 +61,15 @@ impl<'a> ToWire for GetHostStateRequest {
     }
 }
 
-make_fuzz_safe! {
-    /// The [`GetHostState`] response.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// The [`GetHostState`] response.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct GetHostStateResponse as GHSWrap {
-        host_reset_state: HostResetState,
-    }
+pub struct GetHostStateResponse {
+    /// The returned state.
+    host_reset_state: HostResetState,
 }
+make_fuzz_safe!(GetHostStateResponse);
 
 wire_enum! {
     /// Host processor reset state
