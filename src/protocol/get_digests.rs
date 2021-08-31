@@ -93,13 +93,13 @@ make_fuzz_safe! {
     /// The [`GetDigests`] response.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct GetDigestsResponse<'wire> as FVRWrap {
+    pub struct GetDigestsResponse<'wire> {
         /// The digests of each certificate in the chain, starting from the
         /// root.
         #[cfg_attr(feature = "serde",
                    serde(deserialize_with = "crate::serde::de_slice_of_u8_arrays"))]
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub digests: (&'wire [sha256::Digest]),
+        pub digests: &'wire [sha256::Digest],
     }
 }
 

@@ -52,70 +52,106 @@ macro_rules! round_trip_test {
     )+}
 }
 
-/// Convenience trait for use with `make_fuzz_safe`.
-#[doc(hidden)]
-#[cfg(feature = "arbitrary-derive")]
-pub trait FuzzSafe {
-    type Safe: libfuzzer_sys::arbitrary::Arbitrary;
-}
-
 /// Convenience macro for generating a "fuzz-safe" version of the struct that
 /// can be cheaply converted into the original struct.
 macro_rules! make_fuzz_safe {
-    ($name:ident) => {
+    ($($name:ty),* $(,)?) => {$(
         #[cfg(feature = "arbitrary-derive")]
-        impl $crate::protocol::macros::FuzzSafe for $name {
+        impl<'a> $crate::protocol::macros::fuzz::FuzzSafe<'a> for $name {
             type Safe = $name;
+            fn from_safe(safe: &'a Self::Safe) -> Self {
+                safe.clone()
+            }
         }
-    };
+    )*};
     (
         $(#[$meta:meta])*
-        $vis:vis struct $name:ident $(<$lt:lifetime>)? as $wrapper_name:ident {$(
+        $vis:vis struct $name:ident<$lt:lifetime> {$(
             $(#[$field_meta:meta])*
-            $field_vis:vis $field:ident:
-                // Because we need to destructure on this, this *cannot* be a
-                // type. Hence, we accept a token-tree instead, with the
-                // understanding that callers will wrap complex types in
-                // parentheses.
-                //
-                // This is a limitation of the macro engine. See
-                // https://danielkeep.github.io/tlborm/book/mbe-min-captures-and-expansion-redux.html
-            $field_ty:tt,
+            $field_vis:vis $field:ident: $field_ty:ty,
         )*}
     ) => {
         $(#[$meta])*
-        $vis struct $name $(<$lt>)? {$(
+        $vis struct $name<$lt> {$(
             $(#[$field_meta])*
             $field_vis $field: $field_ty,
         )*}
 
-        #[cfg(feature = "arbitrary-derive")]
-        #[derive(Clone, Debug, Arbitrary)]
-        #[allow(unused_parens)]
-        #[doc(hidden)]
-        $vis struct $wrapper_name {$(
-            $field: make_fuzz_safe!(@convert_ty, $field_ty),
-        )*}
-        #[cfg(feature = "arbitrary-derive")]
-        impl<$($lt)?> $crate::protocol::macros::FuzzSafe for $name<$($lt)?> {
-            type Safe = $wrapper_name;
-        }
 
         #[cfg(feature = "arbitrary-derive")]
-        impl $crate::protocol::wire::ToWire for $wrapper_name {
-            fn to_wire<W: $crate::io::Write>(&self, w: W)
-                -> Result<(), $crate::protocol::wire::Error> {
-                $crate::protocol::wire::ToWire::to_wire(&$name {$(
-                    $field: make_fuzz_safe!(@extract_ty,
-                                            self.$field: $field_ty),
-                )*}, w)
+        const _: () = paste::paste!{{
+            use $crate::protocol::macros::fuzz::FuzzSafe;
+            use libfuzzer_sys::arbitrary::Arbitrary;
+
+            $(
+                // The type names may include lifetimes, such as
+                // &'wire [u8], so we cannot utter them in the struct
+                // below. These type aliases give us a workaround for
+                // that.
+                type [<$field:camel AsSafe>]<$lt> =
+                  <$field_ty as FuzzSafe<$lt>>::Safe;
+            )*
+
+            #[derive(Clone, Debug, Arbitrary)]
+            $vis struct [<$name FuzzSafe>] {
+                $($field: [<$field:camel AsSafe>]<'static>,)*
             }
-        }
+            impl<'a> FuzzSafe<'a> for $name<'a> {
+                type Safe = [<$name FuzzSafe>];
+                fn from_safe(safe: &'a Self::Safe) -> Self {
+                    $name {$(
+                        $field: FuzzSafe::from_safe(&safe.$field),
+                    )*}
+                }
+            }
+        }};
     };
-    (@convert_ty, (&$lt:tt [$ty:ty])) => {std::boxed::Box<[$ty]>};
-    (@convert_ty, (&$lt:tt str)) => {std::boxed::Box<str>};
-    (@convert_ty, (&$lt:tt $ty:ty)) => {$ty};
-    (@convert_ty, $ty:ty) => {$ty};
-    (@extract_ty, $s:tt.$f:tt: (&$lt:lifetime $ty:ty)) => {&$s.$f};
-    (@extract_ty, $s:tt.$f:tt: $ty:ty) => {$s.$f};
+}
+
+#[cfg(feature = "arbitrary-derive")]
+#[doc(hidden)]
+pub mod fuzz {
+    use libfuzzer_sys::arbitrary::Arbitrary;
+
+    pub trait FuzzSafe<'a> {
+        type Safe: Arbitrary;
+        fn from_safe(safe: &'a Self::Safe) -> Self;
+    }
+
+    impl<'a, T: Arbitrary> FuzzSafe<'a> for &'a T {
+        type Safe = T;
+        fn from_safe(safe: &'a T) -> Self {
+            safe
+        }
+    }
+
+    impl<'a, T: Arbitrary> FuzzSafe<'a> for &'a [T] {
+        type Safe = Box<[T]>;
+        fn from_safe(safe: &'a Box<[T]>) -> Self {
+            safe
+        }
+    }
+
+    impl<'a> FuzzSafe<'a> for &'a str {
+        type Safe = Box<str>;
+        fn from_safe(safe: &'a Box<str>) -> Self {
+            safe
+        }
+    }
+
+    impl<'a, T: Clone, const N: usize> FuzzSafe<'a> for [T; N]
+    where
+        Self: Arbitrary,
+    {
+        type Safe = Self;
+        fn from_safe(safe: &'a Self) -> Self {
+            safe.clone()
+        }
+    }
+
+    make_fuzz_safe! {
+        u8, u16, u32, u64, u128, usize,
+        i8, i16, i32, i64, i128, isize,
+        (u8, u8),
+    }
 }

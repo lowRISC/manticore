@@ -86,14 +86,14 @@ make_fuzz_safe! {
     /// The [`GetCert`] response.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct GetCertResponse<'wire> as GCRWrap {
+    pub struct GetCertResponse<'wire> {
         /// The slot number of the chain to read from.
         pub slot: u8,
         /// The number of the cert to request, indexed from the root.
         pub cert_number: u8,
         /// The data read from the certificate.
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub data: (&'wire [u8]),
+        pub data: &'wire [u8],
     }
 }
 

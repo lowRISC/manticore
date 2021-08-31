@@ -15,9 +15,10 @@ use manticore::protocol::wire::ToWire;
 use manticore::protocol::FuzzSafe;
 
 use manticore::protocol::capabilities::DeviceCapabilities as C;
+type Resp<'a> = <C as Command<'a>>::Req;
 
-fuzz_target!(|data: <<C as Command<'static>>::Resp as FuzzSafe>::Safe| {
+fuzz_target!(|data: <Resp<'static> as FuzzSafe>::Safe| {
     let mut out = [0u8; 1024];
-    let _ = data.to_wire(&mut &mut out[..]);
+    let _ = Resp::from_safe(&data).to_wire(&mut &mut out[..]);
 });
 
