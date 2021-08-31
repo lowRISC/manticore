@@ -58,7 +58,7 @@ use serde::{Deserialize, Serialize};
 #[macro_use]
 mod macros;
 #[cfg(feature = "arbitrary-derive")]
-pub use macros::FuzzSafe;
+pub use macros::fuzz::FuzzSafe;
 
 #[macro_use]
 pub mod wire;

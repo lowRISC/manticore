@@ -79,14 +79,14 @@ make_fuzz_safe! {
     /// The [`DeviceInfo`] response.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct DeviceInfoResponse<'wire> as DIRWrap {
+    pub struct DeviceInfoResponse<'wire> {
         /// The requested information, in some binary format.
         ///
         /// The format of the response depends on which information index was sent.
         /// Only `0x00` is specified by Cerberus, which is reqired to produce the
         /// "Unique Chip Identifier".
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub info: (&'wire [u8]),
+        pub info: &'wire [u8],
     }
 }
 

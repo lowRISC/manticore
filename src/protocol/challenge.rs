@@ -41,14 +41,14 @@ make_fuzz_safe! {
     /// The [`Challenge`] request.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct ChallengeRequest<'wire> as CRWrap {
+    pub struct ChallengeRequest<'wire> {
         /// The slot number of the chain to read from.
         pub slot: u8,
         /// A requester-chosen random nonce.
         #[cfg_attr(feature = "serde",
                    serde(deserialize_with = "crate::serde::de_u8_array_ref"))]
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub nonce: (&'wire [u8; 32]),
+        pub nonce: &'wire [u8; 32],
     }
 }
 
@@ -82,7 +82,7 @@ make_fuzz_safe! {
     /// The [`Challenge`] response.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct ChallengeResponse<'wire> as CR2Wrap {
+    pub struct ChallengeResponse<'wire> {
         /// The slot number of the chain to read from.
         pub slot: u8,
         /// The "certificate slot mask" (Cerberus does not elaborate further).
@@ -97,18 +97,18 @@ make_fuzz_safe! {
         #[cfg_attr(feature = "serde",
                    serde(deserialize_with = "crate::serde::de_u8_array_ref"))]
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub nonce: (&'wire [u8; 32]),
+        pub nonce: &'wire [u8; 32],
         /// The number of "components" used to generate PMR0.
         pub pmr0_components: u8,
         /// The value of the PMR0 measurement.
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub pmr0: (&'wire [u8]),
+        pub pmr0: &'wire [u8],
         /// The challenge signature.
         ///
         /// This is a signature over the concatenation of the corresponding
         /// request and the response up to the signature.
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub signature: (&'wire [u8]),
+        pub signature: &'wire [u8],
     }
 }
 

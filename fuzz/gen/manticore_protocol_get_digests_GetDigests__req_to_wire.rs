@@ -15,9 +15,10 @@ use manticore::protocol::wire::ToWire;
 use manticore::protocol::FuzzSafe;
 
 use manticore::protocol::get_digests::GetDigests as C;
+type Req<'a> = <C as Command<'a>>::Req;
 
-fuzz_target!(|data: <<C as Command<'static>>::Req as FuzzSafe>::Safe| {
+fuzz_target!(|data: <Req<'static> as FuzzSafe>::Safe| {
     let mut out = [0u8; 1024];
-    let _ = data.to_wire(&mut &mut out[..]);
+    let _ = Req::from_safe(&data).to_wire(&mut &mut out[..]);
 });
 

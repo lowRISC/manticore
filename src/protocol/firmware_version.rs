@@ -77,12 +77,12 @@ make_fuzz_safe! {
     /// The [`FirmwareVersion`] response.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct FirmwareVersionResponse<'wire> as FVRWrap {
+    pub struct FirmwareVersionResponse<'wire> {
         /// The firmware version. In practice, this is usually an ASCII string.
         #[cfg_attr(feature = "serde",
                    serde(deserialize_with = "crate::serde::de_u8_array_ref"))]
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub version: (&'wire [u8; 32]),
+        pub version: &'wire [u8; 32],
     }
 }
 
