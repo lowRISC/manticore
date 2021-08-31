@@ -47,7 +47,7 @@ pub trait TrustChain {
 /// A simple trust chain with only one slot.
 pub struct SimpleChain<'cert, const LEN: usize> {
     chain: ArrayVec<Cert<'cert>, LEN>,
-    signer: &'cert mut dyn sig::Sign,
+    signer: Option<&'cert mut dyn sig::Sign>,
 }
 
 impl<const LEN: usize> fmt::Debug for SimpleChain<'_, LEN> {
@@ -63,7 +63,7 @@ impl<'cert, const LEN: usize> SimpleChain<'cert, LEN> {
         raw_chain: &[&'cert [u8]],
         format: CertFormat,
         ciphers: &mut impl sig::Ciphers,
-        signer: &'cert mut dyn sig::Sign,
+        signer: Option<&'cert mut dyn sig::Sign>,
     ) -> Result<Self, Error> {
         if raw_chain.len() > LEN {
             return Err(Error::ChainTooLong);
@@ -120,11 +120,10 @@ impl<const LEN: usize> TrustChain for SimpleChain<'_, LEN> {
     }
 
     fn signer(&mut self, slot: u8) -> Option<&mut dyn sig::Sign> {
-        if slot != 0 {
-            return None;
+        match (&mut self.signer, slot) {
+            (Some(signer), 0) => Some(*signer),
+            _ => None,
         }
-
-        Some(self.signer)
     }
 }
 
@@ -140,12 +139,11 @@ mod test {
 
     #[test]
     fn x509_chain_parse() {
-        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let chain = SimpleChain::<3>::parse(
             &[x509::CHAIN1, x509::CHAIN2, x509::CHAIN3],
             CertFormat::RiotX509,
             &mut ring::sig::Ciphers::new(),
-            &mut signer,
+            None,
         )
         .unwrap();
 
@@ -159,21 +157,19 @@ mod test {
 
     #[test]
     fn x509_chain_ooo() {
-        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let result = SimpleChain::<3>::parse(
             &[x509::CHAIN1, x509::CHAIN3, x509::CHAIN2],
             CertFormat::RiotX509,
             &mut ring::sig::Ciphers::new(),
-            &mut signer,
+            None,
         );
         assert!(result.is_err());
 
-        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let result = SimpleChain::<3>::parse(
             &[x509::CHAIN2, x509::CHAIN1, x509::CHAIN3],
             CertFormat::RiotX509,
             &mut ring::sig::Ciphers::new(),
-            &mut signer,
+            None,
         );
         assert!(result.is_err());
     }
@@ -213,7 +209,6 @@ mod test {
 
     #[test]
     fn cwt_chain_parse() {
-        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let data = CWT_TEST_CHAIN
             .iter()
             .map(TestCwt::encode)
@@ -223,7 +218,7 @@ mod test {
             &data,
             CertFormat::OpenDiceCwt,
             &mut ring::sig::Ciphers::new(),
-            &mut signer,
+            None,
         )
         .unwrap();
 
@@ -237,7 +232,6 @@ mod test {
 
     #[test]
     fn cwt_chain_ooo() {
-        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let data = CWT_TEST_CHAIN
             .iter()
             .map(TestCwt::encode)
@@ -248,11 +242,10 @@ mod test {
             &data,
             CertFormat::OpenDiceCwt,
             &mut ring::sig::Ciphers::new(),
-            &mut signer,
+            None,
         );
         assert!(result.is_err());
 
-        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let data = CWT_TEST_CHAIN
             .iter()
             .map(TestCwt::encode)
@@ -263,7 +256,7 @@ mod test {
             &data,
             CertFormat::OpenDiceCwt,
             &mut ring::sig::Ciphers::new(),
-            &mut signer,
+            None,
         );
         assert!(result.is_err());
     }

@@ -120,6 +120,9 @@ impl ChallengeResponseTbs<'_> {
                 self.slot_mask,
                 self.protocol_range.0,
                 self.protocol_range.1,
+                // The two reserved bytes.
+                0,
+                0,
             ],
             self.nonce,
             &[self.pmr0_components, self.pmr0.len() as u8],
