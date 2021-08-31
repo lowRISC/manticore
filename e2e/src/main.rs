@@ -26,6 +26,7 @@ pub mod tcp;
 
 #[cfg(test)]
 mod tests {
+    mod challenge;
     mod device_queries;
 }
 

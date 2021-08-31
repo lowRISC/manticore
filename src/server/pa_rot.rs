@@ -179,7 +179,10 @@ where
                     .ok_or(UNSPECIFIED)?;
 
                 let start = cert.raw().len().min(ctx.req.offset as usize);
-                let end = cert.raw().len().min(ctx.req.len as usize);
+                let end = cert
+                    .raw()
+                    .len()
+                    .min((ctx.req.len as usize).saturating_add(start));
                 Ok(protocol::get_cert::GetCertResponse {
                     slot: ctx.req.slot,
                     cert_number: ctx.req.cert_number,
@@ -194,20 +197,21 @@ where
                     .trust_chain
                     .signer(ctx.req.slot)
                     .ok_or(UNSPECIFIED)?;
-                let signature = ctx
-                    .arena
-                    .alloc_slice::<u8>(signer.sig_bytes())
-                    .map_err(|_| UNSPECIFIED)?;
                 let tbs = ChallengeResponseTbs {
                     slot: ctx.req.slot,
                     slot_mask: 0, // Currently unspecified?
                     protocol_range: (0, 0),
-                    nonce: ctx.req.nonce,
+                    // TODO: Wire through a CSRNG to generate the nonce.
+                    nonce: &[0xaa; 32],
                     pmr0_components: 0,
                     pmr0: ctx.server.opts.pmr0,
                 };
 
                 let req_buf = ctx.req_buf;
+                let signature = ctx
+                    .arena
+                    .alloc_slice::<u8>(signer.sig_bytes())
+                    .map_err(|_| UNSPECIFIED)?;
                 tbs.as_iovec_with(|[a, b, c, d]| {
                     signer.sign(&[req_buf, a, b, c, d], signature)
                 })
@@ -279,7 +283,6 @@ const UNSPECIFIED: protocol::Error = protocol::Error {
 mod test {
     use super::*;
     use core::time::Duration;
-    use testutil::data::keys;
 
     use crate::crypto::ring;
     use crate::hardware::fake;
@@ -418,12 +421,11 @@ mod test {
         let reset = fake::Reset::new(0, Duration::from_millis(1));
         let mut ciphers = ring::sig::Ciphers::new();
         let sha = ring::sha256::Builder::new();
-        let (_, mut signer) = ring::rsa::from_keypair(keys::KEY3_RSA_KEYPAIR);
         let mut trust_chain = cert::SimpleChain::parse(
             &[],
             cert::CertFormat::RiotX509,
             &mut ciphers,
-            &mut signer,
+            None,
         )
         .unwrap();
         let mut server = PaRot::new(Options {

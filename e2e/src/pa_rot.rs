@@ -66,7 +66,7 @@ pub struct Options {
     pub cert_format: CertFormat,
 
     /// The keypair to use with the certificate chain.
-    pub alias_keypair: KeyPairFormat,
+    pub alias_keypair: Option<KeyPairFormat>,
 
     /// The contents of PMR #0.
     pub pmr0: Vec<u8>,
@@ -97,7 +97,7 @@ impl Default for Options {
             },
             cert_chain: vec![],
             cert_format: CertFormat::RiotX509,
-            alias_keypair: KeyPairFormat::RsaPkcs8(vec![]),
+            alias_keypair: None,
             pmr0: b"<pmr0 unspecified>".to_vec(),
         }
     }
@@ -255,19 +255,19 @@ pub fn serve(opts: Options) -> ! {
     let mut ciphers = ring::sig::Ciphers::new();
     let trust_chain_bytes =
         opts.cert_chain.iter().map(Vec::as_ref).collect::<Vec<_>>();
-    let mut signer = match &opts.alias_keypair {
+    let mut signer = opts.alias_keypair.as_ref().map(|kp| match kp {
         KeyPairFormat::RsaPkcs8(pk8) => {
             use manticore::crypto::rsa::*;
             let kp = ring::rsa::KeyPair::from_pkcs8(pk8).unwrap();
             let builder = ring::rsa::Builder::new();
             builder.new_signer(kp).unwrap()
         }
-    };
+    });
     let mut trust_chain = cert::SimpleChain::<8>::parse(
         &trust_chain_bytes,
         opts.cert_format,
         &mut ciphers,
-        &mut signer,
+        signer.as_mut().map(|s| s as _),
     )
     .unwrap();
 
@@ -296,8 +296,7 @@ pub fn serve(opts: Options) -> ! {
     // Notify parent that we're listening.
     println!("listening@{}", port);
 
-    let mut arena = vec![0; 64];
-    let mut arena = BumpArena::new(&mut arena);
+    let mut arena = BumpArena::new(vec![0; 1024]);
 
     log::info!("entering server loop");
     loop {
