@@ -24,7 +24,7 @@
 macro_rules! round_trip_test {
     ($($name:ident: {
         bytes: $bytes:expr,
-        value: $ty:ident $({ $($field:ident: $field_val:expr),* $(,)? })?,
+        value: $ty:ident$(::$variant:ident)? $({ $($field:ident: $field_val:expr),* $(,)? })?,
     },)+) => {$(
         #[test]
         fn $name() {
@@ -34,7 +34,7 @@ macro_rules! round_trip_test {
             const BUF_LEN: usize = 1 << 10;
 
             let bytes: &[u8] = $bytes;
-            let value: $ty = $ty $({ $($field: $field_val,)* })?;
+            let value: $ty = $ty$(::$variant)? $({ $($field: $field_val,)* })?;
 
             let mut bytes_reader = bytes;
             let arena = BumpArena::new(vec![0u8; BUF_LEN]);

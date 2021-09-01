@@ -90,6 +90,9 @@ pub use get_host_state::GetHostState;
 pub mod challenge;
 pub use challenge::Challenge;
 
+pub mod key_exchange;
+pub use key_exchange::KeyExchange;
+
 pub mod reset_counter;
 pub use reset_counter::ResetCounter;
 
@@ -169,6 +172,10 @@ wire_enum! {
         ///
         /// See [`Challenge`].
         Challenge = 0x83,
+        /// The key-exchange handshake.
+        ///
+        /// See [`KeyExchange`].
+        KeyExchange = 0x84,
         /// A request for the rest state of the host processor.
         ///
         /// See [`GetHostState`].
