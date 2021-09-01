@@ -50,6 +50,7 @@ impl TestCwt {
                 // Exponent.
                 NINT:1  BYTES {exponent},
             ]),
+            _ => unimplemented!(),
         };
 
         let payload = raw_cbor!(MAP [
