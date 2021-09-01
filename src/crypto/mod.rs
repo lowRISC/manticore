@@ -38,7 +38,6 @@
 //! [`ring` module]: ring/index.html
 
 pub mod csrng;
-pub mod rsa;
 pub mod sha256;
 pub mod sig;
 

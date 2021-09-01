@@ -266,10 +266,13 @@ pub fn serve(opts: Options) -> ! {
         opts.cert_chain.iter().map(Vec::as_ref).collect::<Vec<_>>();
     let mut signer = opts.alias_keypair.as_ref().map(|kp| match kp {
         KeyPairFormat::RsaPkcs8(pk8) => {
-            use manticore::crypto::rsa::*;
-            let kp = ring::rsa::KeyPair::from_pkcs8(pk8).unwrap();
-            let builder = ring::rsa::Builder::new();
-            builder.new_signer(kp).unwrap()
+            match ring::rsa::Sign256::from_pkcs8(pk8) {
+                Ok(rsa) => rsa,
+                Err(e) => {
+                    log::error!("could not parse alias keypair: {:?}", e);
+                    std::process::exit(1);
+                }
+            }
         }
     });
     let mut trust_chain = cert::SimpleChain::<8>::parse(

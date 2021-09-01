@@ -23,8 +23,6 @@ use serde::de::Deserialize;
 use structopt::StructOpt;
 
 use manticore::crypto::ring;
-use manticore::crypto::rsa::Builder as _;
-use manticore::crypto::rsa::KeyPair as _;
 use manticore::io::write::StdWrite;
 use manticore::io::ReadInt as _;
 use manticore::manifest::owned;
@@ -281,11 +279,8 @@ fn main() {
             let (mut input, mut output) = open_files(input, output);
 
             let key = fs::read(key).expect("failed to open file");
-            let keypair = ring::rsa::KeyPair::from_pkcs8(&key)
+            let mut signer = ring::rsa::Sign256::from_pkcs8(&key)
                 .expect("failed to parse key");
-            let mut signer = ring::rsa::Builder::new()
-                .new_signer(keypair)
-                .expect("failed to create signing engine");
             let sha = ring::sha256::Builder::new();
 
             let mut buf = Vec::new();
@@ -313,11 +308,9 @@ fn main() {
 
             let mut engine = key.map(|key| {
                 let key = fs::read(key).expect("failed to open file");
-                let keypair = ring::rsa::KeyPair::from_pkcs8(&key)
+                let signer = ring::rsa::Sign256::from_pkcs8(&key)
                     .expect("failed to parse key");
-                ring::rsa::Builder::new()
-                    .new_verifier(keypair.public())
-                    .expect("failed to create signature verification engine")
+                signer.verifier()
             });
             let sha = ring::sha256::Builder::new();
 
