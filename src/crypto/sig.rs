@@ -33,15 +33,6 @@ pub trait Verify {
     ) -> Result<(), Error>;
 }
 
-/// Marker trait for specifying a bound on a [`Verify`] to specify that it can
-/// verify a specific kind of signature.
-///
-/// For example, you might write `verify: impl VerifyFor<Rsa>` instead of
-/// `verify: impl Verify` if you only wish to accept verifiers for RSA. This is
-/// mostly useful in situations where this is the only supported algorithm for
-/// an operation.
-pub trait VerifyFor<Algo>: Verify {}
-
 /// An signing engine, already primed with a keypair.
 ///
 /// There is no way to extract the keypair back out of a `Sign` value.
@@ -63,12 +54,6 @@ pub trait Sign {
         signature: &mut [u8],
     ) -> Result<(), Error>;
 }
-
-/// Marker trait for specifying a bound on a [`Sign`] to specify that it can
-/// create a specific kind of signature.
-///
-/// See [`VerifyFor`].
-pub trait SignFor<Algo>: Sign {}
 
 /// Public key parameters extracted from a certificate.
 ///

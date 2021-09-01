@@ -13,7 +13,6 @@ use core::{u32, u8};
 
 use bitflags::bitflags;
 
-use crate::crypto::rsa;
 use crate::io::bit_buf::BitBuf;
 use crate::io::ReadInt as _;
 use crate::io::ReadZero;
@@ -200,24 +199,6 @@ bitflags! {
         const BITS_3072 = 0b010;
         /// A key strength of 4096 bits.
         const BITS_4096 = 0b100;
-    }
-}
-
-impl RsaKeyStrength {
-    /// Creates an `RsaKeyStrength` representing the key strengths supported
-    /// by `rsa`.
-    pub fn from_builder<Algo>(rsa: &impl rsa::Builder<Algo>) -> Self {
-        let mut key_strength = Self::empty();
-        if rsa.supports_modulus(rsa::ModulusLength::Bits2048) {
-            key_strength |= Self::BITS_2048;
-        }
-        if rsa.supports_modulus(rsa::ModulusLength::Bits3072) {
-            key_strength |= Self::BITS_3072;
-        }
-        if rsa.supports_modulus(rsa::ModulusLength::Bits4096) {
-            key_strength |= Self::BITS_4096;
-        }
-        key_strength
     }
 }
 

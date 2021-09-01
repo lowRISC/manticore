@@ -7,7 +7,6 @@
 //! Requires the `std` feature flag to be enabled.
 
 use crate::crypto::ring::rsa;
-use crate::crypto::rsa::Builder as _;
 use crate::crypto::sig;
 use crate::protocol::capabilities;
 
@@ -36,7 +35,7 @@ impl sig::Ciphers for Ciphers {
             has_rsa: true,
 
             ecc_strength: EccKeyStrength::empty(),
-            rsa_strength: RsaKeyStrength::from_builder(&rsa::Builder::new()),
+            rsa_strength: RsaKeyStrength::all(),
             ..*caps
         };
     }
@@ -52,10 +51,10 @@ impl sig::Ciphers for Ciphers {
                 sig::PublicKeyParams::Rsa { modulus, exponent },
             ) => {
                 let key =
-                    rsa::PublicKey::new((*modulus).into(), (*exponent).into())?;
+                    rsa::PublicKey::new((*modulus).into(), (*exponent).into());
 
-                let rsa = rsa::Builder::new();
-                self.verifier = Some(Box::new(rsa.new_verifier(key).ok()?));
+                self.verifier =
+                    Some(Box::new(rsa::Verify256::from_public(key)));
                 self.verifier.as_mut().map(|x| &mut **x as _)
             }
         }

@@ -12,8 +12,8 @@ use testutil::data::keys;
 use crate::cert::Cert;
 use crate::cert::CertFormat;
 use crate::crypto::ring;
-use crate::crypto::rsa::KeyPair as _;
 use crate::crypto::sig::NoVerify;
+use crate::crypto::sig::PublicKeyParams;
 
 #[test]
 #[cfg_attr(miri, ignore)]
@@ -35,13 +35,13 @@ fn self_signed() {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn explicit_key() {
-    let keypair =
-        ring::rsa::KeyPair::from_pkcs8(keys::KEY1_RSA_KEYPAIR).unwrap();
-
     let cert = Cert::parse(
         data::x509::SUB_SIGNED,
         CertFormat::RiotX509,
-        Some(&keypair.public().as_cert_params()),
+        Some(&PublicKeyParams::Rsa {
+            modulus: keys::KEY1_RSA_MOD,
+            exponent: keys::KEY1_RSA_EXP,
+        }),
         &mut ring::sig::Ciphers::new(),
     )
     .unwrap();
