@@ -119,7 +119,7 @@ pub trait ReadZeroExt<'a>: ReadZero<'a> {
         Ok(lv.into_slice())
     }
 }
-impl<'a, R: ReadZero<'a>> ReadZeroExt<'a> for R {}
+impl<'a, R: ReadZero<'a> + ?Sized> ReadZeroExt<'a> for R {}
 
 impl<R: Read + ?Sized> Read for &mut R {
     #[inline]
