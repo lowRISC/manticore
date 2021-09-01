@@ -61,12 +61,21 @@ pub trait Sign {
 /// parameters) to be usable for signature verification.
 #[derive(Clone, Debug)]
 pub enum PublicKeyParams<'cert> {
-    /// RSA in an unspecified form with an unspecified hash function.
+    /// Raw RSA parameters.
     Rsa {
         /// The key modulus, in big-endian.
         modulus: &'cert [u8],
         /// The key exponent, in big-endian.
         exponent: &'cert [u8],
+    },
+    /// A raw elliptic curve point.
+    Ecc {
+        /// The curve the point is from.
+        curve: Curve,
+        /// The x-coordinate, in big-endian.
+        x: &'cert [u8],
+        /// The y-coordinate, in big-endian.
+        y: &'cert [u8],
     },
 }
 
@@ -74,10 +83,26 @@ impl PublicKeyParams<'_> {
     /// Returns whether these parameters are appropriate for the given
     /// algorithm.
     pub fn is_params_for(&self, algo: Algo) -> bool {
-        match (self, algo) {
-            (Self::Rsa { .. }, Algo::RsaPkcs1Sha256) => true,
-        }
+        // Attributes are not allowed on expressions. We work around
+        // this by putting it on a `let` instead.
+        #[rustfmt::skip]
+        let ok = matches!(
+            (self, algo),
+            (Self::Rsa { .. }, Algo::RsaPkcs1Sha256) |
+            (Self::Ecc { curve: Curve::NistP256, .. }, Algo::EcdsaDerP256) |
+            (Self::Ecc { curve: Curve::NistP256, .. }, Algo::EcdsaPkcs11P256)
+        );
+        ok
     }
+}
+
+/// An elliptic curve used in e.g. ECDSA.
+///
+/// See [`PublicKeyParams::Ecc`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[allow(missing_docs)]
+pub enum Curve {
+    NistP256,
 }
 
 /// A signature algorithm for a certificate subject key.
@@ -87,6 +112,12 @@ impl PublicKeyParams<'_> {
 pub enum Algo {
     /// PKCS#1.5-encoded RSA signatures using SHA-256 for hashing.
     RsaPkcs1Sha256,
+    /// DER-encoded ECDSA signatures using the NIST P-256 curve and
+    /// SHA-256 for hashing.
+    EcdsaDerP256,
+    /// Fixed-width (PKCS#11-style) ECDSA signatures using the NIST
+    /// P-256 curve and SHA-256 for hashing.
+    EcdsaPkcs11P256,
 }
 
 /// A collection of ciphers that are provided to certificate machinery.

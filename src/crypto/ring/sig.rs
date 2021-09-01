@@ -6,8 +6,14 @@
 //!
 //! Requires the `std` feature flag to be enabled.
 
+use core::convert::TryInto as _;
+
+use crate::crypto::ring::ecdsa;
 use crate::crypto::ring::rsa;
 use crate::crypto::sig;
+use crate::crypto::sig::Algo;
+use crate::crypto::sig::Curve;
+use crate::crypto::sig::PublicKeyParams;
 use crate::protocol::capabilities;
 
 #[cfg(doc)]
@@ -30,11 +36,11 @@ impl sig::Ciphers for Ciphers {
     fn negotiate(&self, caps: &mut capabilities::Crypto) {
         use capabilities::*;
         *caps = Crypto {
-            has_ecdsa: false,
-            has_ecc: false,
+            has_ecdsa: true,
+            has_ecc: true,
             has_rsa: true,
 
-            ecc_strength: EccKeyStrength::empty(),
+            ecc_strength: EccKeyStrength::BITS_256,
             rsa_strength: RsaKeyStrength::all(),
             ..*caps
         };
@@ -47,16 +53,46 @@ impl sig::Ciphers for Ciphers {
     ) -> Option<&'a mut dyn sig::Verify> {
         match (algo, key) {
             (
-                sig::Algo::RsaPkcs1Sha256,
-                sig::PublicKeyParams::Rsa { modulus, exponent },
+                Algo::RsaPkcs1Sha256,
+                PublicKeyParams::Rsa { modulus, exponent },
             ) => {
                 let key =
                     rsa::PublicKey::new((*modulus).into(), (*exponent).into());
 
                 self.verifier =
                     Some(Box::new(rsa::Verify256::from_public(key)));
-                self.verifier.as_mut().map(|x| &mut **x as _)
             }
+            (
+                Algo::EcdsaDerP256,
+                PublicKeyParams::Ecc {
+                    curve: Curve::NistP256,
+                    x,
+                    y,
+                },
+            ) => {
+                let x: &[u8; 32] = (*x).try_into().ok()?;
+                let y: &[u8; 32] = (*y).try_into().ok()?;
+                self.verifier = Some(Box::new(
+                    ecdsa::VerifyP256::with_der_encoding(*x, *y),
+                ));
+            }
+            (
+                Algo::EcdsaPkcs11P256,
+                PublicKeyParams::Ecc {
+                    curve: Curve::NistP256,
+                    x,
+                    y,
+                },
+            ) => {
+                let x: &[u8; 32] = (*x).try_into().ok()?;
+                let y: &[u8; 32] = (*y).try_into().ok()?;
+                self.verifier = Some(Box::new(
+                    ecdsa::VerifyP256::with_pkcs11_encoding(*x, *y),
+                ));
+            }
+            _ => {}
         }
+
+        self.verifier.as_mut().map(|x| &mut **x as _)
     }
 }

@@ -20,6 +20,8 @@
 #[cfg(feature = "std")]
 pub mod csrng;
 #[cfg(feature = "std")]
+pub mod ecdsa;
+#[cfg(feature = "std")]
 pub mod rsa;
 pub mod sha256;
 #[cfg(feature = "std")]
