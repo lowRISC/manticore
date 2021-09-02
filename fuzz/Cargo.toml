@@ -182,6 +182,22 @@ name = "manticore_protocol_firmware_version_FirmwareVersion__resp_to_wire"
 path = "gen/manticore_protocol_firmware_version_FirmwareVersion__resp_to_wire.rs"
 
 [[bin]]
+name = "manticore_protocol_key_exchange_KeyExchange__req_to_wire"
+path = "gen/manticore_protocol_key_exchange_KeyExchange__req_to_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_key_exchange_KeyExchange__req_from_wire"
+path = "gen/manticore_protocol_key_exchange_KeyExchange__req_from_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_key_exchange_KeyExchange__resp_from_wire"
+path = "gen/manticore_protocol_key_exchange_KeyExchange__resp_from_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_key_exchange_KeyExchange__resp_to_wire"
+path = "gen/manticore_protocol_key_exchange_KeyExchange__resp_to_wire.rs"
+
+[[bin]]
 name = "manticore_protocol_request_counter_RequestCounter__req_to_wire"
 path = "gen/manticore_protocol_request_counter_RequestCounter__req_to_wire.rs"
 
