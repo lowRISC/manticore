@@ -106,6 +106,57 @@ macro_rules! make_fuzz_safe {
             }
         }};
     };
+    (
+        $(#[$meta:meta])*
+        $vis:vis enum $name:ident<$lt:lifetime> {$(
+            $(#[$variant_meta:meta])*
+            $variant:ident $({$(
+                $(#[$field_meta:meta])*
+                $field:ident: $field_ty:ty,
+            )*})?,
+        )*}
+    ) => {
+        $(#[$meta])*
+        $vis enum $name<$lt> {$(
+            $(#[$variant_meta])*
+            $variant $({$(
+                $(#[$field_meta])*
+                $field: $field_ty,
+            )*})?,
+        )*}
+
+
+        #[cfg(feature = "arbitrary-derive")]
+        const _: () = paste::paste!{{
+            use $crate::protocol::macros::fuzz::FuzzSafe;
+            use libfuzzer_sys::arbitrary::Arbitrary;
+
+            $($($(
+                // The type names may include lifetimes, such as
+                // &'wire [u8], so we cannot utter them in the struct
+                // below. These type aliases give us a workaround for
+                // that.
+                type [<$variant $field:camel AsSafe>]<$lt> =
+                  <$field_ty as FuzzSafe<$lt>>::Safe;
+            )*)?)*
+
+            #[derive(Clone, Debug, Arbitrary)]
+            $vis enum [<$name FuzzSafe>] {$(
+                $variant $({
+                    $($field: [<$variant $field:camel AsSafe>]<'static>,)*
+                })?,
+            )*}
+            impl<'a> FuzzSafe<'a> for $name<'a> {
+                type Safe = [<$name FuzzSafe>];
+                fn from_safe(safe: &'a Self::Safe) -> Self {
+                    match safe {$(
+                        [<$name FuzzSafe>]::$variant $({$($field),*})? =>
+                            $name::$variant $({$($field: FuzzSafe::from_safe($field)),*})?,
+                    )*}
+                }
+            }
+        }};
+    }
 }
 
 #[cfg(feature = "arbitrary-derive")]
