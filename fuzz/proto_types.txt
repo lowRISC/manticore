@@ -12,6 +12,7 @@ manticore::protocol::get_digests::GetDigests
 manticore::protocol::get_cert::GetCert
 manticore::protocol::get_host_state::GetHostState
 manticore::protocol::firmware_version::FirmwareVersion
+manticore::protocol::key_exchange::KeyExchange
 manticore::protocol::request_counter::RequestCounter
 manticore::protocol::reset_counter::ResetCounter
 

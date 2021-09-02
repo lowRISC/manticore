@@ -586,6 +586,66 @@ jobs:
           manticore_protocol_firmware_version_FirmwareVersion__resp_to_wire \
           -- -max_total_time=180
 
+  'manticore_protocol_key_exchange_KeyExchange__req_to_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::key_exchange::KeyExchange` with `req_to_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_key_exchange_KeyExchange__req_to_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_key_exchange_KeyExchange__req_from_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::key_exchange::KeyExchange` with `req_from_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_key_exchange_KeyExchange__req_from_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_key_exchange_KeyExchange__resp_from_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::key_exchange::KeyExchange` with `resp_from_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_key_exchange_KeyExchange__resp_from_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_key_exchange_KeyExchange__resp_to_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::key_exchange::KeyExchange` with `resp_to_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_key_exchange_KeyExchange__resp_to_wire \
+          -- -max_total_time=180
+
   'manticore_protocol_request_counter_RequestCounter__req_to_wire':
     runs-on: ubuntu-latest
     name: 'Fuzz `manticore::protocol::request_counter::RequestCounter` with `req_to_wire.rs`'
