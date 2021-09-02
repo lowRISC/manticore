@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Run Manticore's e2e tests. See the README.md for more details.
+set -e
 
 # First, build the e2e binary itself, which acts as the server.
 #
@@ -11,6 +12,7 @@
 # JSON blobs that describe each cargo action. The action that outputs
 # the built binary will contain a `"executable":"<path>"` entry.
 export MANTICORE_E2E_TARGET_BINARY="$(
+  set -e
   cargo build -p e2e --message-format=json \
     | tr '\n' ' ' \
     | perl -pe 's/^.+"executable":"(.+?)".+$/$1/g'

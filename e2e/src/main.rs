@@ -37,25 +37,41 @@ struct Options {
     start_pa_rot_with_options: Option<String>,
 }
 
-fn main() {
+#[cfg_attr(test, ctor::ctor)]
+fn logging_setup() {
     let pid = std::process::id();
     env_logger::builder()
-        .format(move |buf, record| {
-            use std::io::Write;
+        .format(move |#[allow(unused)] buf, record| {
+            // Log to stderr in tests, in order to trigger output capture.
+            #[cfg(test)]
+            macro_rules! logln {
+               ($($tt:tt)*) => {eprintln!($($tt)*)};
+            }
+            #[cfg(not(test))]
+            macro_rules! logln {
+                ($($tt:tt)*) => {{
+                    use std::io::Write;
+                    writeln!(buf, $($tt)*)?
+                }};
+            }
+
             for line in record.args().to_string().trim().lines() {
-                writeln!(
-                    buf,
+                logln!(
                     "[{level}{pid} {file}:{line}] {msg}",
                     level = record.level().to_string().chars().next().unwrap(),
                     pid = pid,
                     file = record.file().unwrap_or("?.rs"),
                     line = record.line().unwrap_or(0),
                     msg = line,
-                )?;
+                )
             }
             Ok(())
         })
         .init();
+}
+
+fn main() {
+    logging_setup();
     for (i, arg) in std::env::args_os().enumerate() {
         log::info!("argv[{}] = {:?}", i, arg);
     }
