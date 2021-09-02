@@ -102,26 +102,21 @@ impl Virtual {
             static ref BINARY_PATH: OsString = match env::var_os(TARGET_BINARY) {
                 Some(bin) => bin,
                 None => {
-                    // In order to blow up the test binary, we need to call
-                    // abort ourselves. Not only that, but we need to be clever
-                    // to defeat the standard library's test output capture...
-                    use std::os::unix::io::FromRawFd;
+                    use std::io;
                     use std::io::Write;
-                    use std::fs::File;
                     use std::process;
 
-                    #[allow(unsafe_code)]
-                    let mut stderr = unsafe { File::from_raw_fd(2) };
                     let _ = writeln!(
-                        stderr,
+                        io::stderr(),
                         "Could not find environment variable {}; aborting.",
                         TARGET_BINARY
                     );
                     let _ = writeln!(
-                        stderr,
+                        io::stderr(),
                         "Consider using the e2e/run.sh script, instead."
                     );
-                    process::abort();
+
+                    process::exit(255);
                 }
             };
         }
