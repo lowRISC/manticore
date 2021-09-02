@@ -22,19 +22,19 @@ use crate::server::Error;
 use crate::server::handler::prelude::*;
 
 /// Options struct for initializing a [`PaRot`].
-pub struct Options<'a, Identity, Reset, Sha, Ciphers, TrustChain> {
+pub struct Options<'a, Sha> {
     /// A handle to the "hardware identity" of the device.
-    pub identity: &'a Identity,
+    pub identity: &'a dyn hardware::Identity,
     /// A handle for looking up reset-related information for the current
     /// device.
-    pub reset: &'a Reset,
+    pub reset: &'a dyn hardware::Reset,
 
     /// A handle to a SHA-256 engine.
     pub sha: &'a Sha,
     /// A handle to a signature verification engine,
-    pub ciphers: &'a mut Ciphers,
+    pub ciphers: &'a mut dyn sig::Ciphers,
     /// The trust chain to use for the challenge.
-    pub trust_chain: &'a mut TrustChain,
+    pub trust_chain: &'a mut dyn cert::TrustChain,
 
     /// The value of PMR0.
     ///
@@ -56,25 +56,15 @@ pub struct Options<'a, Identity, Reset, Sha, Ciphers, TrustChain> {
 /// This type implements the request -> response "business logic" of the
 /// host <-> PA-RoT interaction. That is, it accepts input and output buffers,
 /// and from those, parses incoming requests and processes them into responses.
-pub struct PaRot<'a, Identity, Reset, Sha, Ciphers, TrustChain> {
-    opts: Options<'a, Identity, Reset, Sha, Ciphers, TrustChain>,
+pub struct PaRot<'a, Sha> {
+    opts: Options<'a, Sha>,
     ok_count: u16,
     err_count: u16,
 }
 
-impl<'a, Identity, Reset, Sha, Ciphers, TrustChain>
-    PaRot<'a, Identity, Reset, Sha, Ciphers, TrustChain>
-where
-    Identity: hardware::Identity,
-    Reset: hardware::Reset,
-    Sha: sha256::Builder,
-    Ciphers: sig::Ciphers,
-    TrustChain: cert::TrustChain,
-{
+impl<'a, Sha: sha256::Builder> PaRot<'a, Sha> {
     /// Create a new `PaRot` with the given `Options`.
-    pub fn new(
-        opts: Options<'a, Identity, Reset, Sha, Ciphers, TrustChain>,
-    ) -> Self {
+    pub fn new(opts: Options<'a, Sha>) -> Self {
         Self {
             opts,
             ok_count: 0,
@@ -321,13 +311,7 @@ mod test {
         scratch_space: &'a mut [u8],
         port_out: &'a mut Option<net::InMemHost<'a>>,
         arena: &'a mut A,
-        server: &mut PaRot<
-            fake::Identity,
-            fake::Reset,
-            ring::sha256::Builder,
-            ring::sig::Ciphers,
-            cert::SimpleChain<0>,
-        >,
+        server: &mut PaRot<ring::sha256::Builder>,
         request: C::Req,
     ) -> Result<Result<C::Resp, protocol::Error>, Error> {
         use crate::protocol::Response;
