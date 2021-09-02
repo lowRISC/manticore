@@ -159,8 +159,22 @@ impl Virtual {
         let mut child = Command::new(Self::target_binary())
             .args(&["--start-pa-rot-with-options", &opts])
             .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()
             .expect("failed to spawn server subprocess");
+
+        // Forward stderr through the eprint! macro, so that tests can capture
+        // it.
+        let mut stderr = BufReader::new(child.stderr.take().unwrap());
+        let mut line = String::new();
+        let _ = std::thread::spawn(move || loop {
+            line.clear();
+            match stderr.read_line(&mut line) {
+                Ok(_) => eprint!("{}", line),
+                Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => break,
+                Err(e) => panic!("unexpected error from virtual rot: {}", e),
+            }
+        });
 
         // Wait until the child signals it's ready by writing a line to stdout.
         let mut stdout = BufReader::new(child.stdout.take().unwrap());
