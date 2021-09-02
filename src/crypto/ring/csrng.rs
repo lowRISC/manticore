@@ -19,6 +19,21 @@ pub struct Csrng {
     inner: SystemRandom,
 }
 
+impl Csrng {
+    /// Creates a new entropy source.
+    pub fn new() -> Self {
+        Self {
+            inner: SystemRandom::new(),
+        }
+    }
+}
+
+impl Default for Csrng {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl csrng::Csrng for Csrng {
     fn fill(&mut self, buf: &mut [u8]) -> Result<(), csrng::Error> {
         self.inner.fill(buf).map_err(|_| csrng::Error::Unspecified)

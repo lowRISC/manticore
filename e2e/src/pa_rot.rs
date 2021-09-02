@@ -261,7 +261,9 @@ pub fn serve(opts: Options) -> ! {
     };
 
     let sha = ring::sha256::Builder::new();
+    let mut csrng = ring::csrng::Csrng::new();
     let mut ciphers = ring::sig::Ciphers::new();
+
     let trust_chain_bytes =
         opts.cert_chain.iter().map(Vec::as_ref).collect::<Vec<_>>();
     let mut signer = opts.alias_keypair.as_ref().map(|kp| match kp {
@@ -287,6 +289,7 @@ pub fn serve(opts: Options) -> ! {
         identity: &identity,
         reset: &reset,
         sha: &sha,
+        csrng: &mut csrng,
         ciphers: &mut ciphers,
         trust_chain: &mut trust_chain,
         pmr0: &opts.pmr0,

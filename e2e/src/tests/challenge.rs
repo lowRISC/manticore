@@ -52,6 +52,7 @@ fn challenge() {
         )
         .unwrap()
         .unwrap();
+    log::info!("got digests: {:#?}", resp);
 
     // Ensure that the root certificate is one that we implicitly trust.
     // We won't request this certificate; only the two after it.
@@ -113,6 +114,7 @@ fn challenge() {
         .send_local::<Challenge, _>(req, &arena)
         .unwrap()
         .unwrap();
+    log::info!("got nonce: {:?}", resp.tbs.nonce);
 
     // Compute the expected signee: our challenge, plus the response's
     // TBS portion.
