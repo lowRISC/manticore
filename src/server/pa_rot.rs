@@ -8,6 +8,7 @@
 //! requests to a PA-RoT.
 
 use crate::cert;
+use crate::crypto::csrng;
 use crate::crypto::sha256;
 use crate::crypto::sig;
 use crate::hardware;
@@ -33,6 +34,8 @@ pub struct Options<'a, Sha> {
     pub sha: &'a Sha,
     /// A handle to a signature verification engine,
     pub ciphers: &'a mut dyn sig::Ciphers,
+    /// A random number generator for creating nonces and ephemeral keys.
+    pub csrng: &'a mut dyn csrng::Csrng,
     /// The trust chain to use for the challenge.
     pub trust_chain: &'a mut dyn cert::TrustChain,
 
@@ -187,12 +190,15 @@ impl<'a, Sha: sha256::Builder> PaRot<'a, Sha> {
                     .trust_chain
                     .signer(ctx.req.slot)
                     .ok_or(UNSPECIFIED)?;
+                let nonce: &mut [u8; 32] =
+                    ctx.arena.alloc().map_err(|_| UNSPECIFIED)?;
+                ctx.server.opts.csrng.fill(nonce).map_err(|_| UNSPECIFIED)?;
+
                 let tbs = ChallengeResponseTbs {
                     slot: ctx.req.slot,
                     slot_mask: 0, // Currently unspecified?
                     protocol_range: (0, 0),
-                    // TODO: Wire through a CSRNG to generate the nonce.
-                    nonce: &[0xaa; 32],
+                    nonce,
                     pmr0_components: 0,
                     pmr0: ctx.server.opts.pmr0,
                 };
@@ -405,9 +411,11 @@ mod test {
             b"random bits",
         );
         let reset = fake::Reset::new(0, Duration::from_millis(1));
-        let mut ciphers = ring::sig::Ciphers::new();
         let sha = ring::sha256::Builder::new();
-        let mut trust_chain = cert::SimpleChain::parse(
+        let mut ciphers = ring::sig::Ciphers::new();
+        let mut csrng = ring::csrng::Csrng::new();
+
+        let mut trust_chain = cert::SimpleChain::<0>::parse(
             &[],
             cert::CertFormat::RiotX509,
             &mut ciphers,
@@ -419,6 +427,7 @@ mod test {
             reset: &reset,
             sha: &sha,
             ciphers: &mut ciphers,
+            csrng: &mut csrng,
             trust_chain: &mut trust_chain,
             pmr0: "not important".as_bytes(),
             device_id: DEVICE_ID,
