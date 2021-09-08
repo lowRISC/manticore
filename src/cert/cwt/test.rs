@@ -73,13 +73,13 @@ impl TestCwt {
 
         let (_, mut signer) = ring::rsa::from_keypair(self.issuer_key);
         let mut sig = vec![0; signer.sig_bytes()];
-        signer.sign(&[&tbs], &mut sig).unwrap();
+        let sig_len = signer.sign(&[&tbs], &mut sig).unwrap();
 
         raw_cbor! {
             BYTES {protected}
             MAP []  // No unprotected fields.
             BYTES {payload}
-            BYTES {sig}
+            BYTES {(sig[..sig_len])}
         }
     }
 }

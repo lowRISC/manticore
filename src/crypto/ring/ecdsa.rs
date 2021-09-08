@@ -123,7 +123,7 @@ impl sig::Sign for SignP256 {
         &mut self,
         message_vec: &[&[u8]],
         signature: &mut [u8],
-    ) -> Result<(), sig::Error> {
+    ) -> Result<usize, sig::Error> {
         let mut message = Vec::new();
         for bytes in message_vec {
             message.extend_from_slice(bytes);
@@ -134,16 +134,15 @@ impl sig::Sign for SignP256 {
             .keypair
             .sign(&rng, &message)
             .map_err(|_| sig::Error::Unspecified)?;
-        if signature.len() != sig.as_ref().len() {
-            return Err(sig::Error::Unspecified);
-        }
+        let signature = signature
+            .get_mut(..sig.as_ref().len())
+            .ok_or(sig::Error::Unspecified)?;
         signature.copy_from_slice(sig.as_ref());
-        Ok(())
+        Ok(signature.len())
     }
 }
 
 #[cfg(test)]
-#[allow(unused)]
 mod tests {
     use super::*;
     use crate::crypto::sig::Sign as _;
@@ -153,20 +152,45 @@ mod tests {
 
     #[test]
     #[cfg_attr(miri, ignore)]
-    fn p256() {
-        let mut signer = SignP256::with_pkcs11_encoding_from_pkcs8(keys::KEY1_ECDSA_P256_KEYPAIR).unwrap();
+    fn p256_der() {
+        let mut signer = SignP256::with_der_encoding_from_pkcs8(
+            keys::KEY1_ECDSA_P256_KEYPAIR,
+        )
+        .unwrap();
+        let mut verifier = VerifyP256::with_der_encoding(
+            *keys::KEY1_ECDSA_P256_X,
+            *keys::KEY1_ECDSA_P256_Y,
+        );
+
+        let mut generated_sig = vec![0; signer.sig_bytes()];
+        let sig_len = signer
+            .sign(&[misc_crypto::PLAIN_TEXT], &mut generated_sig)
+            .unwrap();
+
+        verifier
+            .verify(&[misc_crypto::PLAIN_TEXT], &generated_sig[..sig_len])
+            .unwrap();
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn p256_pkcs11() {
+        let mut signer = SignP256::with_pkcs11_encoding_from_pkcs8(
+            keys::KEY1_ECDSA_P256_KEYPAIR,
+        )
+        .unwrap();
         let mut verifier = VerifyP256::with_pkcs11_encoding(
             *keys::KEY1_ECDSA_P256_X,
             *keys::KEY1_ECDSA_P256_Y,
         );
 
-        let mut generated_sig = vec![0; 64];
-        signer
+        let mut generated_sig = vec![0; signer.sig_bytes()];
+        let sig_len = signer
             .sign(&[misc_crypto::PLAIN_TEXT], &mut generated_sig)
             .unwrap();
 
         verifier
-            .verify(&[misc_crypto::PLAIN_TEXT], &generated_sig)
+            .verify(&[misc_crypto::PLAIN_TEXT], &generated_sig[..sig_len])
             .unwrap();
     }
 }

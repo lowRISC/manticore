@@ -37,7 +37,8 @@ pub trait Verify {
 ///
 /// There is no way to extract the keypair back out of a `Sign` value.
 pub trait Sign {
-    /// Returns the number of bytes a signature produced by this signer needs.
+    /// Returns an upper bound for the number of bytes a signature of this type
+    /// will need.
     fn sig_bytes(&self) -> usize;
 
     /// Creates a digital signature for `message_vec`, writing it to signature.
@@ -46,13 +47,13 @@ pub trait Sign {
     /// many buffers for digital signatures that are the concatenation of many
     /// parts, such as the Cerberus challenge command or a CWT signature.
     ///
-    /// If the underlying cryptographic operation succeeds, returns `Ok(())`.
-    /// Failures are included in the `Err` variant.
+    /// If the signature is created successfully, returns the number of bytes
+    /// written to `signature`.
     fn sign(
         &mut self,
         message_vec: &[&[u8]],
         signature: &mut [u8],
-    ) -> Result<(), Error>;
+    ) -> Result<usize, Error>;
 }
 
 /// Public key parameters extracted from a certificate.

@@ -111,7 +111,7 @@ impl sig::Sign for Sign256 {
         &mut self,
         message_vec: &[&[u8]],
         signature: &mut [u8],
-    ) -> Result<(), sig::Error> {
+    ) -> Result<usize, sig::Error> {
         let mut message = Vec::new();
         for bytes in message_vec {
             message.extend_from_slice(bytes);
@@ -121,7 +121,8 @@ impl sig::Sign for Sign256 {
         let rng = ring::rand::SystemRandom::new();
         self.keypair
             .sign(scheme, &rng, &message, signature)
-            .map_err(|_| sig::Error::Unspecified)
+            .map_err(|_| sig::Error::Unspecified)?;
+        Ok(self.sig_bytes())
     }
 }
 

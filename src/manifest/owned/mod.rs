@@ -405,7 +405,13 @@ impl<E: Element> Container<E> {
         let mut signed = [0; 32];
         let mut signature = vec![0; signer.sig_bytes()];
         sha.hash_contiguous(&bytes, &mut signed)?;
-        signer.sign(&[&signed], &mut signature)?;
+        let sig_len = signer.sign(&[&signed], &mut signature)?;
+
+        // NOTE: Due to how manifests are constructed, we cannot use
+        // a variable-length signature scheme.
+        if sig_len != signature.len() {
+            return Err(EncodingError::SigError(sig::Error::Unspecified));
+        }
         bytes.extend_from_slice(&signature);
 
         Ok(bytes)
