@@ -212,10 +212,12 @@ where
                     .arena
                     .alloc_slice::<u8>(signer.sig_bytes())
                     .map_err(|_| UNSPECIFIED)?;
-                tbs.as_iovec_with(|[a, b, c, d]| {
-                    signer.sign(&[req_buf, a, b, c, d], signature)
-                })
-                .map_err(|_| UNSPECIFIED)?;
+                let sig_len = tbs
+                    .as_iovec_with(|[a, b, c, d]| {
+                        signer.sign(&[req_buf, a, b, c, d], signature)
+                    })
+                    .map_err(|_| UNSPECIFIED)?;
+                let signature = &signature[..sig_len];
 
                 Ok(ChallengeResponse { tbs, signature })
             })
