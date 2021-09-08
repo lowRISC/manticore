@@ -23,7 +23,7 @@ impl VerifyP256 {
     pub fn with_der_encoding(x: [u8; 32], y: [u8; 32]) -> Self {
         let mut key = [4u8; 65];
         key[1..33].copy_from_slice(&x);
-        key[33..64].copy_from_slice(&y);
+        key[33..65].copy_from_slice(&y);
 
         Self {
             key,
@@ -36,7 +36,7 @@ impl VerifyP256 {
     pub fn with_pkcs11_encoding(x: [u8; 32], y: [u8; 32]) -> Self {
         let mut key = [4u8; 65];
         key[1..33].copy_from_slice(&x);
-        key[33..64].copy_from_slice(&y);
+        key[33..65].copy_from_slice(&y);
 
         Self {
             key,
@@ -139,5 +139,34 @@ impl sig::Sign for SignP256 {
         }
         signature.copy_from_slice(sig.as_ref());
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(unused)]
+mod tests {
+    use super::*;
+    use crate::crypto::sig::Sign as _;
+    use crate::crypto::sig::Verify as _;
+    use testutil::data::keys;
+    use testutil::data::misc_crypto;
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn p256() {
+        let mut signer = SignP256::with_pkcs11_encoding_from_pkcs8(keys::KEY1_ECDSA_P256_KEYPAIR).unwrap();
+        let mut verifier = VerifyP256::with_pkcs11_encoding(
+            *keys::KEY1_ECDSA_P256_X,
+            *keys::KEY1_ECDSA_P256_Y,
+        );
+
+        let mut generated_sig = vec![0; 64];
+        signer
+            .sign(&[misc_crypto::PLAIN_TEXT], &mut generated_sig)
+            .unwrap();
+
+        verifier
+            .verify(&[misc_crypto::PLAIN_TEXT], &generated_sig)
+            .unwrap();
     }
 }
