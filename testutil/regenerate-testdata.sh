@@ -35,16 +35,17 @@ function clear_rust_file() {
 function push_const() {
   module="$(dirname "$1")"
   path="$(realpath --relative-to="$module" "$2")"
-  
+
   const="$(tr '.-/' '_' <<< "$3")"
+  ty="$4"
 
   # xargs will conveniently trim its input!
-  comment="$(xargs <<< "$4" | perl -pe 's#^#/// #')"
+  comment="$(xargs <<< "$5" | perl -pe 's#^#/// #')"
 
   cat >> "$1" <<RUST
 $comment
 #[rustfmt::skip]
-pub const ${const^^}: &[u8] = include_bytes!("$path");
+pub const ${const^^}: $ty = include_bytes!("$path");
 RUST
 }
 
@@ -66,7 +67,9 @@ rm -r "$KEYS_GEN"
 mkdir -p "$KEYS_GEN"
 
 # RSA keypairs.
-rm "$DATA_DIR"/keys/*.rsa.pub.pk8
+# To generate a new *private* key, use
+#   openssl genrsa -outform der -out <name>.rsa.pk8 <bits>
+rm -f "$DATA_DIR"/keys/*.rsa.pub.pk8
 for key in $(find "$DATA_DIR/keys" -name '*.rsa.pk8' -type f | sort); do
   echo "Processing RSA key $key..." >&2
   base="${key%.rsa.pk8}"
@@ -91,20 +94,69 @@ for key in $(find "$DATA_DIR/keys" -name '*.rsa.pk8' -type f | sort); do
 
   push_const \
     "$KEYS_RS" "$key" \
-    "$(basename "$base")_RSA_KEYPAIR" \
-    "Test-only RSA keypair \`$(basename "$base").rsa.pk8\`."
+    "$(basename "$base")_RSA_KEYPAIR" '&[u8]' \
+    "Test-only RSA keypair \`$(basename "key")\`."
   push_const \
     "$KEYS_RS" "$pub" \
-    "$(basename "$base")_RSA_PUBLIC" \
-    "Test-only RSA public key generated from \`$(basename "$base").rsa.pk8\`."
+    "$(basename "$base")_RSA_PUBLIC" '&[u8]' \
+    "Test-only RSA public key generated from \`$(basename "$key")\`."
   push_const \
     "$KEYS_RS" "$mod" \
-    "$(basename "$base")_RSA_MOD" \
-    "RSA modulus of \`$(basename "$base").rsa.pk8\`."
+    "$(basename "$base")_RSA_MOD" '&[u8]' \
+    "RSA modulus of \`$(basename "$key")\`."
   push_const \
     "$KEYS_RS" "$exp" \
-    "$(basename "$base")_RSA_EXP" \
-    "RSA exponent of \`$(basename "$base").rsa.pk8\`."
+    "$(basename "$base")_RSA_EXP" '&[u8]' \
+    "RSA exponent of \`$(basename "$key")\`."
+  echo >> "$KEYS_RS"
+done
+
+# ECDSA keypairs.
+# To generate a new *private* key, use
+#   openssl ecparam -name <curve> -genkey -noout -outform der | \
+#   openssl pkcs8 -topk8 -nocrypt -outform der -out <name>.ecdsa-<curve>.pk8
+rm -f "$DATA_DIR"/keys/*.ecdsa-*.pub.pk8
+for key in $(find "$DATA_DIR/keys" -name '*.ecdsa-*.pk8' -type f | sort); do
+  echo "Processing ECDSA key $key..." >&2
+  base="${key%.ecdsa-*.pk8}"
+  curve="${key%.pk8}"
+  curve="${curve#"$base.ecdsa-"}"
+  pub="$base.ecdsa-$curve.pub.pk8"
+  openssl pkcs8 \
+    -nocrypt \
+    -inform der -outform der \
+    -in "$key" | \
+  openssl ec \
+    -pubout \
+    -inform der -outform der \
+    -out "$pub" \
+    2> /dev/null
+
+  x="$KEYS_GEN/$(basename "$base").ecdsa-$curve.pub.x"
+  y="$KEYS_GEN/$(basename "$base").ecdsa-$curve.pub.y"
+
+  unwrap_bits='s/\s*BIT_STRING\s*{\s*`00`\s*`04(\w+)`\s*}/$1/'
+  xy="$(der2ascii < "$pub" | grep BIT_STRING | perl -pe "$unwrap_bits")"
+  coord_len_hex=$((${#xy} / 2))
+  head -c $coord_len_hex <<< $xy | xxd -r -p > "$x"
+  tail -c $(($coord_len_hex + 1)) <<< $xy | xxd -r -p > "$y"
+
+  push_const \
+    "$KEYS_RS" "$key" \
+    "$(basename "$base")_ECDSA_${curve}_KEYPAIR" '&[u8]' \
+    "Test-only ECDSA keypair \`$(basename "$key")\`."
+  push_const \
+    "$KEYS_RS" "$pub" \
+    "$(basename "$base")_ECDSA_${curve}_PUBLIC" '&[u8]' \
+    "Test-only ECDAS public key generated from \`$(basename "$key")\`."
+  push_const \
+    "$KEYS_RS" "$x" \
+    "$(basename "$base")_ECDSA_${curve}_X" "&[u8; $(($coord_len_hex / 2))]" \
+    "X coordinate of \`$(basename "$key")\`."
+  push_const \
+    "$KEYS_RS" "$y" \
+    "$(basename "$base")_ECDSA_${curve}_Y" "&[u8; $(($coord_len_hex / 2))]" \
+    "Y coordinate of \`$(basename "$key")\`."
   echo >> "$KEYS_RS"
 done
 
@@ -123,7 +175,7 @@ for der in $(find "$DATA_DIR/der" -name '*.der' -type f | sort); do
 
   push_const \
     "$DER_RS" "$bin" \
-    "$(basename "${der%.der}")" \
+    "$(basename "${der%.der}")" '&[u8]' \
     "DER snippet generated from \`$(basename "$der")\`."
   echo >> "$DER_RS"
 done
@@ -186,7 +238,7 @@ for tbs in $(find "$DATA_DIR/x509" -name '*.tbs' -type f | sort); do
 DER
   push_const \
     "$X509_RS" "$bin" \
-    "$(basename "${tbs%.tbs}")" \
+    "$(basename "${tbs%.tbs}")" '&[u8]' \
     "X509 certificate generated from \`$(basename "$tbs")\`."
   echo >> "$X509_RS"
 done
