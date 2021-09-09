@@ -26,6 +26,7 @@ use manticore::protocol::capabilities;
 use manticore::protocol::device_id::DeviceIdentifier;
 use manticore::server;
 use manticore::server::pa_rot::PaRot;
+use manticore::session::ring::Session;
 
 use crate::tcp;
 use crate::tcp::TcpHostPort;
@@ -279,6 +280,7 @@ pub fn serve(opts: Options) -> ! {
         signer.as_mut().map(|s| s as _),
     )
     .unwrap();
+    let mut session = Session::new();
 
     let mut server = PaRot::new(manticore::server::pa_rot::Options {
         identity: &identity,
@@ -286,6 +288,7 @@ pub fn serve(opts: Options) -> ! {
         sha: &sha,
         ciphers: &mut ciphers,
         trust_chain: &mut trust_chain,
+        session: &mut session,
         pmr0: &opts.pmr0,
         device_id: opts.device_id,
         networking,
