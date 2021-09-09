@@ -19,7 +19,9 @@ use crate::net;
 use crate::protocol;
 use crate::protocol::capabilities;
 use crate::protocol::device_id;
+use crate::protocol::get_digests::KeyExchangeAlgo;
 use crate::server::Error;
+use crate::session::Session;
 
 use crate::server::handler::prelude::*;
 
@@ -39,6 +41,9 @@ pub struct Options<'a> {
     pub csrng: &'a mut dyn csrng::Csrng,
     /// The trust chain to use for the challenge.
     pub trust_chain: &'a mut dyn cert::TrustChain,
+
+    /// The session manager.
+    pub session: &'a mut dyn Session,
 
     /// The value of PMR0.
     ///
@@ -64,6 +69,20 @@ pub struct PaRot<'a> {
     opts: Options<'a>,
     ok_count: u16,
     err_count: u16,
+
+    /// State from the last `GetDigests`, which records whether the
+    /// following `Challenge` will be used to initiate a key exchange.
+    /// This prevents the `Challenge` from clobbering session state if
+    /// key exchange won't happen.
+    key_exchange: Option<KeyExchangeAlgo>,
+
+    /// The most recent certificate slot used for an ECDH-seeding
+    /// `Challenge`. This records which certificate's key needs to sign
+    /// the ECDH keypair in the key exchange.
+    ///
+    /// Note that this is *only* changed when the most recent `GetDigests`
+    /// indicated a forthcoming key exchange.
+    current_cert_slot: Option<u8>,
 }
 
 impl<'a> PaRot<'a> {
@@ -73,6 +92,8 @@ impl<'a> PaRot<'a> {
             opts,
             ok_count: 0,
             err_count: 0,
+            key_exchange: None,
+            current_cert_slot: None,
         }
     }
 
@@ -164,6 +185,8 @@ impl<'a> PaRot<'a> {
                         .contiguous_hash(hash::Algo::Sha256, cert.raw(), digest)
                         .map_err(|_| UNSPECIFIED)?;
                 }
+
+                ctx.server.key_exchange = Some(ctx.req.key_exchange);
                 Ok(protocol::get_digests::GetDigestsResponse { digests })
             })
             .handle::<protocol::GetCert, _>(|ctx| {
@@ -187,6 +210,7 @@ impl<'a> PaRot<'a> {
             })
             .handle_buffered::<protocol::Challenge, _>(|ctx| {
                 use protocol::challenge::*;
+
                 let signer = ctx
                     .server
                     .opts
@@ -218,7 +242,72 @@ impl<'a> PaRot<'a> {
                     .map_err(|_| UNSPECIFIED)?;
                 let signature = &signature[..sig_len];
 
+                if let Some(KeyExchangeAlgo::Ecdh) = ctx.server.key_exchange {
+                    ctx.server
+                        .opts
+                        .session
+                        .create_session(ctx.req.nonce, tbs.nonce)
+                        .map_err(|_| UNSPECIFIED)?;
+                    ctx.server.current_cert_slot = Some(tbs.slot);
+                }
+
                 Ok(ChallengeResponse { tbs, signature })
+            })
+            .handle::<protocol::KeyExchange, _>(|ctx| {
+                use protocol::key_exchange::*;
+                match &ctx.req {
+                    KeyExchangeRequest::SessionKey {
+                        hmac_algorithm: _,
+                        pk_req,
+                    } => {
+                        let signer = ctx
+                            .server
+                            .opts
+                            .trust_chain
+                            .signer(
+                                ctx.server
+                                    .current_cert_slot
+                                    .ok_or(UNSPECIFIED)?,
+                            )
+                            .ok_or(UNSPECIFIED)?;
+
+                        let pk_resp = ctx
+                            .arena
+                            .alloc_slice(
+                                ctx.server.opts.session.ephemeral_bytes(),
+                            )
+                            .map_err(|_| UNSPECIFIED)?;
+                        let key_len = ctx
+                            .server
+                            .opts
+                            .session
+                            .begin_ecdh(pk_resp)
+                            .map_err(|_| UNSPECIFIED)?;
+                        let pk_resp = &pk_resp[..key_len];
+                        ctx.server
+                            .opts
+                            .session
+                            .finish_ecdh(pk_req)
+                            .map_err(|_| UNSPECIFIED)?;
+
+                        let signature = ctx
+                            .arena
+                            .alloc_slice(signer.sig_bytes())
+                            .map_err(|_| UNSPECIFIED)?;
+                        signer
+                            .sign(&[pk_req, pk_resp], signature)
+                            .map_err(|_| UNSPECIFIED)?;
+
+                        Ok(KeyExchangeResponse::SessionKey {
+                            pk_resp,
+                            signature,
+                            alias_cert_hmac: &[
+                                // Pending require of crypto::sha256.
+                            ],
+                        })
+                    }
+                    _ => Err(UNSPECIFIED),
+                }
             })
             .handle::<protocol::ResetCounter, _>(|ctx| {
                 use protocol::reset_counter::*;
@@ -295,6 +384,7 @@ mod test {
     use crate::protocol::wire::FromWire;
     use crate::protocol::wire::ToWire;
     use crate::protocol::Header;
+    use crate::session::ring::Session;
 
     const NETWORKING: Networking = Networking {
         max_message_size: 1024,
@@ -424,6 +514,7 @@ mod test {
             None,
         )
         .unwrap();
+        let mut session = Session::new();
         let mut server = PaRot::new(Options {
             identity: &identity,
             reset: &reset,
@@ -431,6 +522,7 @@ mod test {
             ciphers: &mut ciphers,
             csrng: &mut csrng,
             trust_chain: &mut trust_chain,
+            session: &mut session,
             pmr0: "not important".as_bytes(),
             device_id: DEVICE_ID,
             networking: NETWORKING,
