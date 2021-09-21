@@ -12,8 +12,8 @@ pub const PLAIN_TEXT: &[u8] = b"I'm setting the alarm clock for July.";
 ///
 /// Generate with:
 /// ```text
-/// openssl dgst -sha256 \
-///   <<< "I'm setting the alarm clock for July." \
+/// echo -n "I'm setting the alarm clock for July." \
+///   | openssl dgst -sha256 -binary \
 ///   | xxd -i -c 8
 /// ```
 #[rustfmt::skip]
@@ -24,12 +24,29 @@ pub const PLAIN_SHA256: &[u8] = &[
     0xd0, 0xc6, 0x19, 0x2f, 0x47, 0x64, 0xdb, 0xba,
 ];
 
+/// The SHA-256 HMAC of `PLAIN_TEXT`, using itself as the key.
+///
+/// Generate with:
+/// ```text
+/// echo -n "I'm setting the alarm clock for July." \
+///   | openssl dgst -sha256 -binary \
+///     -hmac "I'm setting the alarm clock for July." \
+///   | xxd -i -c 8
+/// ```
+#[rustfmt::skip]
+pub const PLAIN_HMAC256: &[u8] = &[
+  0x95, 0xcb, 0xa4, 0x97, 0x4d, 0x09, 0xa3, 0x9f,
+  0x2d, 0x97, 0xd0, 0x32, 0xa4, 0x0a, 0x3a, 0xd4,
+  0x04, 0xe7, 0x1b, 0x4f, 0x74, 0x35, 0xb0, 0xf5,
+  0x99, 0xe6, 0xc5, 0x9c, 0x01, 0x52, 0x40, 0x51,
+];
+
 /// An RSA signature for `PLAIN_TEXT`, generated thus:
 ///
 /// ```text
-/// openssl dgst -sha256 -keyform DER \
-///   -sign testutil/src/data/keys/key1.rsa.pk8 \
-///   <<< "I'm setting the alarm clock for July." \
+/// echo -n "I'm setting the alarm clock for July." \
+///   | openssl dgst -sha256 -keyform DER \
+///     -sign testutil/src/data/keys/key1.rsa.pk8 \
 ///   | xxd -i -c 8
 /// ```
 ///
