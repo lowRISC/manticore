@@ -260,7 +260,7 @@ pub fn serve(opts: Options) -> ! {
         resets_since_power_on: opts.resets_since_power_on,
     };
 
-    let sha = ring::sha256::Builder::new();
+    let mut hasher = ring::hash::Engine::new();
     let mut csrng = ring::csrng::Csrng::new();
     let mut ciphers = ring::sig::Ciphers::new();
 
@@ -288,7 +288,7 @@ pub fn serve(opts: Options) -> ! {
     let mut server = PaRot::new(manticore::server::pa_rot::Options {
         identity: &identity,
         reset: &reset,
-        sha: &sha,
+        hasher: &mut hasher,
         csrng: &mut csrng,
         ciphers: &mut ciphers,
         trust_chain: &mut trust_chain,

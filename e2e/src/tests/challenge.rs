@@ -7,9 +7,9 @@
 use manticore::cert;
 use manticore::cert::CertFormat;
 use manticore::cert::TrustChain as _;
+use manticore::crypto::hash;
+use manticore::crypto::hash::EngineExt as _;
 use manticore::crypto::ring;
-use manticore::crypto::sha256;
-use manticore::crypto::sha256::Builder as _;
 use manticore::crypto::sig;
 use manticore::crypto::sig::Ciphers as _;
 use manticore::io::Cursor;
@@ -27,7 +27,7 @@ fn challenge() {
     use manticore::protocol::get_cert::*;
     use manticore::protocol::get_digests::*;
 
-    let sha = ring::sha256::Builder::new();
+    let mut h = ring::hash::Engine::new();
     let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
         cert_chain: vec![
             x509::CHAIN1.to_vec(),
@@ -56,8 +56,9 @@ fn challenge() {
 
     // Ensure that the root certificate is one that we implicitly trust.
     // We won't request this certificate; only the two after it.
-    let mut root_hash = sha256::Digest::default();
-    sha.hash_contiguous(x509::CHAIN1, &mut root_hash).unwrap();
+    let mut root_hash = [0; 32];
+    h.contiguous_hash(hash::Algo::Sha256, x509::CHAIN1, &mut root_hash)
+        .unwrap();
     assert_eq!(resp.digests[0], root_hash);
     let digests = resp.digests.to_vec();
     arena.reset();
@@ -88,8 +89,9 @@ fn challenge() {
                 break;
             }
         }
-        let mut cert_hash = sha256::Digest::default();
-        sha.hash_contiguous(&cert, &mut cert_hash).unwrap();
+        let mut cert_hash = [0; 32];
+        h.contiguous_hash(hash::Algo::Sha256, &cert, &mut cert_hash)
+            .unwrap();
         assert!(&cert_hash == digest, "got wrong cert #{} from RoT!", i);
         certs.push(cert);
     }

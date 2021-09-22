@@ -9,6 +9,7 @@
 
 use core::convert::TryInto as _;
 
+use crate::crypto::hash;
 use crate::io::read::ReadZeroExt as _;
 use crate::io::ReadInt as _;
 use crate::io::ReadZero;
@@ -65,9 +66,7 @@ make_fuzz_safe! {
         /// A request to establish a shared session key.
         SessionKey {
             /// The HMAC algorithm to use throughout the session.
-            // TODO: This will use a proper enum, pending on a rewrite of
-            // crypto::sha256.
-            hmac_algorithm: u8,
+            hmac_algorithm: hash::Algo,
 
             /// A DER-encoded ECDSA public key, which will be fed into
             /// the ECDH.
@@ -106,7 +105,12 @@ impl<'wire> FromWire<'wire> for KeyExchangeRequest<'wire> {
     ) -> Result<Self, wire::Error> {
         match RequestType::from_wire(r, arena)? {
             RequestType::SessionKey => {
-                let hmac_algorithm = r.read_le()?;
+                let hmac_algorithm = match r.read_le::<u8>()? {
+                    0b00 => hash::Algo::Sha256,
+                    0b01 => hash::Algo::Sha384,
+                    0b10 => hash::Algo::Sha512,
+                    _ => return Err(wire::Error::OutOfRange),
+                };
                 let pk_len = r.remaining_data();
                 let pk_req = r.read_slice(pk_len, arena)?;
                 Ok(Self::SessionKey {
@@ -137,7 +141,11 @@ impl ToWire for KeyExchangeRequest<'_> {
                 pk_req,
             } => {
                 RequestType::SessionKey.to_wire(&mut w)?;
-                w.write_le(*hmac_algorithm)?;
+                match hmac_algorithm {
+                    hash::Algo::Sha256 => w.write_le::<u8>(0b00)?,
+                    hash::Algo::Sha384 => w.write_le::<u8>(0b01)?,
+                    hash::Algo::Sha512 => w.write_le::<u8>(0b10)?,
+                }
                 w.write_bytes(pk_req)?;
             }
             Self::PairedKeyHmac { key_len, key_hmac } => {
@@ -261,7 +269,7 @@ mod test {
                 b'e', b'c', b'd', b's', b'a',
             ],
             value: KeyExchangeRequest::SessionKey {
-                hmac_algorithm: 0,
+                hmac_algorithm: hash::Algo::Sha256,
                 pk_req: b"ecdsa",
             },
         },
