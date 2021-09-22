@@ -125,7 +125,8 @@ assert_obj_safe!(Arena);
 ///
 /// Note that this trait is implemened for `&impl Arena`, which is the reason
 /// for the slightly odd signature.
-pub trait ArenaExt<'arena> {
+#[extend::ext(name = ArenaExt)]
+pub impl<A: Arena + ?Sized> A {
     /// Allocates a value of type `T`.
     ///
     /// Because of the `reset()` function, it needs to be safe to transmute
@@ -138,9 +139,16 @@ pub trait ArenaExt<'arena> {
     /// This function is permitted to panic under catastrophic failure
     /// conditions, such as completely running out of program memory.
     /// Implementations must advertize whether they panic.
-    fn alloc<T>(self) -> Result<&'arena mut T, OutOfMemory>
+    fn alloc<T>(&self) -> Result<&mut T, OutOfMemory>
     where
-        T: AsBytes + FromBytes + Copy;
+        T: AsBytes + FromBytes + Copy,
+    {
+        let bytes = self.alloc_raw(Layout::new::<T>())?;
+
+        let lv = LayoutVerified::<_, T>::new(bytes)
+            .expect("alloc_raw() implemented incorrectly");
+        Ok(lv.into_mut())
+    }
 
     /// Allocates a slice with `n` elements.
     ///
@@ -154,26 +162,10 @@ pub trait ArenaExt<'arena> {
     /// This function is permitted to panic under catastrophic failure
     /// conditions, such as completely running out of program memory.
     /// Implementations must advertize whether they panic.
-    fn alloc_slice<T>(self, n: usize) -> Result<&'arena mut [T], OutOfMemory>
+    fn alloc_slice<T>(&self, n: usize) -> Result<&mut [T], OutOfMemory>
     where
-        T: AsBytes + FromBytes + Copy;
-}
-
-impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
-    fn alloc<T: AsBytes + FromBytes + Copy>(
-        self,
-    ) -> Result<&'arena mut T, OutOfMemory> {
-        let bytes = self.alloc_raw(Layout::new::<T>())?;
-
-        let lv = LayoutVerified::<_, T>::new(bytes)
-            .expect("alloc_raw() implemented incorrectly");
-        Ok(lv.into_mut())
-    }
-
-    fn alloc_slice<T: AsBytes + FromBytes + Copy>(
-        self,
-        n: usize,
-    ) -> Result<&'arena mut [T], OutOfMemory> {
+        T: AsBytes + FromBytes + Copy,
+    {
         let bytes =
             self.alloc_raw(Layout::array::<T>(n).map_err(|_| OutOfMemory)?)?;
 
@@ -182,6 +174,20 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
         Ok(lv.into_mut_slice())
     }
 }
+/*
+impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
+    fn alloc<T: AsBytes + FromBytes + Copy>(
+        self,
+    ) -> Result<&'arena mut T, OutOfMemory> {
+    }
+
+    fn alloc_slice<T: AsBytes + FromBytes + Copy>(
+        self,
+        n: usize,
+    ) -> Result<&'arena mut [T], OutOfMemory> {
+    }
+}
+*/
 
 /// A bump-allocating [`Arena`] that is backed by fixed storage.
 ///

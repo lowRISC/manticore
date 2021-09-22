@@ -213,41 +213,17 @@ unsafe impl<F: Flash> Flash for &mut F {
 ///
 /// Note that this trait is implemened for `&impl Flash`, which is the reason
 /// for the slightly odd signature.
-pub trait FlashExt<'flash> {
+#[extend::ext(name = FlashExt)]
+pub impl<F: Flash + ?Sized> F {
     /// Reads a value of type `T`.
     ///
     /// See [`ArenaExt::alloc()`].
-    fn read_object<'b: 'c, 'c, T>(
-        self,
+    fn read_object<'a: 'c, 'b: 'c, 'c, T>(
+        &'a self,
         offset: u32,
         arena: &'b dyn Arena,
     ) -> Result<&'c T, Error>
     where
-        'flash: 'c,
-        T: AsBytes + FromBytes + Copy;
-
-    /// Reads a slice of type `[T]`.
-    ///
-    /// See [`ArenaExt::alloc_slice()`].
-    fn read_slice<'b: 'c, 'c, T>(
-        self,
-        offset: u32,
-        n: usize,
-        arena: &'b dyn Arena,
-    ) -> Result<&'c [T], Error>
-    where
-        'flash: 'c,
-        T: AsBytes + FromBytes + Copy;
-}
-
-impl<'flash, F: Flash> FlashExt<'flash> for &'flash F {
-    fn read_object<'b: 'c, 'c, T>(
-        self,
-        offset: u32,
-        arena: &'b dyn Arena,
-    ) -> Result<&'c T, Error>
-    where
-        'flash: 'c,
         T: AsBytes + FromBytes + Copy,
     {
         let bytes = self.read_direct(
@@ -261,14 +237,16 @@ impl<'flash, F: Flash> FlashExt<'flash> for &'flash F {
         Ok(lv.into_ref())
     }
 
-    fn read_slice<'b: 'c, 'c, T>(
-        self,
+    /// Reads a slice of type `[T]`.
+    ///
+    /// See [`ArenaExt::alloc_slice()`].
+    fn read_slice<'a: 'c, 'b: 'c, 'c, T>(
+        &'a self,
         offset: u32,
         n: usize,
         arena: &'b dyn Arena,
     ) -> Result<&'c [T], Error>
     where
-        'flash: 'c,
         T: AsBytes + FromBytes + Copy,
     {
         let bytes_requested =
