@@ -10,8 +10,8 @@
 
 use core::convert::TryInto;
 
-use crate::crypto::ring::sha256::Builder as RingSha;
-use crate::crypto::sha256;
+use crate::crypto::hash;
+use crate::crypto::ring;
 use crate::hardware::flash::Flash;
 use crate::hardware::flash::Region;
 use crate::manifest;
@@ -20,13 +20,10 @@ use crate::manifest::owned::EncodingError;
 use crate::manifest::pfm::ElementType;
 use crate::manifest::provenance;
 use crate::manifest::Error;
-use crate::manifest::HashType;
 use crate::manifest::ManifestType;
 use crate::mem::misalign_of;
 use crate::mem::Arena as _;
 use crate::mem::BumpArena;
-
-use crate::protocol::wire::WireEnum as _;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -131,8 +128,8 @@ pub struct Image {
         )
     )]
     pub flags: u8,
-    pub hash_type: HashType,
-    pub hash: sha256::Digest,
+    pub hash_type: hash::Algo,
+    pub hash: Vec<u8>,
     pub regions: Vec<Region>,
 }
 
@@ -222,7 +219,11 @@ impl owned::Element for Element {
                         .try_into()
                         .map_err(|_| EncodingError::TooManyElements)?;
                     bytes.extend_from_slice(&[
-                        image.hash_type.to_wire_value(),
+                        match image.hash_type {
+                            hash::Algo::Sha256 => 0b00,
+                            hash::Algo::Sha384 => 0b01,
+                            hash::Algo::Sha512 => 0b10,
+                        },
                         reg_len,
                         image.flags,
                         padding_byte,
@@ -269,13 +270,12 @@ impl<'f, F: 'f + Flash> owned::FromUnowned<'f, F> for Element {
             provenance::Adhoc,
         >,
     ) -> Result<Vec<owned::Node<Self>>, Error> {
-        let mut arena = vec![0; 2048];
-        let mut arena = BumpArena::new(&mut arena);
+        let mut arena = BumpArena::new(vec![0; 2048]);
         let pfm = manifest::pfm::ParsedPfm::new(container);
-        let sha = RingSha::new();
+        let mut h = ring::hash::Engine::new();
         let mut nodes = Vec::new();
 
-        if let Some(id) = pfm.platform_id(&sha, &arena)? {
+        if let Some(id) = pfm.platform_id(&mut h, &arena)? {
             nodes.push(owned::Node {
                 element: Element::PlatformId {
                     platform_id: id.id_string().to_vec(),
@@ -286,7 +286,7 @@ impl<'f, F: 'f + Flash> owned::FromUnowned<'f, F> for Element {
         }
         arena.reset();
 
-        if let Some(info) = pfm.flash_device_info(&sha, &arena)? {
+        if let Some(info) = pfm.flash_device_info(&mut h, &arena)? {
             nodes.push(owned::Node {
                 element: Element::FlashDevice {
                     blank_byte: info.blank_byte(),
@@ -298,7 +298,7 @@ impl<'f, F: 'f + Flash> owned::FromUnowned<'f, F> for Element {
         arena.reset();
 
         for allowable_fw in pfm.allowable_fws() {
-            let allowable_fw = allowable_fw.read(&sha, &arena)?;
+            let allowable_fw = allowable_fw.read(&mut h, &arena)?;
 
             let mut node = owned::Node {
                 element: Element::AllowableFw {
@@ -311,7 +311,7 @@ impl<'f, F: 'f + Flash> owned::FromUnowned<'f, F> for Element {
             };
 
             for fw in allowable_fw.firmware_versions() {
-                let fw = fw.read(&sha, &arena)?;
+                let fw = fw.read(&mut h, &arena)?;
 
                 let mut rw_regions = Vec::new();
                 for rw in fw.rw_regions() {
@@ -323,10 +323,11 @@ impl<'f, F: 'f + Flash> owned::FromUnowned<'f, F> for Element {
 
                 let mut image_regions = Vec::new();
                 for image in fw.image_regions() {
+                    let (hash_type, hash) = image.image_hash();
                     image_regions.push(Image {
                         flags: image.raw_flags(),
-                        hash_type: HashType::Sha256,
-                        hash: *image.image_hash(),
+                        hash_type,
+                        hash: hash.to_vec(),
                         regions: image.regions().collect(),
                     });
                 }
@@ -360,8 +361,8 @@ mod test {
     use serde_json::from_str;
     use testutil::data::keys;
 
+    use crate::crypto::ring;
     use crate::crypto::ring::rsa;
-    use crate::crypto::ring::sha256;
     use crate::manifest::owned;
     use crate::manifest::owned::Pfm;
     use crate::manifest::Metadata;
@@ -492,8 +493,8 @@ mod test {
                                 image_regions: vec![
                                     Image {
                                         flags: 0o7,
-                                        hash_type: HashType::Sha256,
-                                        hash: [42; 32],
+                                        hash_type: hash::Algo::Sha256,
+                                        hash: vec![42; 32],
                                         regions: vec![
                                             Region::new(0x10000, 0x1000),
                                             Region::new(0x18000, 0x800),
@@ -501,8 +502,8 @@ mod test {
                                     },
                                     Image {
                                         flags: 0,
-                                        hash_type: HashType::Sha256,
-                                        hash: [77; 32],
+                                        hash_type: hash::Algo::Sha256,
+                                        hash: vec![77; 32],
                                         regions: vec![
                                             Region::new(0x20000, 0x800),
                                             Region::new(0x28000, 0x1000),
@@ -555,8 +556,8 @@ mod test {
                             image_regions: vec![
                                 Image {
                                     flags: 0o7,
-                                    hash_type: HashType::Sha256,
-                                    hash: [42; 32],
+                                    hash_type: hash::Algo::Sha256,
+                                    hash: vec![42; 32],
                                     regions: vec![
                                         Region::new(0x10000, 0x1000),
                                         Region::new(0x18000, 0x800),
@@ -564,8 +565,8 @@ mod test {
                                 },
                                 Image {
                                     flags: 0,
-                                    hash_type: HashType::Sha256,
-                                    hash: [77; 32],
+                                    hash_type: hash::Algo::Sha256,
+                                    hash: vec![77; 32],
                                     regions: vec![
                                         Region::new(0x20000, 0x800),
                                         Region::new(0x28000, 0x1000),
@@ -580,12 +581,14 @@ mod test {
                 },
             ],
         };
-        let sha = sha256::Builder::new();
+        let mut hasher = ring::hash::Engine::new();
         let (mut rsa, mut signer) = rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
-        let bytes = pfm.sign(0x00, &sha, &mut signer).unwrap();
-        let pfm2 =
-            owned::Container::parse(&bytes, &sha, Some(&mut rsa)).unwrap();
+        let bytes = pfm
+            .sign(0x00, hash::Algo::Sha256, &mut hasher, &mut signer)
+            .unwrap();
+        let pfm2 = owned::Container::parse(&bytes, &mut hasher, Some(&mut rsa))
+            .unwrap();
         assert!(!pfm2.bad_signature);
         assert!(!pfm2.bad_toc_hash);
         assert!(pfm2.bad_hashes.is_empty());
