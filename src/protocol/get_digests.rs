@@ -11,7 +11,7 @@ use core::convert::TryInto as _;
 
 use zerocopy::AsBytes as _;
 
-use crate::crypto::sha256;
+use crate::crypto::hash;
 use crate::io::ReadInt as _;
 use crate::io::ReadZero;
 use crate::io::Write;
@@ -99,7 +99,7 @@ make_fuzz_safe! {
         #[cfg_attr(feature = "serde",
                    serde(deserialize_with = "crate::serde::de_slice_of_u8_arrays"))]
         #[cfg_attr(feature = "serde", serde(borrow))]
-        pub digests: &'wire [sha256::Digest],
+        pub digests: &'wire [[u8; hash::Algo::Sha256.bytes()]],
     }
 }
 
@@ -117,8 +117,7 @@ impl<'wire> FromWire<'wire> for GetDigestsResponse<'wire> {
             return Err(wire::Error::OutOfRange);
         }
 
-        let digests =
-            arena.alloc_slice::<sha256::Digest>(r.read_le::<u8>()? as usize)?;
+        let digests = arena.alloc_slice(r.read_le::<u8>()? as usize)?;
         r.read_bytes(digests.as_bytes_mut())?;
         Ok(Self { digests })
     }

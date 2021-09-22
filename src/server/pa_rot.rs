@@ -9,7 +9,8 @@
 
 use crate::cert;
 use crate::crypto::csrng;
-use crate::crypto::sha256;
+use crate::crypto::hash;
+use crate::crypto::hash::EngineExt as _;
 use crate::crypto::sig;
 use crate::hardware;
 use crate::mem::Arena;
@@ -23,15 +24,15 @@ use crate::server::Error;
 use crate::server::handler::prelude::*;
 
 /// Options struct for initializing a [`PaRot`].
-pub struct Options<'a, Sha> {
+pub struct Options<'a> {
     /// A handle to the "hardware identity" of the device.
     pub identity: &'a dyn hardware::Identity,
     /// A handle for looking up reset-related information for the current
     /// device.
     pub reset: &'a dyn hardware::Reset,
 
-    /// A handle to a SHA-256 engine.
-    pub sha: &'a Sha,
+    /// A handle to a hashing engine.
+    pub hasher: &'a mut dyn hash::Engine,
     /// A handle to a signature verification engine,
     pub ciphers: &'a mut dyn sig::Ciphers,
     /// A random number generator for creating nonces and ephemeral keys.
@@ -59,15 +60,15 @@ pub struct Options<'a, Sha> {
 /// This type implements the request -> response "business logic" of the
 /// host <-> PA-RoT interaction. That is, it accepts input and output buffers,
 /// and from those, parses incoming requests and processes them into responses.
-pub struct PaRot<'a, Sha> {
-    opts: Options<'a, Sha>,
+pub struct PaRot<'a> {
+    opts: Options<'a>,
     ok_count: u16,
     err_count: u16,
 }
 
-impl<'a, Sha: sha256::Builder> PaRot<'a, Sha> {
+impl<'a> PaRot<'a> {
     /// Create a new `PaRot` with the given `Options`.
-    pub fn new(opts: Options<'a, Sha>) -> Self {
+    pub fn new(opts: Options<'a>) -> Self {
         Self {
             opts,
             ok_count: 0,
@@ -146,7 +147,9 @@ impl<'a, Sha: sha256::Builder> PaRot<'a, Sha> {
                     .get();
                 let digests = ctx
                     .arena
-                    .alloc_slice::<sha256::Digest>(digests_len)
+                    .alloc_slice::<[u8; hash::Algo::Sha256.bytes()]>(
+                        digests_len,
+                    )
                     .map_err(|_| UNSPECIFIED)?;
                 for (i, digest) in digests.iter_mut().enumerate() {
                     let cert = ctx
@@ -157,8 +160,8 @@ impl<'a, Sha: sha256::Builder> PaRot<'a, Sha> {
                         .ok_or(UNSPECIFIED)?;
                     ctx.server
                         .opts
-                        .sha
-                        .hash_contiguous(cert.raw(), digest)
+                        .hasher
+                        .contiguous_hash(hash::Algo::Sha256, cert.raw(), digest)
                         .map_err(|_| UNSPECIFIED)?;
                 }
                 Ok(protocol::get_digests::GetDigestsResponse { digests })
@@ -317,7 +320,7 @@ mod test {
         scratch_space: &'a mut [u8],
         port_out: &'a mut Option<net::InMemHost<'a>>,
         arena: &'a mut A,
-        server: &mut PaRot<ring::sha256::Builder>,
+        server: &mut PaRot,
         request: C::Req,
     ) -> Result<Result<C::Resp, protocol::Error>, Error> {
         use crate::protocol::Response;
@@ -411,10 +414,9 @@ mod test {
             b"random bits",
         );
         let reset = fake::Reset::new(0, Duration::from_millis(1));
-        let sha = ring::sha256::Builder::new();
         let mut ciphers = ring::sig::Ciphers::new();
+        let mut hasher = ring::hash::Engine::new();
         let mut csrng = ring::csrng::Csrng::new();
-
         let mut trust_chain = cert::SimpleChain::<0>::parse(
             &[],
             cert::CertFormat::RiotX509,
@@ -425,7 +427,7 @@ mod test {
         let mut server = PaRot::new(Options {
             identity: &identity,
             reset: &reset,
-            sha: &sha,
+            hasher: &mut hasher,
             ciphers: &mut ciphers,
             csrng: &mut csrng,
             trust_chain: &mut trust_chain,

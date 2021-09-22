@@ -12,8 +12,13 @@ use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
 use crate::mem::OutOfMemory;
 
+#[cfg(feature = "arbitrary-derive")]
+use libfuzzer_sys::arbitrary::{self, Arbitrary};
+
 /// A cryptographic hashing algorithm.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 pub enum Algo {
     /// 256-bit SHA-2.
     Sha256,
@@ -22,6 +27,7 @@ pub enum Algo {
     /// 512-bit SHA-2.
     Sha512,
 }
+make_fuzz_safe!(Algo);
 
 impl Algo {
     /// The number of bits in a digest or HMAC of this strength.
