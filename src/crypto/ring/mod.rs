@@ -24,7 +24,6 @@ pub mod ecdsa;
 pub mod hash;
 #[cfg(feature = "std")]
 pub mod rsa;
-pub mod sha256;
 #[cfg(feature = "std")]
 pub mod sig;
 

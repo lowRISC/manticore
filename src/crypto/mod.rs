@@ -25,7 +25,6 @@
 
 pub mod csrng;
 pub mod hash;
-pub mod sha256;
 pub mod sig;
 
 #[cfg(feature = "ring")]
