@@ -32,6 +32,7 @@ pub trait Verify {
         signature: &[u8],
     ) -> Result<(), Error>;
 }
+impl dyn Verify {} // Ensure object-safe.
 
 /// An signing engine, already primed with a keypair.
 ///
@@ -55,6 +56,7 @@ pub trait Sign {
         signature: &mut [u8],
     ) -> Result<usize, Error>;
 }
+impl dyn Sign {} // Ensure object-safe.
 
 /// Public key parameters extracted from a certificate.
 ///
@@ -142,6 +144,7 @@ pub trait Ciphers {
         key: &PublicKeyParams,
     ) -> Option<&'a mut dyn Verify>;
 }
+impl dyn Ciphers {} // Ensure object-safe.
 
 /// A [`Ciphers`] that blindly accepts all signatures, for testing purposes.
 #[cfg(test)]

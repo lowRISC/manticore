@@ -12,8 +12,6 @@ use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use core::slice;
 
-use static_assertions::assert_obj_safe;
-
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 use zerocopy::LayoutVerified;
@@ -118,8 +116,7 @@ pub unsafe trait Arena {
     /// ```
     fn reset(&mut self);
 }
-
-assert_obj_safe!(Arena);
+impl dyn Arena {} // Ensure object-safety.
 
 /// Convenience functions for arenas, exposed as a trait.
 ///

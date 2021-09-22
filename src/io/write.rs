@@ -6,8 +6,6 @@
 
 use core::mem;
 
-use static_assertions::assert_obj_safe;
-
 use crate::io;
 use crate::io::endian::LeInt;
 
@@ -38,8 +36,7 @@ pub trait Write {
         val.write_to(self)
     }
 }
-
-assert_obj_safe!(Write);
+impl dyn Write {} // Ensure object-safety.
 
 impl<W: Write + ?Sized> Write for &'_ mut W {
     #[inline]

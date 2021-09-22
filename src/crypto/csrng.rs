@@ -22,3 +22,4 @@ pub trait Csrng {
     /// Fills `buf` with random bytes.
     fn fill(&mut self, buf: &mut [u8]) -> Result<(), Error>;
 }
+impl dyn Csrng {} // Ensure object-safe.

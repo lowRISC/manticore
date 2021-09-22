@@ -30,6 +30,7 @@ pub trait Identity {
     /// value of unspecified format.
     fn unique_device_identity(&self) -> &[u8];
 }
+impl dyn Identity {} // Ensure object-safe.
 
 /// Provides access to device reset-related information for a particular
 /// device.
@@ -45,6 +46,7 @@ pub trait Reset {
     /// best-effort.
     fn uptime(&self) -> Duration;
 }
+impl dyn Reset {} // Ensure object-safe.
 
 #[cfg(test)]
 pub(crate) mod fake {
