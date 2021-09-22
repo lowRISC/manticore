@@ -9,8 +9,6 @@
 use core::alloc::Layout;
 use core::mem;
 
-use static_assertions::assert_obj_safe;
-
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 use zerocopy::LayoutVerified;
@@ -39,7 +37,7 @@ pub trait Read {
     /// Returns the number of bytes still available to read.
     fn remaining_data(&self) -> usize;
 }
-assert_obj_safe!(Read);
+impl dyn Read {} // Ensure object-safety.
 
 /// Convenience functions for reading integers from a [`Read`].
 #[extend::ext(name = ReadInt)]

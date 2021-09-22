@@ -16,8 +16,6 @@ use core::alloc::Layout;
 use core::convert::TryInto;
 use core::mem;
 
-use static_assertions::assert_obj_safe;
-
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 use zerocopy::LayoutVerified;
@@ -143,7 +141,7 @@ pub unsafe trait Flash {
         Ok(())
     }
 }
-assert_obj_safe!(Flash);
+impl dyn Flash {} // Ensure object-safety.
 
 unsafe impl<F: Flash> Flash for &F {
     #[inline]

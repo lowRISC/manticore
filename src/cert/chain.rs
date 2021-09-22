@@ -43,6 +43,7 @@ pub trait TrustChain {
     /// Returns `None` if no such chain is present.
     fn signer(&mut self, slot: u8) -> Option<&mut dyn sig::Sign>;
 }
+impl dyn TrustChain {} // Ensure object-safe.
 
 /// A simple trust chain with only one slot.
 pub struct SimpleChain<'cert, const LEN: usize> {

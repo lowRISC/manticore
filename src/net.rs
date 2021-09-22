@@ -16,7 +16,6 @@
 #![allow(missing_docs)]
 
 use core::cell::Cell;
-use static_assertions::assert_obj_safe;
 
 use crate::io;
 use crate::io::Cursor;
@@ -130,7 +129,7 @@ pub trait HostPort<'req> {
     /// can be used to respond to the request.
     fn receive(&mut self) -> Result<&mut dyn HostRequest<'req>, Error>;
 }
-assert_obj_safe!(HostPort);
+impl dyn HostPort<'_> {} // Ensure object-safety.
 
 /// Provides the "request" half of a transaction with a host.
 ///
@@ -211,7 +210,7 @@ pub trait DevicePort {
     /// On success returns the response.
     fn receive_response(&mut self) -> Result<&mut dyn DeviceResponse, Error>;
 }
-assert_obj_safe!(DevicePort);
+impl dyn DevicePort {} // Ensure object-safety.
 
 /// Provides the "response" half of a transaction with a device.
 ///
