@@ -42,20 +42,14 @@ pub trait Read {
 assert_obj_safe!(Read);
 
 /// Convenience functions for reading integers from a [`Read`].
-pub trait ReadInt: Read {
+#[extend::ext(name = ReadInt)]
+pub impl<R: Read + ?Sized> R {
     /// Reads a little-endian integer.
-    ///
-    /// # Note
-    /// Do not implement this function yourself. Callers are not required to
-    /// call it in order to actually perform a read, so whether or not it is
-    /// called is an implementation detail.
     #[inline]
     fn read_le<I: LeInt>(&mut self) -> Result<I, io::Error> {
         I::read_from(self)
     }
 }
-
-impl<R: Read + ?Sized> ReadInt for R {}
 
 /// A [`Read`] that may, as an optimization, zero-copy read data for the
 /// lifetime `'a`.
@@ -90,7 +84,8 @@ pub unsafe trait ReadZero<'a>: Read + 'a {
 }
 
 /// Convenience functions for direct reads, exposed as a trait.
-pub trait ReadZeroExt<'a>: ReadZero<'a> {
+#[extend::ext(name = ReadZeroExt)]
+pub impl<'a, R: ReadZero<'a> + ?Sized> R {
     /// Reads a value of type `T`.
     ///
     /// See [`ArenaExt::alloc()`].
@@ -119,7 +114,6 @@ pub trait ReadZeroExt<'a>: ReadZero<'a> {
         Ok(lv.into_slice())
     }
 }
-impl<'a, R: ReadZero<'a> + ?Sized> ReadZeroExt<'a> for R {}
 
 impl<R: Read + ?Sized> Read for &mut R {
     #[inline]
