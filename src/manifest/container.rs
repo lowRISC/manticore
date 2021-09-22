@@ -12,8 +12,8 @@ use core::mem;
 use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 
-use crate::crypto::sha256;
-use crate::crypto::sha256::Hasher as _;
+use crate::crypto::hash;
+use crate::crypto::hash::EngineExt as _;
 use crate::crypto::sig;
 use crate::hardware::flash::Flash;
 use crate::hardware::flash::FlashExt as _;
@@ -44,20 +44,6 @@ pub struct Metadata {
     /// When minting a new manifest, a signing authority should make sure to
     /// bump this value.
     pub version_id: u32,
-}
-
-wire_enum! {
-    /// A hash type for a manifest [`Toc`]
-    ///
-    /// Note that we currently only support the SHA-256 variant, even though
-    /// Cerberus permits SHA-384 and SHA-512 as well.
-    #[allow(missing_docs)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub enum HashType: u8 {
-      Sha256 = 0b000,
-      Sha384 = 0b001,
-      Sha512 = 0b010,
-    }
 }
 
 /// A TOC entry's raw bits.
@@ -134,11 +120,33 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
     }
 
     /// Returns this entry's hash, if it has one.
-    pub fn hash(self) -> Option<&'toc sha256::Digest> {
+    pub fn hash(self) -> Option<&'entry [u8]> {
         match self.raw().hash_idx {
             0xff => None,
-            x => Some(&self.toc.hashes[x as usize]),
+            x => self.toc.hash(x as usize),
         }
+    }
+
+    /// Helper for checking that the hash specified in this entry matches the data
+    /// provided.
+    pub(crate) fn check_hash(
+        self,
+        data: &[u8],
+        hasher: &mut impl hash::Engine,
+    ) -> Result<(), Error> {
+        let expected = match self.hash() {
+            Some(h) => h,
+            None => return Ok(()),
+        };
+
+        let mut hasher = hasher.new_hash(self.toc.hash_type)?;
+        hasher.write(data)?;
+        hasher
+            .expect(expected)
+            .map_err(|error| Error::BadElementHash {
+                error,
+                toc_index: self.index(),
+            })
     }
 
     /// Returns an iterator over all of this entry's children.
@@ -187,9 +195,7 @@ impl<M> Copy for TocEntry<'_, '_, M> {}
 /// }
 /// ```
 ///
-/// The layout of the `TocEntry` type is described in [`TocEntry`]. `Digest` is
-/// a hash specified by `hash_type`. Currently, Manticore does not support hash
-/// types other than SHA-256. See [`HashType`] for more information.
+/// The layout of the `TocEntry` type is described in [`TocEntry`].
 ///
 /// The `entries` represent the actual entries to the table of contents; each
 /// entry refers to an *element* in the body of the PFM, describing where it is
@@ -206,7 +212,9 @@ impl<M> Copy for TocEntry<'_, '_, M> {}
 /// a valid [`Manifest`].
 pub struct Toc<'toc, M> {
     entries: &'toc [RawTocEntry],
-    hashes: &'toc [sha256::Digest],
+    // How this is interpreted is dependent on `hash_type`.
+    hashes: &'toc [u8],
+    hash_type: hash::Algo,
     _ph: PhantomData<fn() -> M>,
 }
 
@@ -220,7 +228,7 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
     fn check_invariants(&self) -> Result<(), Error> {
         for (i, entry) in self.entries.iter().enumerate() {
             if entry.hash_idx != 0xff
-                && self.hashes.len() <= entry.hash_idx as usize
+                && self.hash(entry.hash_idx as usize).is_none()
             {
                 return Err(Error::BadHashIndex { toc_index: i });
             }
@@ -252,6 +260,18 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
     /// Returns whether this `Toc` is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Returns the hash algorithm used in this `Toc`'s hashes.
+    pub fn hash_type(&self) -> hash::Algo {
+        self.hash_type
+    }
+
+    /// Returns the `i`th hash.
+    fn hash(&self, i: usize) -> Option<&[u8]> {
+        let start = i.checked_mul(self.hash_type.bytes())?;
+        let end = start.checked_add(self.hash_type.bytes())?;
+        self.hashes.get(start..end)
     }
 
     /// Returns the `i`th entry in this `Toc`.
@@ -335,15 +355,15 @@ impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Signed> {
     /// `buf` must be aligned to a four-byte boundary.
     pub fn parse_and_verify(
         flash: &'f F,
-        sha: &impl sha256::Builder,
+        hasher: &mut impl hash::Engine,
         sig_verify: &mut impl sig::Verify,
         toc_arena: &'f impl Arena,
         verify_arena: &impl Arena,
     ) -> Result<Self, Error> {
         let c = Self::parse_inner(flash, toc_arena)?;
 
-        c.verify_toc_hash(sha)?;
-        c.verify_signature(sha, sig_verify, verify_arena)?;
+        c.verify_toc_hash(hasher, verify_arena)?;
+        c.verify_signature(hasher, sig_verify, verify_arena)?;
 
         Ok(c)
     }
@@ -379,32 +399,37 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     /// Verifies the TOC hash for this `Container`.
     pub(crate) fn verify_toc_hash(
         &self,
-        sha: &impl sha256::Builder,
+        hasher: &mut impl hash::Engine,
+        verify_arena: &impl Arena,
     ) -> Result<(), Error> {
-        let mut toc_hash = [0; 32];
-        let mut toc_hasher = sha.new_hasher()?;
-        let toc_header = &self.header.as_bytes()[12..];
-        toc_hasher.write(toc_header)?;
-        toc_hasher.write(self.toc().entries.as_bytes())?;
-        toc_hasher.write(self.toc().hashes.as_bytes())?;
-        toc_hasher.finish(&mut toc_hash)?;
-
         let expected_hash_offset = mem::size_of::<RawHeader>()
             + mem::size_of_val(self.toc().entries)
             + mem::size_of_val(self.toc().hashes);
-        let mut expected_toc_hash = [0; 32];
-        self.flash
-            .read(expected_hash_offset as u32, &mut expected_toc_hash)?;
-        if expected_toc_hash != toc_hash {
-            return Err(Error::BadTocHash);
+        let expected_toc_hash = self.flash.read_slice::<u8>(
+            expected_hash_offset as u32,
+            self.toc().hash_type.bytes(),
+            verify_arena,
+        )?;
+
+        if !hasher.supports(self.toc.hash_type) {
+            return Err(Error::UnsupportedHashType(self.toc.hash_type));
         }
-        Ok(())
+
+        let mut toc_hasher = hasher.new_hash(self.toc.hash_type)?;
+        let toc_header = &self.header.as_bytes()[12..];
+        toc_hasher.write(toc_header)?;
+        toc_hasher.write(self.toc().entries.as_bytes())?;
+        toc_hasher.write(self.toc().hashes)?;
+
+        toc_hasher
+            .expect(expected_toc_hash)
+            .map_err(Error::BadTocHash)
     }
 
     /// Verifies the signature for this `Container`.
     pub(crate) fn verify_signature(
         &self,
-        sha: &impl sha256::Builder,
+        hasher: &mut impl hash::Engine,
         sig_verify: &mut impl sig::Verify,
         verify_arena: &impl Arena,
     ) -> Result<(), Error> {
@@ -413,7 +438,11 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
         let mut r = FlashIo::new(&self.flash)?;
         r.reslice(signed_region);
 
-        let mut hasher = sha.new_hasher()?;
+        // Currently hard-coded to SHA-256, but this is not the correct way
+        // to verify the signature; the signature is not a hash of hashes as
+        // specified, but we do not have a way to do this with our current
+        // APIs.
+        let mut hasher = hasher.new_hash(hash::Algo::Sha256)?;
         while r.remaining_data() > 0 {
             let to_read = r.remaining_data().min(16);
             r.read_bytes(&mut bytes[..to_read])?;
@@ -449,12 +478,12 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
             return Err(Error::OutOfRange);
         }
 
-        // TODO(#57): we don't deal with hash types that aren't SHA-256.
-        match HashType::from_wire_value(header.hash_type) {
-            Some(HashType::Sha256) => {}
-            Some(h) => return Err(Error::UnsupportedHashType(h)),
-            None => return Err(Error::OutOfRange),
-        }
+        let hash_type = match header.hash_type {
+            0b00 => hash::Algo::Sha256,
+            0b01 => hash::Algo::Sha384,
+            0b10 => hash::Algo::Sha512,
+            _ => return Err(Error::OutOfRange),
+        };
 
         // Unused values are currently required to be zeroed by the spec.
         if header.reserved1 != 0 || header.reserved2 != 0 {
@@ -469,15 +498,16 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
         )?;
         cursor += mem::size_of_val(entries) as u32;
 
-        let hashes = flash.read_slice::<sha256::Digest>(
+        let hashes = flash.read_slice::<u8>(
             cursor,
-            header.hash_count as usize,
+            header.hash_count as usize * hash_type.bytes(),
             toc_arena,
         )?;
 
         let toc = Toc {
             entries,
             hashes,
+            hash_type,
             _ph: PhantomData,
         };
         toc.check_invariants()?;
@@ -557,7 +587,7 @@ pub(crate) mod test {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn empty() {
-        let sha = ring::sha256::Builder::new();
+        let mut hasher = ring::hash::Engine::new();
         let (mut rsa, mut signer) =
             ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
@@ -566,12 +596,14 @@ pub(crate) mod test {
             "version_id": 42,
             "elements": []
         }"#).unwrap();
-        let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
+        let bytes = Ram(pfm
+            .sign(0x0, hash::Algo::Sha256, &mut hasher, &mut signer)
+            .unwrap());
         type Flash = Ram<Vec<u8>>;
 
         let container: Container<'_, Pfm, Flash> = Container::parse_and_verify(
             &bytes,
-            &sha,
+            &mut hasher,
             &mut rsa,
             &OutOfMemory,
             &OutOfMemory,
@@ -589,7 +621,7 @@ pub(crate) mod test {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn one_element() {
-        let sha = ring::sha256::Builder::new();
+        let mut hasher = ring::hash::Engine::new();
         let (mut rsa, mut signer) =
             ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
@@ -598,12 +630,14 @@ pub(crate) mod test {
             "version_id": 42,
             "elements": [{ "platform_id": "blah" }]
         }"#).unwrap();
-        let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
+        let bytes = Ram(pfm
+            .sign(0x0, hash::Algo::Sha256, &mut hasher, &mut signer)
+            .unwrap());
         type Flash = Ram<Vec<u8>>;
 
         let container: Container<'_, Pfm, Flash> = Container::parse_and_verify(
             &bytes,
-            &sha,
+            &mut hasher,
             &mut rsa,
             &OutOfMemory,
             &OutOfMemory,
@@ -628,7 +662,7 @@ pub(crate) mod test {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn with_child() {
-        let sha = ring::sha256::Builder::new();
+        let mut hasher = ring::hash::Engine::new();
         let (mut rsa, mut signer) =
             ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
@@ -643,12 +677,14 @@ pub(crate) mod test {
                 }]
             }]
         }"#).unwrap();
-        let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
+        let bytes = Ram(pfm
+            .sign(0x0, hash::Algo::Sha256, &mut hasher, &mut signer)
+            .unwrap());
         type Flash = Ram<Vec<u8>>;
 
         let container: Container<'_, Pfm, Flash> = Container::parse_and_verify(
             &bytes,
-            &sha,
+            &mut hasher,
             &mut rsa,
             &OutOfMemory,
             &OutOfMemory,

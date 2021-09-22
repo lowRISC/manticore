@@ -22,6 +22,7 @@ use serde::de::Deserialize;
 
 use structopt::StructOpt;
 
+use manticore::crypto::hash;
 use manticore::crypto::ring;
 use manticore::io::write::StdWrite;
 use manticore::io::ReadInt as _;
@@ -281,7 +282,7 @@ fn main() {
             let key = fs::read(key).expect("failed to open file");
             let mut signer = ring::rsa::Sign256::from_pkcs8(&key)
                 .expect("failed to parse key");
-            let sha = ring::sha256::Builder::new();
+            let mut hasher = ring::hash::Engine::new();
 
             let mut buf = Vec::new();
             input.read_to_end(&mut buf).expect("failed to read file");
@@ -289,7 +290,7 @@ fn main() {
                 ManifestType::Pfm => {
                     let pfm: owned::Pfm = serde_json::from_slice(&buf)
                         .expect("failed to parse PFM");
-                    pfm.sign(0x00, &sha, &mut signer)
+                    pfm.sign(0x00, hash::Algo::Sha256, &mut hasher, &mut signer)
                         .expect("failed to sign PFM")
                 }
             };
@@ -312,7 +313,7 @@ fn main() {
                     .expect("failed to parse key");
                 signer.verifier()
             });
-            let sha = ring::sha256::Builder::new();
+            let mut hasher = ring::hash::Engine::new();
 
             let mut buf = Vec::new();
             input.read_to_end(&mut buf).expect("failed to read file");
@@ -323,8 +324,9 @@ fn main() {
 
             match ManifestType::from_wire_value(manifest_type) {
                 Some(ManifestType::Pfm) => {
-                    let parse = owned::Pfm::parse(&buf, &sha, engine.as_mut())
-                        .expect("failed to parse PFM");
+                    let parse =
+                        owned::Pfm::parse(&buf, &mut hasher, engine.as_mut())
+                            .expect("failed to parse PFM");
 
                     if parse.bad_signature {
                         eprintln!("signature verification failed");

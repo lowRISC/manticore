@@ -15,7 +15,8 @@ use std::mem;
 
 use zerocopy::AsBytes;
 
-use crate::crypto::sha256;
+use crate::crypto::hash;
+use crate::crypto::hash::EngineExt as _;
 use crate::crypto::sig;
 use crate::hardware::flash::Flash;
 use crate::hardware::flash::Ram;
@@ -25,11 +26,10 @@ use crate::manifest;
 use crate::manifest::container::RawTocEntry;
 use crate::manifest::provenance;
 use crate::manifest::Error;
-use crate::manifest::HashType;
 use crate::manifest::Manifest;
 use crate::manifest::ManifestType;
 use crate::manifest::Metadata;
-use crate::mem::OutOfMemory;
+use crate::mem::BumpArena;
 use crate::protocol::wire::WireEnum;
 
 #[cfg(feature = "serde")]
@@ -174,14 +174,14 @@ pub enum EncodingError {
     EmptyRegion,
 
     /// Indicates an error while computing a hash.
-    HashError(sha256::Error),
+    HashError(hash::Error),
 
     /// Indicates an error while computing an RSA signature.
     SigError(sig::Error),
 }
 
-impl From<sha256::Error> for EncodingError {
-    fn from(e: sha256::Error) -> Self {
+impl From<hash::Error> for EncodingError {
+    fn from(e: hash::Error) -> Self {
         Self::HashError(e)
     }
 }
@@ -200,7 +200,7 @@ impl<E: Element> Container<E> {
     /// containing the parsed container.
     pub fn parse(
         bytes: &[u8],
-        sha: &impl sha256::Builder,
+        hasher: &mut impl hash::Engine,
         sig_verify: Option<&mut impl sig::Verify>,
     ) -> Result<Parse<E>, Error>
     where
@@ -217,24 +217,26 @@ impl<E: Element> Container<E> {
         };
 
         let ram = Ram(bytes);
+        let arena = BumpArena::new(vec![0; 2048]);
         let container = manifest::Container::<
             '_,
             E::Manifest,
             _,
             provenance::Adhoc,
-        >::parse(&ram, &OutOfMemory)?;
+        >::parse(&ram, &arena)?;
         // TODO(#58): Right now we ignore a bunch of "implied" fields in the
         // manifest, but we may want to either reject failures, use them,
         // or simply report them.
 
         parse.container.metadata = container.metadata();
-        parse.bad_toc_hash = container.verify_toc_hash(sha).is_err();
+        parse.bad_toc_hash = container.verify_toc_hash(hasher, &arena).is_err();
         if let Some(sig_verify) = sig_verify {
             parse.bad_signature = container
-                .verify_signature(sha, sig_verify, &OutOfMemory)
+                .verify_signature(hasher, sig_verify, &arena)
                 .is_err();
         }
 
+        let hash_algo = container.toc().hash_type();
         for (i, entry) in container.toc().entries().enumerate() {
             let expected = match entry.hash() {
                 Some(h) => h,
@@ -248,9 +250,9 @@ impl<E: Element> Container<E> {
                 .get(start..end)
                 .ok_or(Error::TooShort { toc_index: i })?;
 
-            let mut hash = [0; 32];
-            sha.hash_contiguous(bytes, &mut hash)?;
-            if &hash != expected {
+            let mut hash = vec![0; expected.len()];
+            hasher.contiguous_hash(hash_algo, bytes, &mut hash)?;
+            if hash != expected {
                 parse.bad_hashes.push(i);
             }
         }
@@ -266,7 +268,8 @@ impl<E: Element> Container<E> {
     pub fn sign(
         &self,
         padding_byte: u8,
-        sha: &impl sha256::Builder,
+        hash_type: hash::Algo,
+        hasher: &mut impl hash::Engine,
         signer: &mut impl sig::Sign,
     ) -> Result<Vec<u8>, EncodingError> {
         let mut bytes = Vec::new();
@@ -359,17 +362,20 @@ impl<E: Element> Container<E> {
         let mut toc = vec![
             index,
             hash_index,
-            HashType::Sha256.to_wire_value(),
+            match hash_type {
+                hash::Algo::Sha256 => 0b00,
+                hash::Algo::Sha384 => 0b01,
+                hash::Algo::Sha512 => 0b10,
+            },
             padding_byte,
         ];
-        let mut toc_hashes = Vec::with_capacity(
-            mem::size_of::<sha256::Digest>() * hash_index as usize,
-        );
+        let mut toc_hashes =
+            Vec::with_capacity(hash_type.bytes() * hash_index as usize);
 
         let header_len = bytes.len()
             + toc.len()
             + encoded.len() * mem::size_of::<RawTocEntry>()
-            + (hash_index as usize + 1) * mem::size_of::<sha256::Digest>();
+            + (hash_index as usize + 1) * hash_type.bytes();
         let header_len: u16 = header_len
             .try_into()
             .map_err(|_| EncodingError::OutOfSpace)?;
@@ -382,14 +388,14 @@ impl<E: Element> Container<E> {
             toc.extend_from_slice(entry.as_bytes());
 
             if entry.hash_idx != 0xff {
-                let mut hash = [0; 32];
-                sha.hash_contiguous(data, &mut hash)?;
+                let mut hash = vec![0; hash_type.bytes()];
+                hasher.contiguous_hash(hash_type, data, &mut hash)?;
                 toc_hashes.extend_from_slice(&hash);
             }
         }
         toc.extend_from_slice(&toc_hashes);
-        let mut toc_hash = [0; 32];
-        sha.hash_contiguous(&toc, &mut toc_hash)?;
+        let mut toc_hash = vec![0; hash_type.bytes()];
+        hasher.contiguous_hash(hash_type, &toc, &mut toc_hash)?;
         bytes.extend_from_slice(&toc);
         bytes.extend_from_slice(&toc_hash);
 
@@ -404,7 +410,7 @@ impl<E: Element> Container<E> {
 
         let mut signed = [0; 32];
         let mut signature = vec![0; signer.sig_bytes()];
-        sha.hash_contiguous(&bytes, &mut signed)?;
+        hasher.contiguous_hash(hash::Algo::Sha256, &bytes, &mut signed)?;
         let sig_len = signer.sign(&[&signed], &mut signature)?;
 
         // NOTE: Due to how manifests are constructed, we cannot use

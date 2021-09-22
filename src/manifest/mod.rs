@@ -73,7 +73,7 @@
 //! for use by tooling. The [`owned::Container`] type is the relevant entry
 //! point.
 
-use crate::crypto::sha256;
+use crate::crypto::hash;
 use crate::crypto::sig;
 use crate::hardware::flash;
 use crate::io;
@@ -85,7 +85,6 @@ use flash::Flash;
 
 mod container;
 pub use container::Container;
-pub use container::HashType;
 pub use container::Metadata;
 pub use container::Toc;
 pub use container::TocEntry;
@@ -132,7 +131,7 @@ pub enum Error {
     BadMagic(u16),
 
     /// Indicates that the overall TOC hash did not match the actual value.
-    BadTocHash,
+    BadTocHash(hash::Error),
 
     /// Indicates that a TOC entry in the manifest had an invalid parent.
     BadParent {
@@ -149,6 +148,8 @@ pub enum Error {
 
     /// Indicates that a TOC entry's hash did not match the actual value.
     BadElementHash {
+        /// The reason for the failure.
+        error: hash::Error,
         /// The index of the bad entry.
         toc_index: usize,
     },
@@ -175,14 +176,14 @@ pub enum Error {
 
     /// Indicates that a manifest contained a signature type not supported by
     /// the hash engine being used.
-    UnsupportedHashType(HashType),
+    UnsupportedHashType(hash::Algo),
 
     /// Indicates that the signature length is incompatible with either the
     /// given manifest length or the signature algorithm.
     BadSignatureLen,
 
     /// Indicates that an error occured inside of a hashing engine.
-    HashError(sha256::Error),
+    HashError(hash::Error),
 
     /// Indicates that a signature operation failed for some reason.
     SigError(sig::Error),
@@ -212,8 +213,8 @@ impl From<sig::Error> for Error {
     }
 }
 
-impl From<sha256::Error> for Error {
-    fn from(e: sha256::Error) -> Self {
+impl From<hash::Error> for Error {
+    fn from(e: hash::Error) -> Self {
         Self::HashError(e)
     }
 }

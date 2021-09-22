@@ -25,14 +25,13 @@ use zerocopy::AsBytes;
 use zerocopy::FromBytes;
 use zerocopy::LayoutVerified;
 
-use crate::crypto::sha256;
+use crate::crypto::hash;
 use crate::hardware::flash::Flash;
 use crate::hardware::flash::Region;
 use crate::manifest::provenance;
 use crate::manifest::provenance::Provenance;
 use crate::manifest::Container;
 use crate::manifest::Error;
-use crate::manifest::HashType;
 use crate::manifest::Manifest;
 use crate::manifest::ManifestType;
 use crate::manifest::Parse;
@@ -153,7 +152,7 @@ where
     /// present.
     pub fn platform_id<'a>(
         &'a self,
-        sha: &impl sha256::Builder,
+        hasher: &mut impl hash::Engine,
         arena: &'pfm impl Arena,
     ) -> Result<Option<PlatformId<'a, 'pfm>>, Error> {
         let entry =
@@ -191,15 +190,7 @@ where
         let id = &rest[..len];
 
         if P::AUTHENTICATED {
-            if let Some(expected) = entry.hash() {
-                let mut hash = [0; 32];
-                sha.hash_contiguous(&data, &mut hash)?;
-                if &hash != expected {
-                    return Err(Error::BadElementHash {
-                        toc_index: entry.index(),
-                    });
-                }
-            }
+            entry.check_hash(data, hasher)?;
         }
 
         Ok(Some(PlatformId {
@@ -215,7 +206,7 @@ where
     /// is present.
     pub fn flash_device_info<'a>(
         &'a self,
-        sha: &impl sha256::Builder,
+        hasher: &mut impl hash::Engine,
         arena: &'pfm impl Arena,
     ) -> Result<Option<FlashDeviceInfo<'a, 'pfm>>, Error> {
         let entry =
@@ -245,15 +236,7 @@ where
                 })?;
 
         if P::AUTHENTICATED {
-            if let Some(expected) = entry.hash() {
-                let mut hash = [0; 32];
-                sha.hash_contiguous(&data, &mut hash)?;
-                if &hash != expected {
-                    return Err(Error::BadElementHash {
-                        toc_index: entry.index(),
-                    });
-                }
-            }
+            entry.check_hash(data, hasher)?;
         }
 
         Ok(Some(FlashDeviceInfo {
@@ -346,7 +329,7 @@ where
     /// and potentially allocating it on `arena`.
     pub fn read(
         self,
-        sha: &impl sha256::Builder,
+        hasher: &mut impl hash::Engine,
         arena: &'pfm impl Arena,
     ) -> Result<AllowableFw<'a, 'pfm, F, P>, Error> {
         let data = self.pfm.container.flash().read_direct(
@@ -378,15 +361,7 @@ where
         let fw_id = &rest[..id_len];
 
         if P::AUTHENTICATED {
-            if let Some(expected) = self.entry.hash() {
-                let mut hash = [0; 32];
-                sha.hash_contiguous(&data, &mut hash)?;
-                if &hash != expected {
-                    return Err(Error::BadElementHash {
-                        toc_index: self.entry.index(),
-                    });
-                }
-            }
+            self.entry.check_hash(data, hasher)?;
         }
 
         Ok(AllowableFw {
@@ -476,7 +451,7 @@ where
     /// and potentially allocating it on `arena`.
     pub fn read(
         self,
-        sha: &impl sha256::Builder,
+        hasher: &mut impl hash::Engine,
         arena: &'pfm impl Arena,
     ) -> Result<FwVersion<'a, 'pfm, F, P>, Error> {
         #[rustfmt::skip]
@@ -486,15 +461,7 @@ where
             mem::align_of::<u32>(),
         )?;
         if P::AUTHENTICATED {
-            if let Some(expected) = self.entry.hash() {
-                let mut hash = [0; 32];
-                sha.hash_contiguous(data, &mut hash)?;
-                if &hash != expected {
-                    return Err(Error::BadElementHash {
-                        toc_index: self.entry.index(),
-                    });
-                }
-            }
+            self.entry.check_hash(data, hasher)?;
         }
 
         #[derive(FromBytes)]
@@ -564,12 +531,18 @@ where
                             toc_index: self.entry.index(),
                         })?;
 
-                // TODO(#57): we don't deal with hash types that aren't SHA-256.
-                match HashType::from_wire_value(img_header.hash_type) {
-                    Some(HashType::Sha256) => {}
-                    Some(h) => return Err(Error::UnsupportedHashType(h)),
-                    None => return Err(Error::OutOfRange),
+                let hash_type = match img_header.hash_type {
+                    0b00 => hash::Algo::Sha256,
+                    0b01 => hash::Algo::Sha384,
+                    0b10 => hash::Algo::Sha512,
+                    _ => return Err(Error::OutOfRange),
+                };
+                if rest.len() < hash_type.bytes() {
+                    return Err(Error::TooShort {
+                        toc_index: self.entry.index(),
+                    });
                 }
+                let (_hash, rest) = rest.split_at(hash_type.bytes());
 
                 let ranges_len = img_header.region_count as usize
                     * mem::size_of::<FwRegionRange>();
@@ -596,6 +569,7 @@ where
                     image_region_offsets[(i + 1) as usize] =
                         image_region_offsets[i as usize]
                             + ranges_len as u32
+                            + hash_type.bytes() as u32
                             + mem::size_of::<FwRegionHeader>() as u32;
                 }
             }
@@ -685,12 +659,20 @@ impl<'a, 'pfm, F, P> FwVersion<'a, 'pfm, F, P> {
         let (header, bytes) =
             LayoutVerified::<_, FwRegionHeader>::new_from_prefix(bytes)
                 .unwrap();
+        let hash_type = match header.hash_type {
+            0b00 => hash::Algo::Sha256,
+            0b01 => hash::Algo::Sha384,
+            0b10 => hash::Algo::Sha512,
+            _ => unreachable!(),
+        };
+        let (hash, bytes) = bytes.split_at(hash_type.bytes());
         let ranges =
             LayoutVerified::<_, [FwRegionRange]>::new_slice(bytes).unwrap();
         debug_assert!(ranges.len() == header.region_count as usize);
 
         Some(FwRegion {
             header: header.into_ref(),
+            hash,
             ranges: ranges.into_slice(),
         })
     }
@@ -754,6 +736,7 @@ impl RwRegion {
 /// Currently, Manticore only supports SHA-256 hashes here.
 pub struct FwRegion<'a> {
     header: &'a FwRegionHeader,
+    hash: &'a [u8],
     ranges: &'a [FwRegionRange],
 }
 
@@ -764,7 +747,6 @@ struct FwRegionHeader {
     region_count: u8,
     flags: u8,
     _reserved: u8,
-    image_hash: sha256::Digest,
 }
 
 #[derive(FromBytes)]
@@ -787,8 +769,14 @@ impl FwRegion<'_> {
     }
 
     /// Returns the hash that this region is expected to conform to.
-    pub fn image_hash(&self) -> &sha256::Digest {
-        &self.header.image_hash
+    pub fn image_hash(&self) -> (hash::Algo, &[u8]) {
+        let hash_type = match self.header.hash_type {
+            0b00 => hash::Algo::Sha256,
+            0b01 => hash::Algo::Sha384,
+            0b10 => hash::Algo::Sha512,
+            _ => unreachable!(),
+        };
+        (hash_type, self.hash)
     }
 
     /// Returns the number of flash regions that actually make up this image
@@ -822,7 +810,6 @@ mod test {
     use testutil::data::keys;
 
     use crate::crypto::ring;
-    use crate::crypto::sha256::Builder as _;
     use crate::hardware::flash::Ram;
     use crate::io::Write as _;
     use crate::manifest::owned;
@@ -835,7 +822,7 @@ mod test {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn empty() {
-        let sha = ring::sha256::Builder::new();
+        let mut hasher = ring::hash::Engine::new();
         let (mut rsa, mut signer) =
             ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
@@ -844,11 +831,13 @@ mod test {
             "version_id": 42,
             "elements": []
         }"#).unwrap();
-        let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
+        let bytes = Ram(pfm
+            .sign(0x0, hash::Algo::Sha256, &mut hasher, &mut signer)
+            .unwrap());
 
         let container = Container::parse_and_verify(
             &bytes,
-            &sha,
+            &mut hasher,
             &mut rsa,
             &OutOfMemory,
             &OutOfMemory,
@@ -856,15 +845,21 @@ mod test {
         .unwrap();
         let pfm = ParsedPfm::new(container);
 
-        assert!(pfm.platform_id(&sha, &OutOfMemory).unwrap().is_none());
-        assert!(pfm.flash_device_info(&sha, &OutOfMemory).unwrap().is_none());
+        assert!(pfm
+            .platform_id(&mut hasher, &OutOfMemory)
+            .unwrap()
+            .is_none());
+        assert!(pfm
+            .flash_device_info(&mut hasher, &OutOfMemory)
+            .unwrap()
+            .is_none());
         assert_eq!(pfm.allowable_fws().count(), 0);
     }
 
     #[test]
     #[cfg_attr(miri, ignore)]
     fn platform_id() {
-        let sha = ring::sha256::Builder::new();
+        let mut hasher = ring::hash::Engine::new();
         let (mut rsa, mut signer) =
             ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
@@ -873,11 +868,13 @@ mod test {
             "version_id": 42,
             "elements": [{ "platform_id": "my pfm" }]
         }"#).unwrap();
-        let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
+        let bytes = Ram(pfm
+            .sign(0x0, hash::Algo::Sha256, &mut hasher, &mut signer)
+            .unwrap());
 
         let container = Container::parse_and_verify(
             &bytes,
-            &sha,
+            &mut hasher,
             &mut rsa,
             &OutOfMemory,
             &OutOfMemory,
@@ -885,14 +882,14 @@ mod test {
         .unwrap();
         let pfm = ParsedPfm::new(container);
 
-        let id = pfm.platform_id(&sha, &OutOfMemory).unwrap().unwrap();
+        let id = pfm.platform_id(&mut hasher, &OutOfMemory).unwrap().unwrap();
         assert_eq!(id.id_string(), b"my pfm");
     }
 
     #[test]
     #[cfg_attr(miri, ignore)]
     fn fw_versions() {
-        let sha = ring::sha256::Builder::new();
+        let mut hasher = ring::hash::Engine::new();
         let (mut rsa, mut signer) =
             ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
 
@@ -950,11 +947,13 @@ mod test {
                 }
             ]
         }"#).unwrap();
-        let bytes = Ram(pfm.sign(0x0, &sha, &mut signer).unwrap());
+        let bytes = Ram(pfm
+            .sign(0x0, hash::Algo::Sha256, &mut hasher, &mut signer)
+            .unwrap());
 
         let container = Container::parse_and_verify(
             &bytes,
-            &sha,
+            &mut hasher,
             &mut rsa,
             &OutOfMemory,
             &OutOfMemory,
@@ -962,8 +961,10 @@ mod test {
         .unwrap();
         let pfm = ParsedPfm::new(container);
 
-        let device =
-            pfm.flash_device_info(&sha, &OutOfMemory).unwrap().unwrap();
+        let device = pfm
+            .flash_device_info(&mut hasher, &OutOfMemory)
+            .unwrap()
+            .unwrap();
         assert_eq!(device.blank_byte(), 0xff);
 
         let mut allowed_fws = pfm.allowable_fws().map(Some).collect::<Vec<_>>();
@@ -972,7 +973,7 @@ mod test {
         let allowed = allowed_fws[0]
             .take()
             .unwrap()
-            .read(&sha, &OutOfMemory)
+            .read(&mut hasher, &OutOfMemory)
             .unwrap();
         assert_eq!(allowed.firmware_id(), b"my cool firmware");
 
@@ -982,7 +983,11 @@ mod test {
             allowed.firmware_versions().map(Some).collect::<Vec<_>>();
         assert_eq!(allowed_fws.len(), 1);
 
-        let fw = versions[0].take().unwrap().read(&sha, &arena).unwrap();
+        let fw = versions[0]
+            .take()
+            .unwrap()
+            .read(&mut hasher, &arena)
+            .unwrap();
         assert_eq!(
             fw.version(),
             (Region::new(0x12345678, 9), b"ver-1.2.2".as_ref())
@@ -997,13 +1002,13 @@ mod test {
         let imgs = fw.image_regions().collect::<Vec<_>>();
         assert_eq!(imgs.len(), 2);
 
-        assert_eq!(imgs[0].image_hash(), &[42; 32]);
+        assert_eq!(imgs[0].image_hash(), (hash::Algo::Sha256, &[42; 32][..]));
         assert_eq!(imgs[0].region_count(), 2);
         assert_eq!(imgs[0].region(0), Some(Region::new(0x10000, 0x1000)));
         assert_eq!(imgs[0].region(1), Some(Region::new(0x18000, 0x800)));
         assert!(imgs[0].region(2).is_none());
 
-        assert_eq!(imgs[1].image_hash(), &[77; 32]);
+        assert_eq!(imgs[1].image_hash(), (hash::Algo::Sha256, &[77; 32][..]));
         assert_eq!(imgs[1].region_count(), 2);
         assert_eq!(imgs[1].region(0), Some(Region::new(0x20000, 0x800)));
         assert_eq!(imgs[1].region(1), Some(Region::new(0x28000, 0x1000)));
@@ -1013,7 +1018,7 @@ mod test {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn baked_pfm1() {
-        let sha = ring::sha256::Builder::new();
+        let mut hasher = ring::hash::Engine::new();
         let (mut rsa, mut signer) =
             ring::rsa::from_keypair(keys::KEY1_RSA_KEYPAIR);
         let mut arena = vec![0; 1024];
@@ -1024,7 +1029,7 @@ mod test {
         // schemes, so we disable signature verification (for now).
         /*let container = Container::parse_and_verify(
             &bytes,
-            &sha,
+            &mut hasher,
             &mut rsa,
             &arena,
             &OutOfMemory,
@@ -1033,8 +1038,10 @@ mod test {
         let container = Container::parse(&bytes, &arena).unwrap();
         let pfm = ParsedPfm::new(container);
 
-        let device =
-            pfm.flash_device_info(&sha, &OutOfMemory).unwrap().unwrap();
+        let device = pfm
+            .flash_device_info(&mut hasher, &OutOfMemory)
+            .unwrap()
+            .unwrap();
         assert_eq!(device.blank_byte(), 0xff);
 
         let mut allowed_fws = pfm.allowable_fws().map(Some).collect::<Vec<_>>();
@@ -1043,7 +1050,7 @@ mod test {
         let allowed = allowed_fws[0]
             .take()
             .unwrap()
-            .read(&sha, &OutOfMemory)
+            .read(&mut hasher, &OutOfMemory)
             .unwrap();
         assert_eq!(allowed.firmware_id(), b"Firmware");
 
@@ -1053,7 +1060,11 @@ mod test {
             allowed.firmware_versions().map(Some).collect::<Vec<_>>();
         assert_eq!(allowed_fws.len(), 1);
 
-        let fw = versions[0].take().unwrap().read(&sha, &arena).unwrap();
+        let fw = versions[0]
+            .take()
+            .unwrap()
+            .read(&mut hasher, &arena)
+            .unwrap();
         assert_eq!(
             fw.version(),
             (Region::new(0x12345, 7), b"Testing".as_ref())
