@@ -17,6 +17,7 @@ use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
+use crate::protocol::NoSpecificError;
 use crate::protocol::Request;
 use crate::protocol::Response;
 
@@ -38,6 +39,7 @@ pub enum FirmwareVersion {}
 impl<'wire> Command<'wire> for FirmwareVersion {
     type Req = FirmwareVersionRequest;
     type Resp = FirmwareVersionResponse<'wire>;
+    type Error = NoSpecificError;
 }
 
 /// The [`FirmwareVersion`] request.

@@ -20,6 +20,7 @@ use crate::mem::ArenaExt as _;
 use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
+use crate::protocol::ChallengeError;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Request;
@@ -38,6 +39,7 @@ pub enum GetDigests {}
 impl<'wire> Command<'wire> for GetDigests {
     type Req = GetDigestsRequest;
     type Resp = GetDigestsResponse<'wire>;
+    type Error = ChallengeError;
 }
 
 wire_enum! {

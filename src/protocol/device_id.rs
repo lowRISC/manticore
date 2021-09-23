@@ -16,6 +16,7 @@ use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
+use crate::protocol::NoSpecificError;
 use crate::protocol::Request;
 use crate::protocol::Response;
 
@@ -37,6 +38,7 @@ pub enum DeviceId {}
 impl Command<'_> for DeviceId {
     type Req = DeviceIdRequest;
     type Resp = DeviceIdResponse;
+    type Error = NoSpecificError;
 }
 
 /// The [`DeviceId`] request.

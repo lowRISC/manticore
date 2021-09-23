@@ -18,6 +18,7 @@ use crate::mem::Arena;
 use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
+use crate::protocol::ChallengeError;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Request;
@@ -41,6 +42,7 @@ pub enum KeyExchange {}
 impl<'wire> Command<'wire> for KeyExchange {
     type Req = KeyExchangeRequest<'wire>;
     type Resp = KeyExchangeResponse<'wire>;
+    type Error = ChallengeError;
 }
 
 wire_enum! {

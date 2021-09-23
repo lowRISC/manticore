@@ -20,6 +20,7 @@ use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
+use crate::protocol::NoSpecificError;
 use crate::protocol::Request;
 use crate::protocol::Response;
 
@@ -41,6 +42,7 @@ pub enum DeviceUptime {}
 impl<'wire> Command<'wire> for DeviceUptime {
     type Req = DeviceUptimeRequest;
     type Resp = DeviceUptimeResponse;
+    type Error = NoSpecificError;
 }
 
 /// The [`DeviceUptime`] request.

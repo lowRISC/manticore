@@ -16,6 +16,7 @@ use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
+use crate::protocol::NoSpecificError;
 use crate::protocol::Request;
 use crate::protocol::Response;
 
@@ -32,6 +33,7 @@ pub enum GetHostState {}
 impl Command<'_> for GetHostState {
     type Req = GetHostStateRequest;
     type Resp = GetHostStateResponse;
+    type Error = NoSpecificError;
 }
 
 /// The [`GetHostState`] request.

@@ -18,6 +18,7 @@ use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
+use crate::protocol::NoSpecificError;
 use crate::protocol::Request;
 use crate::protocol::Response;
 
@@ -34,6 +35,7 @@ pub enum RequestCounter {}
 impl<'wire> Command<'wire> for RequestCounter {
     type Req = RequestCounterRequest;
     type Resp = RequestCounterResponse;
+    type Error = NoSpecificError;
 }
 
 /// The [`RequestCounter`] request.

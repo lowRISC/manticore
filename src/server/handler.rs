@@ -33,7 +33,7 @@
 //! - It parses the rest of `req` as a `MyCommand::Req`, and passes it and the
 //!   server context into the closure.
 //! - The closure executes, which returns
-//!   `Result<MyCommand::Resp, protocol::Error>`.
+//!   `Result<MyCommand::Resp, protocol::Error<MyCommand::Error>>`.
 //! - The resulting response or error is sent using `resp`.
 //! - If no handler is chosen, an error is returned.
 //!
@@ -165,6 +165,8 @@ mod sealed {
 pub type ReqOf<'a, C> = <C as protocol::Command<'a>>::Req;
 #[doc(hidden)]
 pub type RespOf<'a, C> = <C as protocol::Command<'a>>::Resp;
+#[doc(hidden)]
+pub type ErrOf<'a, C> = protocol::Error<<C as protocol::Command<'a>>::Error>;
 
 /// Context for a request, i.e., all relevant variables for handling a request.
 pub struct Context<'req, Buf, Req, Server, Arena> {
@@ -224,7 +226,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
         C: for<'c> protocol::Command<'c>,
         F: FnOnce(
             Context<'req, (), ReqOf<'req, C>, Server, Arena>,
-        ) -> Result<RespOf<'out, C>, protocol::Error>,
+        ) -> Result<RespOf<'out, C>, ErrOf<'out, C>>,
         'srv: 'out,
         'req: 'out,
     {
@@ -242,7 +244,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
         C: for<'c> protocol::Command<'c>,
         F: FnOnce(
             Context<'req, &'req [u8], ReqOf<'req, C>, Server, Arena>,
-        ) -> Result<RespOf<'out, C>, protocol::Error>,
+        ) -> Result<RespOf<'out, C>, ErrOf<'out, C>>,
         'srv: 'out,
         'req: 'out,
     {
@@ -293,7 +295,7 @@ where
         ctx: Ctx,
     ) -> Result<(), Error>
     where
-        F: FnOnce(Ctx) -> Result<RespOf<'out, Command>, protocol::Error>,
+        F: FnOnce(Ctx) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
     {
         match (self.handler)(ctx) {
             Ok(msg) => {
@@ -333,7 +335,7 @@ where
     Command: for<'c> protocol::Command<'c>,
     F: FnOnce(
         Context<'req, (), ReqOf<'req, Command>, Server, Arena>,
-    ) -> Result<RespOf<'out, Command>, protocol::Error>,
+    ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
 {
     #[inline]
     fn run_with_header(
@@ -372,7 +374,7 @@ where
     Command: for<'c> protocol::Command<'c>,
     F: FnOnce(
         Context<'req, &'req [u8], ReqOf<'req, Command>, Server, Arena>,
-    ) -> Result<RespOf<'out, Command>, protocol::Error>,
+    ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
 {
     #[inline]
     fn run_with_header(
