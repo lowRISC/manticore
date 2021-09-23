@@ -14,6 +14,7 @@ use crate::mem::ArenaExt as _;
 use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
+use crate::protocol::ChallengeError;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Request;
@@ -32,6 +33,7 @@ pub enum GetCert {}
 impl<'wire> Command<'wire> for GetCert {
     type Req = GetCertRequest;
     type Resp = GetCertResponse<'wire>;
+    type Error = ChallengeError;
 }
 
 /// The [`GetCert`] request.

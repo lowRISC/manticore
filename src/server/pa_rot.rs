@@ -142,7 +142,7 @@ impl<'a> PaRot<'a> {
                 if ctx.req.reset_type != ResetType::Local
                     || ctx.req.port_id != 0
                 {
-                    return Err(UNSPECIFIED);
+                    return Err(protocol::Error::OutOfRange);
                 }
 
                 Ok(ResetCounterResponse {
@@ -152,7 +152,7 @@ impl<'a> PaRot<'a> {
             .handle::<protocol::DeviceUptime, _>(|ctx| {
                 // NOTE: Currently, we only handle port 0, the "self" port.
                 if ctx.req.port_id != 0 {
-                    return Err(UNSPECIFIED);
+                    return Err(protocol::Error::OutOfRange);
                 }
 
                 Ok(protocol::device_uptime::DeviceUptimeResponse {
@@ -193,7 +193,7 @@ impl<'a> PaRot<'a> {
             .opts
             .identity
             .vendor_firmware_version(req.index)
-            .ok_or(UNSPECIFIED)?;
+            .ok_or(protocol::Error::OutOfRange)?;
         Ok(FirmwareVersionResponse { version })
     }
 
@@ -232,24 +232,29 @@ impl<'a> PaRot<'a> {
         &mut self,
         arena: &'req impl Arena,
         req: &protocol::get_digests::GetDigestsRequest,
-    ) -> Result<protocol::get_digests::GetDigestsResponse<'req>, protocol::Error>
-    {
+    ) -> Result<
+        protocol::get_digests::GetDigestsResponse<'req>,
+        protocol::Error<protocol::ChallengeError>,
+    > {
         let digests_len = self
             .opts
             .trust_chain
             .chain_len(req.slot)
-            .ok_or(UNSPECIFIED)?
+            .ok_or(protocol::ChallengeError::UnknownChain)?
             .get();
         let digests = arena
-            .alloc_slice::<[u8; hash::Algo::Sha256.bytes()]>(digests_len)
-            .map_err(|_| UNSPECIFIED)?;
+            .alloc_slice::<[u8; hash::Algo::Sha256.bytes()]>(digests_len)?;
         for (i, digest) in digests.iter_mut().enumerate() {
-            let cert =
-                self.opts.trust_chain.cert(req.slot, i).ok_or(UNSPECIFIED)?;
-            self.opts
-                .hasher
-                .contiguous_hash(hash::Algo::Sha256, cert.raw(), digest)
-                .map_err(|_| UNSPECIFIED)?;
+            let cert = self
+                .opts
+                .trust_chain
+                .cert(req.slot, i)
+                .ok_or(protocol::ChallengeError::UnknownChain)?;
+            self.opts.hasher.contiguous_hash(
+                hash::Algo::Sha256,
+                cert.raw(),
+                digest,
+            )?;
         }
 
         self.key_exchange = Some(req.key_exchange);
@@ -259,12 +264,15 @@ impl<'a> PaRot<'a> {
     fn handle_cert(
         &mut self,
         req: &protocol::get_cert::GetCertRequest,
-    ) -> Result<protocol::get_cert::GetCertResponse, protocol::Error> {
+    ) -> Result<
+        protocol::get_cert::GetCertResponse,
+        protocol::Error<protocol::ChallengeError>,
+    > {
         let cert = self
             .opts
             .trust_chain
             .cert(req.slot, req.cert_number as usize)
-            .ok_or(UNSPECIFIED)?;
+            .ok_or(protocol::ChallengeError::UnknownChain)?;
 
         let start = cert.raw().len().min(req.offset as usize);
         let end = cert
@@ -283,13 +291,18 @@ impl<'a> PaRot<'a> {
         arena: &'req impl Arena,
         req: &protocol::challenge::ChallengeRequest,
         req_buf: &[u8],
-    ) -> Result<protocol::challenge::ChallengeResponse<'req>, protocol::Error>
-    {
+    ) -> Result<
+        protocol::challenge::ChallengeResponse<'req>,
+        protocol::Error<protocol::ChallengeError>,
+    > {
         use protocol::challenge::*;
-        let signer =
-            self.opts.trust_chain.signer(req.slot).ok_or(UNSPECIFIED)?;
-        let nonce = arena.alloc::<[u8; 32]>().map_err(|_| UNSPECIFIED)?;
-        self.opts.csrng.fill(nonce).map_err(|_| UNSPECIFIED)?;
+        let signer = self
+            .opts
+            .trust_chain
+            .signer(req.slot)
+            .ok_or(protocol::ChallengeError::UnknownChain)?;
+        let nonce = arena.alloc::<[u8; 32]>()?;
+        self.opts.csrng.fill(nonce)?;
 
         let tbs = ChallengeResponseTbs {
             slot: req.slot,
@@ -300,21 +313,14 @@ impl<'a> PaRot<'a> {
             pmr0: self.opts.pmr0,
         };
 
-        let signature = arena
-            .alloc_slice::<u8>(signer.sig_bytes())
-            .map_err(|_| UNSPECIFIED)?;
-        let sig_len = tbs
-            .as_iovec_with(|[a, b, c, d]| {
-                signer.sign(&[req_buf, a, b, c, d], signature)
-            })
-            .map_err(|_| UNSPECIFIED)?;
+        let signature = arena.alloc_slice::<u8>(signer.sig_bytes())?;
+        let sig_len = tbs.as_iovec_with(|[a, b, c, d]| {
+            signer.sign(&[req_buf, a, b, c, d], signature)
+        })?;
         let signature = &signature[..sig_len];
 
         if let Some(KeyExchangeAlgo::Ecdh) = self.key_exchange {
-            self.opts
-                .session
-                .create_session(req.nonce, tbs.nonce)
-                .map_err(|_| UNSPECIFIED)?;
+            self.opts.session.create_session(req.nonce, tbs.nonce)?;
             self.current_cert_slot = Some(tbs.slot);
         }
 
@@ -327,7 +333,7 @@ impl<'a> PaRot<'a> {
         req: &protocol::key_exchange::KeyExchangeRequest,
     ) -> Result<
         protocol::key_exchange::KeyExchangeResponse<'req>,
-        protocol::Error,
+        protocol::Error<protocol::ChallengeError>,
     > {
         use protocol::key_exchange::*;
         match req {
@@ -335,56 +341,48 @@ impl<'a> PaRot<'a> {
                 hmac_algorithm,
                 pk_req,
             } => {
-                let slot = self.current_cert_slot.ok_or(UNSPECIFIED)?;
-                let signer =
-                    self.opts.trust_chain.signer(slot).ok_or(UNSPECIFIED)?;
-
-                let pk_resp = arena
-                    .alloc_slice(self.opts.session.ephemeral_bytes())
-                    .map_err(|_| UNSPECIFIED)?;
-                let key_len = self
+                let slot = self
+                    .current_cert_slot
+                    .ok_or(protocol::Error::OutOfRange)?;
+                let signer = self
                     .opts
-                    .session
-                    .begin_ecdh(pk_resp)
-                    .map_err(|_| UNSPECIFIED)?;
-                let pk_resp = &pk_resp[..key_len];
-                self.opts
-                    .session
-                    .finish_ecdh(*hmac_algorithm, pk_req)
-                    .map_err(|_| UNSPECIFIED)?;
+                    .trust_chain
+                    .signer(slot)
+                    .ok_or(protocol::ChallengeError::UnknownChain)?;
 
-                let signature = arena
-                    .alloc_slice(signer.sig_bytes())
-                    .map_err(|_| UNSPECIFIED)?;
-                signer
-                    .sign(&[pk_req, pk_resp], signature)
-                    .map_err(|_| UNSPECIFIED)?;
+                let pk_resp =
+                    arena.alloc_slice(self.opts.session.ephemeral_bytes())?;
+                let key_len = self.opts.session.begin_ecdh(pk_resp)?;
+                let pk_resp = &pk_resp[..key_len];
+                self.opts.session.finish_ecdh(*hmac_algorithm, pk_req)?;
+
+                let signature = arena.alloc_slice(signer.sig_bytes())?;
+                signer.sign(&[pk_req, pk_resp], signature)?;
 
                 let chain_len = self
                     .opts
                     .trust_chain
                     .chain_len(slot)
-                    .ok_or(UNSPECIFIED)?
+                    .ok_or(protocol::Error::OutOfRange)?
                     .get();
                 let alias_cert = self
                     .opts
                     .trust_chain
                     .cert(slot, chain_len - 1)
-                    .ok_or(UNSPECIFIED)?;
+                    .ok_or(protocol::Error::OutOfRange)?;
 
-                let alias_cert_hmac =
-                    hmac_algorithm.alloc(arena).map_err(|_| UNSPECIFIED)?;
-                let (_, hmac_key) =
-                    self.opts.session.hmac_key().ok_or(UNSPECIFIED)?;
-                self.opts
-                    .hasher
-                    .contiguous_hmac(
-                        *hmac_algorithm,
-                        hmac_key,
-                        alias_cert.raw(),
-                        alias_cert_hmac,
-                    )
-                    .map_err(|_| UNSPECIFIED)?;
+                let alias_cert_hmac = hmac_algorithm.alloc(arena)?;
+                let (_, hmac_key) = self
+                    .opts
+                    .session
+                    .hmac_key()
+                    .ok_or(protocol::Error::Internal)?;
+                self.opts.hasher.contiguous_hmac(
+                    *hmac_algorithm,
+                    hmac_key,
+                    alias_cert.raw(),
+                    alias_cert_hmac,
+                )?;
 
                 Ok(KeyExchangeResponse::SessionKey {
                     pk_resp,
@@ -392,13 +390,7 @@ impl<'a> PaRot<'a> {
                     alias_cert_hmac,
                 })
             }
-            _ => Err(UNSPECIFIED),
+            _ => Err(protocol::Error::Internal),
         }
     }
 }
-
-/// Stopgap error code until we have richer errors for Manticore and Cerberus.
-const UNSPECIFIED: protocol::Error = protocol::Error {
-    code: protocol::ErrorCode::Unspecified,
-    data: [0; 4],
-};

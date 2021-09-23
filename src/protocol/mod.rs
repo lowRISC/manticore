@@ -63,6 +63,10 @@ pub use macros::fuzz::FuzzSafe;
 #[macro_use]
 pub mod wire;
 
+#[macro_use]
+mod error;
+pub use error::*;
+
 pub mod device_id;
 pub use device_id::DeviceId;
 
@@ -104,7 +108,7 @@ pub use request_counter::RequestCounter;
 /// A Cerberus command is identified by two types, each of which has a
 /// corresponding [`CommandType`]:
 /// - A unique request type.
-/// - A response type, which may be [`Error`].
+/// - A response type, which may be [`Ack`].
 ///
 /// This trait is not implemented by any of the request or response types, but
 /// is intead implemented by uninhabited types that represent pairs of requests
@@ -113,13 +117,18 @@ pub trait Command<'req> {
     /// The unique request type for this `Command`.
     type Req: Request<'req>;
     /// The response type for this `Command`, which will either be unique or
-    /// [`Error`].
+    /// [`Ack`].
     type Resp: Response<'req>;
+
+    /// The message-specific errors for this `Command`.
+    ///
+    /// In general, this will just be [`NoSpecificError`].
+    type Error: error::SpecificError;
 }
 
 /// A Cerberus request.
 ///
-/// See [`Command`](trait.Command.html).
+/// See [`Command`].
 pub trait Request<'req>: FromWire<'req> + ToWire {
     /// The unique [`CommandType`] for this `Request`.
     const TYPE: CommandType;
@@ -127,7 +136,7 @@ pub trait Request<'req>: FromWire<'req> + ToWire {
 
 /// A Cerberus response.
 ///
-/// See [`Command`](trait.Command.html).
+/// See [`Command`].
 pub trait Response<'req>: FromWire<'req> + ToWire {
     /// The unique [`CommandType`] for this `Response`.
     const TYPE: CommandType;
@@ -142,7 +151,7 @@ wire_enum! {
     pub enum CommandType: u8 {
         /// An error message (or a trivial command ACK).
         ///
-        /// See [`Error`].
+        /// See [`Ack`] and [`RawError`].
         Error = 0x7f,
         /// A request for the RoT's firmware version.
         ///
@@ -280,78 +289,6 @@ impl ToWire for Header {
         w.write_bytes(HEADER_MAGIC)?;
         w.write_le((self.is_request as u8) << 7)?;
         self.command.to_wire(w)?;
-        Ok(())
-    }
-}
-
-wire_enum! {
-    /// A Cerberus error.
-    ///
-    /// This enum represents all error types implemented by `manticore`.
-    /// Because `manticore` does not mandate running the connection over MCTP,
-    /// the MCTP-specific error codes are omited.
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub enum ErrorCode: u8 {
-        /// Represents a successful operation; this "error" code is used to
-        /// turn an [`Error`] into an ACK.
-        Ok = 0x00,
-        /// Indicates that the device is "busy", usually meaning that other
-        /// commands are being serviced.
-        Busy = 0x03,
-        /// Indicates an unspecified, vendor-defined error, which may include
-        /// extra data in an [`Error`].
-        Unspecified = 0x04,
-    }
-}
-
-/// A generic error response.
-///
-/// This message is used to indicate that a request resulted in an error, or
-/// as an ACK for commands that otherwise have no response message.
-///
-/// This command corresponds to [`CommandType::Error`] and does not have a
-/// request counterpart.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Error {
-    /// What kind of error this is (or, it's merely an ACK).
-    pub code: ErrorCode,
-    /// A fixed array of "extra data" that can come with an error code.
-    pub data: [u8; 4],
-}
-
-impl Error {
-    /// Creates an "ACK" response, consisting of an `Error` with an
-    /// [`ErrorCode::Ok`] code.
-    pub fn new_ack() -> Self {
-        Self {
-            code: ErrorCode::Ok,
-            data: [0; 4],
-        }
-    }
-}
-
-impl Response<'_> for Error {
-    const TYPE: CommandType = CommandType::Error;
-}
-
-impl<'wire> FromWire<'wire> for Error {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        a: &'wire A,
-    ) -> Result<Self, wire::Error> {
-        let code = ErrorCode::from_wire(r, a)?;
-        let mut data = [0; 4];
-        r.read_bytes(&mut data)?;
-
-        Ok(Self { code, data })
-    }
-}
-
-impl ToWire for Error {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
-        self.code.to_wire(&mut w)?;
-        w.write_bytes(&self.data[..])?;
         Ok(())
     }
 }

@@ -16,6 +16,7 @@ use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
+use crate::protocol::NoSpecificError;
 use crate::protocol::Request;
 use crate::protocol::Response;
 
@@ -32,6 +33,7 @@ pub enum DeviceInfo {}
 impl<'wire> Command<'wire> for DeviceInfo {
     type Req = DeviceInfoRequest;
     type Resp = DeviceInfoResponse<'wire>;
+    type Error = NoSpecificError;
 }
 
 wire_enum! {

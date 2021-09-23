@@ -24,6 +24,7 @@ use crate::protocol::wire::ToWire;
 use crate::protocol::wire::WireEnum;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
+use crate::protocol::NoSpecificError;
 use crate::protocol::Request;
 use crate::protocol::Response;
 
@@ -40,6 +41,7 @@ pub enum DeviceCapabilities {}
 impl Command<'_> for DeviceCapabilities {
     type Req = DeviceCapabilitiesRequest;
     type Resp = DeviceCapabilitiesResponse;
+    type Error = NoSpecificError;
 }
 
 /// The [`DeviceCapabilities`] request.

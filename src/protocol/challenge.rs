@@ -16,6 +16,7 @@ use crate::mem::Arena;
 use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
+use crate::protocol::ChallengeError;
 use crate::protocol::Command;
 use crate::protocol::CommandType;
 use crate::protocol::Request;
@@ -34,6 +35,7 @@ pub enum Challenge {}
 impl<'wire> Command<'wire> for Challenge {
     type Req = ChallengeRequest<'wire>;
     type Resp = ChallengeResponse<'wire>;
+    type Error = ChallengeError;
 }
 
 make_fuzz_safe! {
