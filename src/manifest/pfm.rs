@@ -35,9 +35,12 @@ use crate::manifest::Error;
 use crate::manifest::HashType;
 use crate::manifest::Manifest;
 use crate::manifest::ManifestType;
+use crate::manifest::MustValidate;
 use crate::manifest::Parse;
 use crate::manifest::ParsedManifest;
+use crate::manifest::RwFailurePolicy;
 use crate::manifest::TocEntry;
+use crate::manifest::UpdatesTakeEffect;
 use crate::manifest::ValidationTime;
 use crate::mem::misalign_of;
 use crate::mem::Arena;
@@ -437,6 +440,11 @@ impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
         self.flags
     }
 
+    /// Returns the `UpdatesTakeEffect` flag value.
+    pub fn updates_take_effect(&self) -> UpdatesTakeEffect {
+        UpdatesTakeEffect::from_u8(self.raw_flags())
+    }
+
     /// Returns an iterator over the `FwVersion` subelements of this `AllowableFw`.
     ///
     /// The returned values only contain the `Toc` information for the entry,
@@ -701,22 +709,6 @@ impl<'a, 'pfm, F, P> FwVersion<'a, 'pfm, F, P> {
     }
 }
 
-wire_enum! {
-    /// A policy for responding to verification failure in a read-write region.
-    ///
-    /// Cerberus currently does not fully specify what these policies mean
-    /// precisely, nor what failure mode they should be enacted with respect
-    /// to.
-    pub enum RwFailurePolicy: u8 {
-        /// Do nothing.
-        DoNothing = 0b00,
-        /// Restore the region from write-only memory.
-        RestoreFromRo = 0b01,
-        /// Erase the region.
-        Erase = 0b10,
-    }
-}
-
 /// A read-write region within a [`FwVersion`].
 ///
 /// This region is not hashed or protected in any way, and both reads and
@@ -732,8 +724,8 @@ pub struct RwRegion {
 
 impl RwRegion {
     /// Returns a policy to enact "on failure" (currently underspecified).
-    pub fn failure_policy(&self) -> Option<RwFailurePolicy> {
-        RwFailurePolicy::from_wire_value(self.flags & 0b11)
+    pub fn rw_failure_policy(&self) -> RwFailurePolicy {
+        RwFailurePolicy::from_u8(self.raw_flags())
     }
 
     /// Returns the raw encoded flags for this element.
@@ -775,10 +767,9 @@ struct FwRegionRange {
 }
 
 impl FwRegion<'_> {
-    /// Returns whether this region must be validated on boot, rather than just
-    /// when loading a new firmware update.
-    pub fn must_validate_on_boot(&self) -> bool {
-        (self.header.flags & 1) == 1
+    /// Returns the `MustValidate` flag value for this image region.
+    pub fn must_validate_on_boot(&self) -> MustValidate {
+        MustValidate::from_u8(self.raw_flags())
     }
 
     /// Returns the raw encoded flags for this element.

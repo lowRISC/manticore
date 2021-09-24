@@ -343,3 +343,275 @@ pub mod provenance {
         const AUTHENTICATED: bool = false;
     }
 }
+
+wire_enum! {
+    /// A policy for responding to verification failure in a read-write region.
+    ///
+    /// Cerberus currently does not fully specify what these policies mean
+    /// precisely, nor what failure mode they should be enacted with respect
+    /// to.
+    pub enum RwFailurePolicy: u8 {
+        /// Do nothing.
+        DoNothing = 0b00,
+        /// Restore the region from write-only memory.
+        RestoreFromRo = 0b01,
+        /// Erase the region.
+        Erase = 0b10,
+    }
+}
+
+impl RwFailurePolicy {
+    /// Returns the `RwFailurePolicy` flag based on a `u8`
+    pub fn from_u8(n: u8) -> RwFailurePolicy {
+        match n & 0b11 {
+            0b01 => RwFailurePolicy::RestoreFromRo,
+            0b10 => RwFailurePolicy::Erase,
+            _ => RwFailurePolicy::DoNothing,
+        }
+    }
+
+    /// Returns the input `u8` with the bits of this `RwFailurePolicy` set in it.
+    pub fn set_bits_in_u8(&self, n: u8) -> u8 {
+        (n & !0b11) | (*self as u8)
+    }
+}
+
+wire_enum! {
+    /// Indicates when this image's signature should be validates, either
+    /// only if there are changes to the image or otherwise on every boot.
+    pub enum MustValidate: u8 {
+        /// Only validate on updates
+        OnlyOnUpdates = 0b0,
+        /// Validate on every boot
+        OnEveryBoot = 0b1,
+    }
+}
+
+impl MustValidate {
+    /// Returns the `MustValidate` flag based on a `u8`
+    pub fn from_u8(n: u8) -> MustValidate {
+        if n & 0b1 == 0b0 {
+            MustValidate::OnlyOnUpdates
+        } else {
+            MustValidate::OnEveryBoot
+        }
+    }
+
+    /// Returns the input `u8` with the bits of this `MustValidate` set in it.
+    pub fn set_bits_in_u8(&self, n: u8) -> u8 {
+        (n & !0b1) | (*self as u8)
+    }
+}
+
+wire_enum! {
+    /// Indicates if the firmware component update can take affect at run-time
+    /// or if a reboot is required.
+    pub enum UpdatesTakeEffect: u8 {
+        /// Only on reboot
+        OnlyOnReboot = 0b0,
+        /// At run-time and on reboot
+        AtRuntimeAndOnReboot = 0b1,
+    }
+}
+
+impl UpdatesTakeEffect {
+    /// Returns the `UpdatesTakeEffect` flag based on a `u8`
+    pub fn from_u8(n: u8) -> UpdatesTakeEffect {
+        if n & 0b1 == 0b0 {
+            UpdatesTakeEffect::OnlyOnReboot
+        } else {
+            UpdatesTakeEffect::AtRuntimeAndOnReboot
+        }
+    }
+
+    /// Returns the input `u8` with the bits of this `UpdatesTakeEffect` set in it.
+    pub fn set_bits_in_u8(&self, n: u8) -> u8 {
+        (n & !0b1) | (*self as u8)
+    }
+}
+
+#[cfg(test)]
+#[allow(unused)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn operation_on_failure_set_bits_in_u8_do_nothing() {
+        assert_eq!(4, RwFailurePolicy::DoNothing.set_bits_in_u8(4));
+        assert_eq!(12, RwFailurePolicy::DoNothing.set_bits_in_u8(12));
+        assert_eq!(128, RwFailurePolicy::DoNothing.set_bits_in_u8(128));
+
+        for i in 0..=u8::MAX {
+            let expected = i & !0b11;
+            assert_eq!(expected, RwFailurePolicy::DoNothing.set_bits_in_u8(i));
+        }
+    }
+
+    #[test]
+    fn operation_on_failure_set_bits_in_u8_restore_from_ro() {
+        assert_eq!(1, RwFailurePolicy::RestoreFromRo.set_bits_in_u8(2));
+        assert_eq!(5, RwFailurePolicy::RestoreFromRo.set_bits_in_u8(4));
+        assert_eq!(13, RwFailurePolicy::RestoreFromRo.set_bits_in_u8(12));
+        assert_eq!(129, RwFailurePolicy::RestoreFromRo.set_bits_in_u8(128));
+
+        for i in 0..=u8::MAX {
+            let expected = (i & !0b11) + 1;
+            assert_eq!(
+                expected,
+                RwFailurePolicy::RestoreFromRo.set_bits_in_u8(i)
+            );
+        }
+    }
+
+    #[test]
+    fn operation_on_failure_set_bits_in_u8_erase() {
+        assert_eq!(2, RwFailurePolicy::Erase.set_bits_in_u8(2));
+        assert_eq!(6, RwFailurePolicy::Erase.set_bits_in_u8(4));
+        assert_eq!(14, RwFailurePolicy::Erase.set_bits_in_u8(12));
+        assert_eq!(130, RwFailurePolicy::Erase.set_bits_in_u8(128));
+
+        for i in 0..=u8::MAX {
+            let expected = (i & !0b11) + 2;
+            assert_eq!(expected, RwFailurePolicy::Erase.set_bits_in_u8(i));
+        }
+    }
+
+    #[test]
+    fn operation_on_failure_as_u8() {
+        assert_eq!(0, RwFailurePolicy::DoNothing as u8);
+        assert_eq!(1, RwFailurePolicy::RestoreFromRo as u8);
+        assert_eq!(2, RwFailurePolicy::Erase as u8);
+    }
+
+    #[test]
+    fn operation_on_failure_from_u8_all() {
+        for i in 0..=u8::MAX {
+            let rw_failure_policy = RwFailurePolicy::from_u8(i);
+
+            let expected_rw_failure_policy = match i & 0b11 {
+                1 => RwFailurePolicy::RestoreFromRo,
+                2 => RwFailurePolicy::Erase,
+                _ => RwFailurePolicy::DoNothing,
+            };
+
+            assert_eq!(rw_failure_policy, expected_rw_failure_policy);
+        }
+    }
+
+    #[test]
+    fn must_validate_set_bits_in_u8_only_on_updates() {
+        assert_eq!(0, MustValidate::OnlyOnUpdates.set_bits_in_u8(0));
+        assert_eq!(0, MustValidate::OnlyOnUpdates.set_bits_in_u8(1));
+        assert_eq!(4, MustValidate::OnlyOnUpdates.set_bits_in_u8(4));
+        assert_eq!(12, MustValidate::OnlyOnUpdates.set_bits_in_u8(12));
+        assert_eq!(128, MustValidate::OnlyOnUpdates.set_bits_in_u8(128));
+
+        for i in 0..=u8::MAX {
+            let expected = i & !0b1;
+            assert_eq!(expected, MustValidate::OnlyOnUpdates.set_bits_in_u8(i));
+        }
+    }
+
+    #[test]
+    fn must_validate_set_bits_in_u8_on_every_boot() {
+        assert_eq!(1, MustValidate::OnEveryBoot.set_bits_in_u8(0));
+        assert_eq!(1, MustValidate::OnEveryBoot.set_bits_in_u8(1));
+        assert_eq!(5, MustValidate::OnEveryBoot.set_bits_in_u8(4));
+        assert_eq!(13, MustValidate::OnEveryBoot.set_bits_in_u8(12));
+        assert_eq!(129, MustValidate::OnEveryBoot.set_bits_in_u8(128));
+
+        for i in 0..=u8::MAX {
+            let expected = i | 1;
+            assert_eq!(expected, MustValidate::OnEveryBoot.set_bits_in_u8(i));
+        }
+    }
+
+    #[test]
+    fn must_validate_as_u8() {
+        assert_eq!(0, MustValidate::OnlyOnUpdates as u8);
+        assert_eq!(1, MustValidate::OnEveryBoot as u8);
+    }
+
+    #[test]
+    fn must_validate_from_u8_all() {
+        for i in 0..=u8::MAX {
+            let must_validate = MustValidate::from_u8(i);
+
+            let expected_must_validate = if i % 2 == 0 {
+                MustValidate::OnlyOnUpdates
+            } else {
+                MustValidate::OnEveryBoot
+            };
+            assert_eq!(must_validate, expected_must_validate);
+        }
+    }
+
+    #[test]
+    fn updates_take_effect_set_bits_in_u8_only_on_reboot() {
+        assert_eq!(0, UpdatesTakeEffect::OnlyOnReboot.set_bits_in_u8(0));
+        assert_eq!(0, UpdatesTakeEffect::OnlyOnReboot.set_bits_in_u8(1));
+        assert_eq!(4, UpdatesTakeEffect::OnlyOnReboot.set_bits_in_u8(4));
+        assert_eq!(12, UpdatesTakeEffect::OnlyOnReboot.set_bits_in_u8(12));
+        assert_eq!(128, UpdatesTakeEffect::OnlyOnReboot.set_bits_in_u8(128));
+
+        for i in 0..=u8::MAX {
+            let expected = i & !0b1;
+            assert_eq!(
+                expected,
+                UpdatesTakeEffect::OnlyOnReboot.set_bits_in_u8(i)
+            );
+        }
+    }
+
+    #[test]
+    fn updates_take_effect_set_bits_in_u8_at_runtime_and_on_reboot() {
+        assert_eq!(
+            1,
+            UpdatesTakeEffect::AtRuntimeAndOnReboot.set_bits_in_u8(0)
+        );
+        assert_eq!(
+            1,
+            UpdatesTakeEffect::AtRuntimeAndOnReboot.set_bits_in_u8(1)
+        );
+        assert_eq!(
+            5,
+            UpdatesTakeEffect::AtRuntimeAndOnReboot.set_bits_in_u8(4)
+        );
+        assert_eq!(
+            13,
+            UpdatesTakeEffect::AtRuntimeAndOnReboot.set_bits_in_u8(12)
+        );
+        assert_eq!(
+            129,
+            UpdatesTakeEffect::AtRuntimeAndOnReboot.set_bits_in_u8(128)
+        );
+
+        for i in 0..=u8::MAX {
+            let expected = i | 1;
+            assert_eq!(
+                expected,
+                UpdatesTakeEffect::AtRuntimeAndOnReboot.set_bits_in_u8(i)
+            );
+        }
+    }
+
+    #[test]
+    fn updates_take_effect_as_u8() {
+        assert_eq!(0, UpdatesTakeEffect::OnlyOnReboot as u8);
+        assert_eq!(1, UpdatesTakeEffect::AtRuntimeAndOnReboot as u8);
+    }
+
+    #[test]
+    fn updates_take_effect() {
+        for i in 0..=u8::MAX {
+            let updates_take_effect = UpdatesTakeEffect::from_u8(i);
+
+            let expected_updates_take_effect = if i % 2 == 0 {
+                UpdatesTakeEffect::OnlyOnReboot
+            } else {
+                UpdatesTakeEffect::AtRuntimeAndOnReboot
+            };
+            assert_eq!(updates_take_effect, expected_updates_take_effect);
+        }
+    }
+}

@@ -6,8 +6,6 @@
 //!
 //! See [`owned::Pfm`](../type.Pfm.html).
 
-// TODO(#60): Provide a more ergonomic way of specifying flags bytes.
-
 use core::convert::TryInto;
 
 use crate::crypto::ring::sha256::Builder as RingSha;
@@ -22,6 +20,9 @@ use crate::manifest::provenance;
 use crate::manifest::Error;
 use crate::manifest::HashType;
 use crate::manifest::ManifestType;
+use crate::manifest::MustValidate;
+use crate::manifest::RwFailurePolicy;
+use crate::manifest::UpdatesTakeEffect;
 use crate::mem::misalign_of;
 use crate::mem::Arena as _;
 use crate::mem::BumpArena;
@@ -47,29 +48,7 @@ pub enum Element {
         )]
         blank_byte: u8,
     },
-    AllowableFw {
-        #[cfg_attr(
-            feature = "serde",
-            serde(deserialize_with = "crate::serde::de_radix")
-        )]
-        version_count: u8,
-        #[cfg_attr(
-            feature = "serde",
-            serde(
-                deserialize_with = "crate::serde::de_bytestring",
-                serialize_with = "crate::serde::se_bytestring",
-            )
-        )]
-        firmware_id: Vec<u8>,
-        #[cfg_attr(
-            feature = "serde",
-            serde(
-                deserialize_with = "crate::serde::de_radix",
-                serialize_with = "crate::serde::se_bin",
-            )
-        )]
-        flags: u8,
-    },
+    AllowableFw(AllowableFw),
     FwVersion {
         #[cfg_attr(
             feature = "serde",
@@ -102,6 +81,49 @@ pub enum Element {
     },
 }
 
+/// asdf
+#[allow(missing_docs)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AllowableFw {
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "crate::serde::de_radix")
+    )]
+    pub version_count: u8,
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            deserialize_with = "crate::serde::de_bytestring",
+            serialize_with = "crate::serde::se_bytestring",
+        )
+    )]
+    pub firmware_id: Vec<u8>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            deserialize_with = "crate::serde::de_radix",
+            serialize_with = "crate::serde::se_bin",
+        )
+    )]
+    flags: u8,
+}
+
+impl AllowableFw {
+    /// Gets the `UpdatesTakeEffect` flag value.
+    pub fn get_updates_take_effect(&self) -> UpdatesTakeEffect {
+        UpdatesTakeEffect::from_u8(self.flags)
+    }
+
+    /// Sets the `UpdatesTakeEffect` flag value.
+    pub fn set_updates_take_effect(
+        &mut self,
+        updates_take_effect: UpdatesTakeEffect,
+    ) {
+        self.flags = updates_take_effect.set_bits_in_u8(self.flags);
+    }
+}
+
 /// A read-write region.
 #[allow(missing_docs)]
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
@@ -114,8 +136,23 @@ pub struct Rw {
             serialize_with = "crate::serde::se_bin",
         )
     )]
-    pub flags: u8,
+    flags: u8,
     pub region: Region,
+}
+
+impl Rw {
+    /// Gets the `RwFailurePolicy` flag value.
+    pub fn get_rw_failure_policy(&self) -> RwFailurePolicy {
+        RwFailurePolicy::from_u8(self.flags)
+    }
+
+    /// Sets the `RwFailurePolicy` flag value.
+    pub fn set_rw_failure_policy(
+        &mut self,
+        rw_failure_policy: RwFailurePolicy,
+    ) {
+        self.flags = rw_failure_policy.set_bits_in_u8(self.flags);
+    }
 }
 
 /// An image region.
@@ -130,10 +167,22 @@ pub struct Image {
             serialize_with = "crate::serde::se_bin",
         )
     )]
-    pub flags: u8,
+    flags: u8,
     pub hash_type: HashType,
     pub hash: sha256::Digest,
     pub regions: Vec<Region>,
+}
+
+impl Image {
+    /// Gets the `MustValidate` flag value.
+    pub fn get_must_validate(&self) -> MustValidate {
+        MustValidate::from_u8(self.flags)
+    }
+
+    /// Sets the `MustValidate` flag value.
+    pub fn set_must_validate(&mut self, must_validate: MustValidate) {
+        self.flags = must_validate.set_bits_in_u8(self.flags);
+    }
 }
 
 impl owned::Element for Element {
@@ -156,11 +205,11 @@ impl owned::Element for Element {
                 bytes[0] = *blank_byte;
                 Ok(bytes)
             }
-            Self::AllowableFw {
+            Self::AllowableFw(AllowableFw {
                 version_count,
                 firmware_id,
                 flags,
-            } => {
+            }) => {
                 let id_len: u8 =
                     firmware_id.len().try_into().map_err(|_| {
                         EncodingError::StringTooLong(firmware_id.clone())
@@ -301,11 +350,11 @@ impl<'f, F: 'f + Flash> owned::FromUnowned<'f, F> for Element {
             let allowable_fw = allowable_fw.read(&sha, &arena)?;
 
             let mut node = owned::Node {
-                element: Element::AllowableFw {
+                element: Element::AllowableFw(AllowableFw {
                     version_count: allowable_fw.firmware_count() as u8,
                     firmware_id: allowable_fw.firmware_id().to_vec(),
                     flags: allowable_fw.raw_flags(),
-                },
+                }),
                 hashed: allowable_fw.entry().hash().is_some(),
                 children: Vec::new(),
             };
@@ -476,11 +525,11 @@ mod test {
                         hashed: true,
                     },
                     owned::Node {
-                        element: Element::AllowableFw {
+                        element: Element::AllowableFw(AllowableFw {
                             version_count: 1,
                             firmware_id: b"my cool firmware".to_vec(),
                             flags: 0xaa,
-                        },
+                        }),
                         children: vec![owned::Node {
                             element: Element::FwVersion {
                                 version_addr: 0x12345678,
@@ -539,11 +588,11 @@ mod test {
                     hashed: true,
                 },
                 owned::Node {
-                    element: Element::AllowableFw {
+                    element: Element::AllowableFw(AllowableFw {
                         version_count: 1,
                         firmware_id: b"my cool firmware".to_vec(),
                         flags: 0xaa,
-                    },
+                    }),
                     children: vec![owned::Node {
                         element: Element::FwVersion {
                             version_addr: 0x12345678,
