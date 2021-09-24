@@ -16,6 +16,8 @@ use manticore::io::Cursor;
 use manticore::mem::Arena as _;
 use manticore::mem::BumpArena;
 use manticore::protocol::wire::ToWire;
+use manticore::session;
+use manticore::session::Session as _;
 use testutil::data::keys;
 use testutil::data::x509;
 
@@ -26,6 +28,7 @@ fn challenge() {
     use manticore::protocol::challenge::*;
     use manticore::protocol::get_cert::*;
     use manticore::protocol::get_digests::*;
+    use manticore::protocol::key_exchange::*;
 
     let mut h = ring::hash::Engine::new();
     let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
@@ -46,7 +49,7 @@ fn challenge() {
         .send_local::<GetDigests, _>(
             GetDigestsRequest {
                 slot: 0,
-                key_exchange: KeyExchangeAlgo::None,
+                key_exchange: KeyExchangeAlgo::Ecdh,
             },
             &arena,
         )
@@ -130,7 +133,38 @@ fn challenge() {
         .verifier(sig::Algo::RsaPkcs1Sha256, alias_cert.subject_key())
         .unwrap();
 
-    assert!(verifier
+    verifier
         .verify(&[cursor.consumed_bytes()], &resp.signature)
-        .is_ok());
+        .unwrap();
+
+    let mut session = session::ring::Session::new();
+    session.create_session(&[99; 32], resp.tbs.nonce).unwrap();
+
+    let mut pk_req = vec![0; session.ephemeral_bytes()];
+    let pk_len = session.begin_ecdh(&mut pk_req).unwrap();
+    let pk_req = &pk_req[..pk_len];
+
+    let req = KeyExchangeRequest::SessionKey {
+        hmac_algorithm: hash::Algo::Sha256,
+        pk_req,
+    };
+    let resp = virt
+        .send_local::<KeyExchange, _>(req, &arena)
+        .unwrap()
+        .unwrap();
+    let (pk_resp, pk_sig, alias_hmac) = match resp {
+        KeyExchangeResponse::SessionKey {
+            pk_resp,
+            signature,
+            alias_cert_hmac,
+        } => (pk_resp, signature, alias_cert_hmac),
+        _ => panic!(),
+    };
+    verifier.verify(&[pk_req, pk_resp], pk_sig).unwrap();
+
+    session.finish_ecdh(hash::Algo::Sha256, pk_resp).unwrap();
+    let (_, hmac_key) = session.hmac_key().unwrap();
+    let mut hasher = h.new_hmac(hash::Algo::Sha256, hmac_key).unwrap();
+    hasher.write(alias_cert.raw()).unwrap();
+    hasher.expect(alias_hmac).unwrap();
 }
