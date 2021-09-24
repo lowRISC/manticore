@@ -21,6 +21,7 @@
 
 use structopt::StructOpt;
 
+pub mod fakes;
 pub mod pa_rot;
 pub mod tcp;
 

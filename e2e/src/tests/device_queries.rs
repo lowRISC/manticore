@@ -17,8 +17,7 @@ fn firmware_version() {
         ..Default::default()
     });
 
-    let mut arena = [0; 64];
-    let arena = BumpArena::new(&mut arena);
+    let arena = BumpArena::new([0; 64]);
     let resp = virt.send_local::<FirmwareVersion, _>(
         FirmwareVersionRequest { index: 0 },
         &arena,
@@ -26,6 +25,49 @@ fn firmware_version() {
 
     let version = resp.unwrap().unwrap().version;
     assert!(version.starts_with(b"my cool e2e test"));
+}
+
+#[test]
+fn vendor_firmware_version() {
+    use manticore::protocol::firmware_version::*;
+
+    let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
+        vendor_firmware_versions: vec![
+            (1, b"my version".to_vec()),
+            (3, b"my other version".to_vec()),
+        ],
+        ..Default::default()
+    });
+
+    let arena = BumpArena::new([0; 64]);
+    let resp = virt.send_local::<FirmwareVersion, _>(
+        FirmwareVersionRequest { index: 1 },
+        &arena,
+    );
+
+    let version = resp.unwrap().unwrap().version;
+    assert!(version.starts_with(b"my version"));
+}
+
+#[test]
+fn vendor_firmware_version_out_of_range() {
+    use manticore::protocol::firmware_version::*;
+
+    let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
+        vendor_firmware_versions: vec![
+            (1, b"my version".to_vec()),
+            (3, b"my other version".to_vec()),
+        ],
+        ..Default::default()
+    });
+
+    let arena = BumpArena::new([0; 64]);
+    let resp = virt.send_local::<FirmwareVersion, _>(
+        FirmwareVersionRequest { index: 2 },
+        &arena,
+    );
+
+    resp.unwrap().expect_err("expected error from server");
 }
 
 #[test]
@@ -42,8 +84,7 @@ fn device_id() {
         ..Default::default()
     });
 
-    let mut arena = [0; 64];
-    let arena = BumpArena::new(&mut arena);
+    let arena = BumpArena::new([0; 64]);
     let resp = virt.send_local::<DeviceId, _>(DeviceIdRequest, &arena);
     assert_eq!(
         resp.unwrap().unwrap().id,
