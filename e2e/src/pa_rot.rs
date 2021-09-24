@@ -14,7 +14,6 @@ use std::process::Command;
 use std::process::Stdio;
 use std::str;
 use std::time::Duration;
-use std::time::Instant;
 
 use manticore::cert;
 use manticore::cert::CertFormat;
@@ -28,6 +27,7 @@ use manticore::server;
 use manticore::server::pa_rot::PaRot;
 use manticore::session::ring::Session;
 
+use crate::fakes;
 use crate::tcp;
 use crate::tcp::TcpHostPort;
 
@@ -36,6 +36,9 @@ use crate::tcp::TcpHostPort;
 pub struct Options {
     /// A firmware version blob to report to clients.
     pub firmware_version: Vec<u8>,
+
+    /// Vendor-specific firmware version blobs to report to clients.
+    pub vendor_firmware_versions: Vec<(u8, Vec<u8>)>,
 
     /// A unique device identity blob to report to clients.
     pub unique_device_identity: Vec<u8>,
@@ -84,6 +87,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             firmware_version: b"<version unspecified>".to_vec(),
+            vendor_firmware_versions: vec![],
             unique_device_identity: b"<uid unspecified>".to_vec(),
             resets_since_power_on: 5,
             max_message_size: 1024,
@@ -222,44 +226,14 @@ pub fn serve(opts: Options) -> ! {
         crypto: opts.crypto_timeout,
     };
 
-    struct Id {
-        firmware_version: [u8; 32],
-        unique_device_identity: Vec<u8>,
-    }
-    impl manticore::hardware::Identity for Id {
-        fn firmware_version(&self) -> &[u8; 32] {
-            &self.firmware_version
-        }
-        fn unique_device_identity(&self) -> &[u8] {
-            &self.unique_device_identity[..]
-        }
-    }
-    let mut identity = Id {
-        firmware_version: [0; 32],
-        unique_device_identity: opts.unique_device_identity,
-    };
-    let prefix_len = opts.firmware_version.len().min(32);
-
-    identity.firmware_version[..prefix_len]
-        .copy_from_slice(&opts.firmware_version[..prefix_len]);
-
-    struct Reset {
-        startup_time: Instant,
-        resets_since_power_on: u32,
-    }
-    impl manticore::hardware::Reset for Reset {
-        fn resets_since_power_on(&self) -> u32 {
-            self.resets_since_power_on
-        }
-
-        fn uptime(&self) -> Duration {
-            self.startup_time.elapsed()
-        }
-    }
-    let reset = Reset {
-        startup_time: Instant::now(),
-        resets_since_power_on: opts.resets_since_power_on,
-    };
+    let identity = fakes::Identity::new(
+        &opts.firmware_version,
+        opts.vendor_firmware_versions
+            .iter()
+            .map(|(k, v)| (*k, v.as_slice())),
+        &opts.unique_device_identity,
+    );
+    let reset = fakes::Reset::new(opts.resets_since_power_on);
 
     let mut hasher = ring::hash::Engine::new();
     let mut csrng = ring::csrng::Csrng::new();
