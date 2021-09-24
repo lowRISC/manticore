@@ -218,6 +218,8 @@ impl From<sha256::Error> for Error {
     }
 }
 
+debug_from!(Error => io::Error, flash::Error, OutOfMemory, sig::Error, sha256::Error);
+
 /// A manifest type.
 ///
 /// A type that implements this trait is not itself a "parsed" instance of the

@@ -58,6 +58,7 @@ impl From<OutOfMemory> for Error {
         Error::Internal
     }
 }
+debug_from!(Error => OutOfMemory);
 
 /// Provides access to a flash-like storage device.
 ///

@@ -30,6 +30,8 @@
 //! - `ring` (default) enables the [`crypto::ring` module], which provides
 //!   software implementations for cryptography traits used by `manticore`.
 //!   This feature is not intended for on-device use-cases either.
+//! - `log` (default) enables debug logging throughout manticore, via the `log`
+//!   crate. This feature can be disabled to redact all logging.
 //! - `serde` enables implementations of `serde`'s (de)serialization traits.
 //! - `inject-alloc` makes it possible to replace borrowed content in some
 //!   structs with allocated content. This is mostly useful for tooling that
@@ -49,6 +51,14 @@
 #![deny(unused)]
 #![deny(unsafe_code)]
 
+// Pull in the `log` crate via a different name, to help prevent code from
+// accidentally using it without going through the redactable versions in
+// `debug`.
+#[cfg(feature = "log")]
+extern crate log as __raw_log;
+#[macro_use]
+mod debug;
+
 #[macro_use]
 pub mod protocol;
 
@@ -63,3 +73,12 @@ pub mod manifest;
 pub mod mem;
 pub mod net;
 pub mod server;
+
+pub use debug::Error;
+
+/// [`Result`] type to use throughout Manticore, which incorporates the
+/// [`manticore::Error`] type.
+///
+/// [`Result`]: std::result::Result
+/// [`manticore::Error`]: crate::Error
+pub type Result<T, E> = core::result::Result<T, Error<E>>;
