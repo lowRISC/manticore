@@ -11,6 +11,7 @@ use core::mem;
 use ring::agreement as ecdh;
 use ring::hmac;
 
+use crate::crypto::hash;
 use crate::session;
 
 /// A [`ring`]-based [`session::Session`].
@@ -31,6 +32,7 @@ enum Keys {
     Session {
         aes_key: session::Key,
         hmac_key: session::Key,
+        algo: hash::Algo,
     },
 }
 
@@ -98,7 +100,11 @@ impl session::Session for Session {
         Ok(out.len())
     }
 
-    fn finish_ecdh(&mut self, their_key: &[u8]) -> Result<(), session::Error> {
+    fn finish_ecdh(
+        &mut self,
+        hmac_algorithm: hash::Algo,
+        their_key: &[u8],
+    ) -> Result<(), session::Error> {
         let conn = self
             .conn
             .as_mut()
@@ -126,7 +132,11 @@ impl session::Session for Session {
                     &conn.resp_nonce,
                     &conn.req_nonce,
                 );
-                Ok(Keys::Session { aes_key, hmac_key })
+                Ok(Keys::Session {
+                    aes_key,
+                    hmac_key,
+                    algo: hmac_algorithm,
+                })
             },
         )?;
         Ok(())
@@ -142,12 +152,12 @@ impl session::Session for Session {
         }
     }
 
-    fn hmac_key(&self) -> Option<&session::Key> {
+    fn hmac_key(&self) -> Option<(hash::Algo, &session::Key)> {
         match &self.conn {
             Some(Connection {
-                keys: Keys::Session { hmac_key, .. },
+                keys: Keys::Session { hmac_key, algo, .. },
                 ..
-            }) => Some(hmac_key),
+            }) => Some((*algo, hmac_key)),
             _ => None,
         }
     }
@@ -194,8 +204,8 @@ mod test {
         let key_len = device.begin_ecdh(&mut dkey).unwrap();
         let dkey = &dkey[..key_len];
 
-        device.finish_ecdh(hkey).unwrap();
-        host.finish_ecdh(dkey).unwrap();
+        device.finish_ecdh(hash::Algo::Sha256, hkey).unwrap();
+        host.finish_ecdh(hash::Algo::Sha256, dkey).unwrap();
 
         assert_eq!(host.aes_key(), device.aes_key());
         assert_eq!(host.hmac_key(), device.hmac_key());

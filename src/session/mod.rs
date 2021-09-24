@@ -24,6 +24,8 @@
 //!
 //! [SP 800-108]: https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-108.pdf
 
+use crate::crypto::hash;
+
 #[cfg(doc)]
 use crate::protocol;
 
@@ -127,15 +129,22 @@ pub trait Session {
 
     /// Completes the ECDH agreement, establishing an active session.
     ///
+    /// `hmac_algorithm` is the client-chosen algorithm for creating HMACs
+    /// throughout the session.
+    ///
     /// `their_key` should contain the public key from the response to an
     /// appropriate [`protocol::key_exchange`] request.
     ///
     /// `their_key` must be an ECC key using the DER encoding.
-    fn finish_ecdh(&mut self, their_key: &[u8]) -> Result<(), Error>;
+    fn finish_ecdh(
+        &mut self,
+        hmac_algorithm: hash::Algo,
+        their_key: &[u8],
+    ) -> Result<(), Error>;
 
     /// Returns the current session's AES-GCM encryption key, if a session exists.
     fn aes_key(&self) -> Option<&Key>;
 
     /// Returns the current session's HMAC key, if a session exists.
-    fn hmac_key(&self) -> Option<&Key>;
+    fn hmac_key(&self) -> Option<(hash::Algo, &Key)>;
 }

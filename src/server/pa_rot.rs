@@ -332,14 +332,12 @@ impl<'a> PaRot<'a> {
         use protocol::key_exchange::*;
         match req {
             KeyExchangeRequest::SessionKey {
-                hmac_algorithm: _,
+                hmac_algorithm,
                 pk_req,
             } => {
-                let signer = self
-                    .opts
-                    .trust_chain
-                    .signer(self.current_cert_slot.ok_or(UNSPECIFIED)?)
-                    .ok_or(UNSPECIFIED)?;
+                let slot = self.current_cert_slot.ok_or(UNSPECIFIED)?;
+                let signer =
+                    self.opts.trust_chain.signer(slot).ok_or(UNSPECIFIED)?;
 
                 let pk_resp = arena
                     .alloc_slice(self.opts.session.ephemeral_bytes())
@@ -352,7 +350,7 @@ impl<'a> PaRot<'a> {
                 let pk_resp = &pk_resp[..key_len];
                 self.opts
                     .session
-                    .finish_ecdh(pk_req)
+                    .finish_ecdh(*hmac_algorithm, pk_req)
                     .map_err(|_| UNSPECIFIED)?;
 
                 let signature = arena
@@ -362,12 +360,36 @@ impl<'a> PaRot<'a> {
                     .sign(&[pk_req, pk_resp], signature)
                     .map_err(|_| UNSPECIFIED)?;
 
+                let chain_len = self
+                    .opts
+                    .trust_chain
+                    .chain_len(slot)
+                    .ok_or(UNSPECIFIED)?
+                    .get();
+                let alias_cert = self
+                    .opts
+                    .trust_chain
+                    .cert(slot, chain_len - 1)
+                    .ok_or(UNSPECIFIED)?;
+
+                let alias_cert_hmac =
+                    hmac_algorithm.alloc(arena).map_err(|_| UNSPECIFIED)?;
+                let (_, hmac_key) =
+                    self.opts.session.hmac_key().ok_or(UNSPECIFIED)?;
+                self.opts
+                    .hasher
+                    .contiguous_hmac(
+                        *hmac_algorithm,
+                        hmac_key,
+                        alias_cert.raw(),
+                        alias_cert_hmac,
+                    )
+                    .map_err(|_| UNSPECIFIED)?;
+
                 Ok(KeyExchangeResponse::SessionKey {
                     pk_resp,
                     signature,
-                    alias_cert_hmac: &[
-                      // Pending require of crypto::sha256.
-                    ],
+                    alias_cert_hmac,
                 })
             }
             _ => Err(UNSPECIFIED),
