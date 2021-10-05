@@ -261,7 +261,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
         self,
         server: Server,
         header: Header,
-        request: &mut dyn net::HostRequest<'req>,
+        request: &mut dyn net::host::HostRequest<'req>,
         arena: &'req Arena,
     ) -> Result<(), Error>;
 
@@ -272,7 +272,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
     fn run(
         self,
         server: Server,
-        host_port: &mut dyn net::HostPort<'req>,
+        host_port: &mut dyn net::host::HostPort<'req>,
         arena: &'req Arena,
     ) -> Result<(), Error> {
         let request = host_port.receive()?;
@@ -291,7 +291,7 @@ where
     #[inline]
     fn run_inner<'out, Ctx>(
         self,
-        request: &mut dyn net::HostRequest,
+        request: &mut dyn net::host::HostRequest,
         ctx: Ctx,
     ) -> Result<(), Error>
     where
@@ -342,7 +342,7 @@ where
         self,
         server: Server,
         header: Header,
-        request: &mut dyn net::HostRequest<'req>,
+        request: &mut dyn net::host::HostRequest<'req>,
         arena: &'req Arena,
     ) -> Result<(), Error> {
         if header.command != ReqOf::<'req, Command>::TYPE {
@@ -381,7 +381,7 @@ where
         self,
         server: Server,
         header: Header,
-        request: &mut dyn net::HostRequest<'req>,
+        request: &mut dyn net::host::HostRequest<'req>,
         arena: &'req Arena,
     ) -> Result<(), Error> {
         if header.command != ReqOf::<'req, Command>::TYPE {
@@ -422,7 +422,7 @@ impl<'req, 'srv, Server: 'srv, Arena: 'req>
         self,
         _: Server,
         header: Header,
-        _: &mut dyn net::HostRequest<'req>,
+        _: &mut dyn net::host::HostRequest<'req>,
         _: &'req Arena,
     ) -> Result<(), Error> {
         Err(Error::UnhandledCommand(header.command))
@@ -449,7 +449,7 @@ mod test {
         A: mem::Arena,
     >(
         scratch_space: &'a mut [u8],
-        port_out: &'a mut Option<net::InMemHost<'a>>,
+        port_out: &'a mut Option<net::host::InMemHost<'a>>,
         arena: &'a mut A,
         server: (H, T),
         request: C::Req,
@@ -462,7 +462,7 @@ mod test {
             .expect("failed to write request");
         let request_bytes = cursor.take_consumed_bytes();
 
-        *port_out = Some(net::InMemHost::new(port_scratch));
+        *port_out = Some(net::host::InMemHost::new(port_scratch));
         let port = port_out.as_mut().unwrap();
         port.request(
             Header {
