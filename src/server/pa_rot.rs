@@ -100,7 +100,7 @@ impl<'a> PaRot<'a> {
     /// Process a single incoming request.
     pub fn process_request<'req, A: Arena>(
         &mut self,
-        host_port: &mut dyn net::HostPort<'req>,
+        host_port: &mut dyn net::host::HostPort<'req>,
         arena: &'req A,
     ) -> Result<(), Error> {
         // Style note: when defining a new handler, if it is more than a

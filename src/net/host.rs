@@ -2,57 +2,20 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Networking interfaces.
+//! Device-to-host communication.
 //!
-//! This module provides generic, abstract networking interfaces for sending
-//! buffers over a "network". The term "network" is used very loosely: for
-//! our purposes, a network is an object upon which we can transact encoded
-//! buffers along with the bits necessary to encode a Cerberus header.
-//!
-//! For example, if an integration wished to recieve requests from a "host"
-//! device over a SPI line, it tie up all the necessary implementation
-//! details into a [`HostPort`] implementation.
+//! See [`HostPort`] for detailed information.
 
-#![allow(missing_docs)]
-
-use core::cell::Cell;
-
-use crate::io;
 use crate::io::Cursor;
-use crate::io::Read;
 use crate::io::ReadZero;
 use crate::io::Write;
+use crate::net;
 
 pub use crate::protocol::Header;
 
-/// A networking error.
-#[derive(Copy, Clone, Debug)]
-pub enum Error {
-    /// Indicates an inderlying I/O error.
-    Io(io::Error),
-    /// Indicates an error constructing (or interpreting) an abstract Manticore
-    /// header.
-    BadHeader,
-    /// Indicates that the other end of a connection is "disconnected". This
-    /// can mean anything from a connection being explicitly terminated, to
-    /// some internal timeout expiring.
-    Disconnected,
-    /// Indicates that some operation was done out of order, such as attempting
-    /// to reference part of the request once a reply has begun.
-    OutOfOrder,
-    /// The operation timed out.
-    Timeout,
-}
-
-impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Self {
-        Self::Io(e)
-    }
-}
-
 /// Represents a physical port that can be used to interact with host devices.
 ///
-/// This trait provides a generic mechanism for recieving and responding to
+/// This trait provides a generic mechanism for receiving and responding to
 /// requests from host devices. A value of a type implementing this trait
 /// implements the entire network stack below the Cerberus protocol: it must
 /// know how to speak the physical layer and assemble messages out of that
@@ -61,7 +24,7 @@ impl From<io::Error> for Error {
 /// `HostPort` uses the traits [`HostRequest`] and [`HostResponse`] to describe
 /// a generic state machine, where a request is processed and replied to.
 /// ```
-/// # use manticore::net::*;
+/// # use manticore::net::{*, host::*};
 /// fn process_request<'req>(port: &mut impl HostPort<'req>) -> Result<(), Error> {
 ///     let req = port.receive()?;
 ///     let header = req.header()?;
@@ -91,7 +54,7 @@ impl From<io::Error> for Error {
 /// Note that a lot of the state transitions described above aren't perfectly
 /// enforced, because, since we want `HostPort` to be object-safe, we need to
 /// use references exclusively. Implementations should return
-/// [`Error::OutOfOrder`] when this state ordering is violated.
+/// [`net::Error::OutOfOrder`] when this state ordering is violated.
 ///
 /// [`InMemHost`] is a simple implementation meant for testing; its
 /// documentation contains a concrete example of how to use `HostPort`'s
@@ -102,7 +65,7 @@ impl From<io::Error> for Error {
 ///
 /// # Implementing this trait
 ///
-/// A `HostPort` provides all low-level management of incomming and outgoing
+/// A `HostPort` provides all low-level management of incoming and outgoing
 /// connections. An implementation is responsible for packet assembly,
 /// verifying redundancy codes, tracking AEAD tags, and so on, exposing only
 /// an abstract header and a I/O for the message payload itself to Manticore.
@@ -127,7 +90,7 @@ pub trait HostPort<'req> {
     ///
     /// When a request begins, this function returns a [`HostRequest`], which
     /// can be used to respond to the request.
-    fn receive(&mut self) -> Result<&mut dyn HostRequest<'req>, Error>;
+    fn receive(&mut self) -> Result<&mut dyn HostRequest<'req>, net::Error>;
 }
 impl dyn HostPort<'_> {} // Ensure object-safety.
 
@@ -138,12 +101,12 @@ pub trait HostRequest<'req> {
     /// Returns the header sent by the host for this request.
     ///
     /// This function should not be called after calling `reply()`.
-    fn header(&self) -> Result<Header, Error>;
+    fn header(&self) -> Result<Header, net::Error>;
 
     /// Returns the raw byte stream for the payload of the request.
     ///
     /// This function should not be called after calling `reply()`.
-    fn payload(&mut self) -> Result<&mut dyn ReadZero<'req>, Error>;
+    fn payload(&mut self) -> Result<&mut dyn ReadZero<'req>, net::Error>;
 
     /// Replies to this request..
     ///
@@ -153,7 +116,7 @@ pub trait HostRequest<'req> {
     fn reply(
         &mut self,
         header: Header,
-    ) -> Result<&mut dyn HostResponse<'req>, Error>;
+    ) -> Result<&mut dyn HostResponse<'req>, net::Error>;
 }
 
 /// Provides the "reponse" half of a transaction with a host.
@@ -163,64 +126,13 @@ pub trait HostResponse<'req> {
     /// Returns the raw byte stream for building the payload of the response.
     ///
     /// This function should not be called after calling `finish()`.
-    fn sink(&mut self) -> Result<&mut dyn Write, Error>;
+    fn sink(&mut self) -> Result<&mut dyn Write, net::Error>;
 
     /// Indicates that all payload data has been written.
     ///
     /// Callers should remember to call this function; failing to do so may
     /// result in a response not being sent properly.
-    fn finish(&mut self) -> Result<(), Error>;
-}
-
-/// Represents a physical port that can be used to interact with client devices.
-///
-/// This for example is used for a PA RoT to send messages to a AC RoT.
-///
-/// This trait provides a generic mechanism for sending and receiving requests
-/// from devices.
-pub trait DevicePort {
-    /// The send function takes a `header` and `msg` to send to a device.
-    /// The implementation of this function must send the header and msg
-    /// to the device specified by `dest`.
-    ///
-    /// This should block until the operation is complete.
-    ///
-    /// On success it should return nothing.
-    /// On a failure an error is returned.
-    fn send(
-        &mut self,
-        dest: u8,
-        header: Header,
-        msg: &[u8],
-    ) -> Result<(), Error>;
-
-    /// This is a blocking call that should wait for a response or a timeout.
-    ///
-    /// `duration`: Number of milliseconds to wait.
-    ///
-    /// If a response is received in time this should return a success.
-    /// On a time out Error::Timeout is returned.
-    /// Other errors should return a suitable Error as well.
-    fn wait_for_response(&mut self, duration: usize) -> Result<(), Error>;
-
-    /// The `process_response()` function should be called once a reply
-    /// has been received for the device the `send()` operation was sent to.
-    /// `msg` should contain the raw message to be processed.
-    ///
-    /// On success returns the response.
-    fn receive_response(&mut self) -> Result<&mut dyn DeviceResponse, Error>;
-}
-impl dyn DevicePort {} // Ensure object-safety.
-
-/// Provides the "response" half of a transaction with a device.
-///
-/// This for example is used for a PA RoT to send messages to a AC RoT.
-pub trait DeviceResponse {
-    /// Returns the header sent by the device for this response.
-    fn header(&self) -> Result<Header, Error>;
-
-    /// Returns the raw byte stream for the payload of the response.
-    fn payload(&mut self) -> Result<&mut dyn Read, Error>;
+    fn finish(&mut self) -> Result<(), net::Error>;
 }
 
 /// A simple in-memory [`HostPort`].
@@ -234,6 +146,7 @@ pub trait DeviceResponse {
 /// # use manticore::io::*;
 /// # use manticore::mem::*;
 /// # use manticore::net::*;
+/// # use manticore::net::host::*;
 /// # use manticore::protocol::*;
 /// # use manticore::protocol::firmware_version::*;
 /// # use manticore::protocol::wire::*;
@@ -345,22 +258,22 @@ impl<'buf> InMemHost<'buf> {
 }
 
 impl<'req, 'buf: 'req> HostPort<'req> for InMemHost<'buf> {
-    fn receive(&mut self) -> Result<&mut dyn HostRequest<'req>, Error> {
+    fn receive(&mut self) -> Result<&mut dyn HostRequest<'req>, net::Error> {
         if self.0.rx_header.is_none() {
-            return Err(Error::Disconnected);
+            return Err(net::Error::Disconnected);
         }
         Ok(&mut self.0)
     }
 }
 
 impl<'req, 'buf: 'req> HostRequest<'req> for InMemInner<'buf> {
-    fn header(&self) -> Result<Header, Error> {
-        self.rx_header.ok_or(Error::OutOfOrder)
+    fn header(&self) -> Result<Header, net::Error> {
+        self.rx_header.ok_or(net::Error::OutOfOrder)
     }
 
-    fn payload(&mut self) -> Result<&mut dyn ReadZero<'req>, Error> {
+    fn payload(&mut self) -> Result<&mut dyn ReadZero<'req>, net::Error> {
         if self.rx_header.is_none() {
-            return Err(Error::OutOfOrder);
+            return Err(net::Error::OutOfOrder);
         }
         Ok(&mut self.rx)
     }
@@ -368,7 +281,7 @@ impl<'req, 'buf: 'req> HostRequest<'req> for InMemInner<'buf> {
     fn reply(
         &mut self,
         header: Header,
-    ) -> Result<&mut dyn HostResponse<'req>, Error> {
+    ) -> Result<&mut dyn HostResponse<'req>, net::Error> {
         self.rx_header = None;
         self.tx_header = Some(header);
         Ok(self)
@@ -376,91 +289,15 @@ impl<'req, 'buf: 'req> HostRequest<'req> for InMemInner<'buf> {
 }
 
 impl<'req, 'buf: 'req> HostResponse<'req> for InMemInner<'buf> {
-    fn sink(&mut self) -> Result<&mut dyn Write, Error> {
+    fn sink(&mut self) -> Result<&mut dyn Write, net::Error> {
         if self.finished {
-            return Err(Error::OutOfOrder);
+            return Err(net::Error::OutOfOrder);
         }
         Ok(&mut self.tx)
     }
 
-    fn finish(&mut self) -> Result<(), Error> {
+    fn finish(&mut self) -> Result<(), net::Error> {
         self.finished = true;
         Ok(())
-    }
-}
-
-/// A simple in-memory [`DevicePort`].
-pub struct InMemDevice<'buf>(InMemDeviceInner<'buf>);
-
-struct InMemDeviceInner<'buf> {
-    rx_header: Cell<Option<Header>>,
-    rx: &'buf [u8],
-    tx_dest: Cell<u8>,
-    tx_header: Cell<Option<Header>>,
-    tx: &'buf mut [u8],
-    finished: Cell<bool>,
-}
-
-impl<'buf> Default for InMemDevice<'buf> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<'buf> InMemDevice<'buf> {
-    /// Creates a new `InMemDeviceInner`, with the given output buffer for holding
-    /// messages to be "transmitted", acting as the final destination for
-    /// replies to this host.
-    pub fn new() -> Self {
-        Self(InMemDeviceInner {
-            rx_header: Cell::new(None),
-            rx: &[],
-            tx_dest: Cell::new(0),
-            tx_header: Cell::new(None),
-            tx: &mut [],
-            finished: Cell::new(false),
-        })
-    }
-
-    pub fn response(&mut self, header: Header, message: &'buf [u8]) {
-        self.0.rx_header.set(Some(header));
-        self.0.rx = message;
-    }
-}
-
-impl<'buf> DevicePort for InMemDevice<'buf> {
-    fn send(
-        &mut self,
-        dest: u8,
-        header: Header,
-        msg: &[u8],
-    ) -> Result<(), Error> {
-        self.0.tx_dest.set(dest);
-        self.0.tx_header.set(Some(header));
-        self.0.tx.copy_from_slice(msg);
-
-        self.0.finished.set(true);
-
-        Ok(())
-    }
-
-    fn wait_for_response(&mut self, _timeout: usize) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn receive_response(&mut self) -> Result<&mut dyn DeviceResponse, Error> {
-        Ok(&mut self.0)
-    }
-}
-impl DeviceResponse for InMemDeviceInner<'_> {
-    fn header(&self) -> Result<Header, Error> {
-        if !self.finished.get() {
-            return Err(Error::OutOfOrder);
-        }
-        Ok(self.tx_header.get().unwrap())
-    }
-
-    fn payload(&mut self) -> Result<&mut dyn Read, Error> {
-        Ok(&mut self.rx)
     }
 }
