@@ -10,7 +10,6 @@
 //! ```text
 //! struct TcpCerberus {
 //!   command_type: u8,
-//!   is_request: bool,  // Eight bits; must be 0x0 or 0x1.
 //!   payload_len: u16,
 //! }
 //! ```
@@ -36,7 +35,6 @@ use manticore::protocol::wire::ToWire;
 use manticore::protocol::wire::WireEnum;
 use manticore::protocol::Command;
 use manticore::protocol::CommandType;
-use manticore::protocol::Header;
 use manticore::protocol::Request;
 use manticore::protocol::Response;
 use manticore::server;
@@ -59,9 +57,8 @@ where
         log::error!("{}", e);
         net::Error::Io(io::Error::Internal)
     })?;
-    let mut writer = Writer::new(Header {
+    let mut writer = Writer::new(net::Header {
         command: <Cmd::Req as Request>::TYPE,
-        is_request: true,
     });
     log::info!("serializing {}", type_name::<Cmd::Req>());
     req.to_wire(&mut writer)?;
@@ -94,10 +91,6 @@ where
     let (header, len) = header_from_wire(&mut conn)?;
     let mut r = Reader(conn, len);
 
-    if header.is_request {
-        log::error!("unexpected header.is_request: {}", header.is_request);
-        return Err(net::Error::BadHeader.into());
-    }
     if header.command == <Cmd::Resp as Response>::TYPE {
         log::info!("deserializing {}", type_name::<Cmd::Resp>());
         Ok(Ok(FromWire::from_wire(&mut r, arena)?))
@@ -114,27 +107,19 @@ where
 /// Returns a pair of abstract header and payload length.
 fn header_from_wire(
     mut r: impl std::io::Read,
-) -> Result<(Header, usize), net::Error> {
-    let mut header_bytes = [0u8; 4];
+) -> Result<(net::Header, usize), net::Error> {
+    let mut header_bytes = [0u8; 3];
     r.read_exact(&mut header_bytes).map_err(|e| {
         log::error!("{}", e);
         net::Error::Io(io::Error::Internal)
     })?;
-    let [cmd_byte, req_bit, len_lo, len_hi] = header_bytes;
+    let [cmd_byte, len_lo, len_hi] = header_bytes;
 
-    let header = Header {
+    let header = net::Header {
         command: CommandType::from_wire_value(cmd_byte).ok_or_else(|| {
             log::error!("bad command byte: {}", cmd_byte);
             net::Error::BadHeader
         })?,
-        is_request: match req_bit {
-            0 => false,
-            1 => true,
-            _ => {
-                log::error!("bar request bit value: {}", req_bit);
-                return Err(net::Error::BadHeader);
-            }
-        },
     };
     let len = u16::from_le_bytes([len_lo, len_hi]);
     Ok((header, len as usize))
@@ -150,13 +135,13 @@ fn header_from_wire(
 ///
 /// This type implements [`manticore::io::Write`].
 struct Writer {
-    header: Header,
+    header: net::Header,
     buf: Vec<u8>,
 }
 
 impl Writer {
-    /// Creates a new `Writer` that will encode the given abstract [`Header`].
-    pub fn new(header: Header) -> Self {
+    /// Creates a new `Writer` that will encode the given abstract [`net::Header`].
+    pub fn new(header: net::Header) -> Self {
         Self {
             header,
             buf: Vec::new(),
@@ -167,16 +152,11 @@ impl Writer {
     /// [`TcpStream`]).
     pub fn finish(self, mut w: impl std::io::Write) -> Result<(), net::Error> {
         let [len_lo, len_hi] = (self.buf.len() as u16).to_le_bytes();
-        w.write_all(&[
-            self.header.command.to_wire_value(),
-            self.header.is_request as u8,
-            len_lo,
-            len_hi,
-        ])
-        .map_err(|e| {
-            log::error!("{}", e);
-            net::Error::Io(io::Error::BufferExhausted)
-        })?;
+        w.write_all(&[self.header.command.to_wire_value(), len_lo, len_hi])
+            .map_err(|e| {
+                log::error!("{}", e);
+                net::Error::Io(io::Error::BufferExhausted)
+            })?;
         w.write_all(&self.buf).map_err(|e| {
             log::error!("{}", e);
             net::Error::Io(io::Error::BufferExhausted)
@@ -213,7 +193,7 @@ struct Inner {
     listener: TcpListener,
     // State for `HostRequest`: a parsed header, the length of the payload, and
     // a stream to read it from.
-    stream: Option<(Header, usize, TcpStream)>,
+    stream: Option<(net::Header, usize, TcpStream)>,
     // State for `HostResponse`: a `Writer` to dump the response bytes into.
     output_buffer: Option<Writer>,
 }
@@ -258,7 +238,7 @@ impl<'req> HostPort<'req> for TcpHostPort {
 }
 
 impl<'req> HostRequest<'req> for Inner {
-    fn header(&self) -> Result<Header, net::Error> {
+    fn header(&self) -> Result<net::Header, net::Error> {
         if self.output_buffer.is_some() {
             log::error!("header() called out-of-order");
             return Err(net::Error::OutOfOrder);
@@ -284,7 +264,7 @@ impl<'req> HostRequest<'req> for Inner {
 
     fn reply(
         &mut self,
-        header: Header,
+        header: net::Header,
     ) -> Result<&mut dyn HostResponse<'req>, net::Error> {
         if self.stream.is_none() {
             log::error!("payload() called out-of-order");

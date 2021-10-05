@@ -15,10 +15,13 @@
 
 use crate::io;
 
-pub use crate::protocol::Header;
+use crate::protocol::CommandType;
 
 pub mod device;
 pub mod host;
+
+#[cfg(doc)]
+use host::HostPort;
 
 /// A networking error.
 #[derive(Copy, Clone, Debug)]
@@ -43,4 +46,19 @@ impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
     }
+}
+
+/// An abstract Cerberus message header.
+///
+/// This type records fields extracted out of an incoming Cerberus message's
+/// header, which Manticore's machinery requires to further parse and process
+/// the message.
+///
+/// The serialization of this type is dependent on a [`HostPort`]
+/// implementation.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Header {
+    /// The [`CommandType`] for a request.
+    pub command: CommandType,
 }
