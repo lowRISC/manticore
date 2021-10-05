@@ -45,10 +45,6 @@
 // This is required due to the make_fuzz_safe! macro.
 #![allow(unused_parens)]
 
-use crate::io::ReadInt as _;
-use crate::io::ReadZero;
-use crate::io::Write;
-use crate::mem::Arena;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
 
@@ -234,61 +230,5 @@ impl From<u8> for CommandType {
             0xa1 => CommandType::RequestCounter,
             _ => CommandType::Error,
         }
-    }
-}
-
-/// A parsed `manticore` header.
-///
-/// This struct represents all of the meaningful fields from a `manticore`
-/// header; the actual format of the header is left up to an integration of
-/// this library.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Header {
-    /// The [`CommandType`] for a request.
-    pub command: CommandType,
-    /// The "request bit", for interpreting whether the body is the
-    /// request or response variant of a command.
-    pub is_request: bool,
-}
-
-/// The length of a `manticore` header on the wire, in bytes.
-pub const HEADER_LEN: usize = 5;
-
-/// A magic number required at the start of each `manticore` header.
-const HEADER_MAGIC: &[u8] = &[0b01111110, 0x14, 0x14];
-
-impl<'wire> FromWire<'wire> for Header {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        a: &'wire A,
-    ) -> Result<Self, wire::Error> {
-        let mut magic = [0; 3];
-        r.read_bytes(&mut magic)?;
-        if magic != HEADER_MAGIC {
-            return Err(wire::Error::OutOfRange);
-        }
-
-        let request_byte = r.read_le::<u8>()?;
-        let is_request = match request_byte {
-            0b0000_0000 => false,
-            0b1000_0000 => true,
-            _ => return Err(wire::Error::OutOfRange),
-        };
-
-        let command = CommandType::from_wire(r, a)?;
-        Ok(Self {
-            command,
-            is_request,
-        })
-    }
-}
-
-impl ToWire for Header {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
-        w.write_bytes(HEADER_MAGIC)?;
-        w.write_le((self.is_request as u8) << 7)?;
-        self.command.to_wire(w)?;
-        Ok(())
     }
 }

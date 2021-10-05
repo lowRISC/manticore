@@ -25,7 +25,7 @@
 //! ```
 //! This defines a request handler; nothing happens until `run()` is called.
 //! When called, `run()` performs the following steps:
-//! - It parses a `protocol::Header` out of `req`, asserting that the header
+//! - It parses a `protocol::net::Header` out of `req`, asserting that the header
 //!   has the request bit set.
 //! - It selects a `.handle<MyCommand, _>()` call, such that
 //!   `MyCommand::Req::TYPE` matches the header's command type (if multiple
@@ -76,7 +76,6 @@ use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire as _;
 use crate::protocol::CommandType;
-use crate::protocol::Header;
 use crate::protocol::Request as _;
 use crate::protocol::Response as _;
 
@@ -260,7 +259,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
     fn run_with_header(
         self,
         server: Server,
-        header: Header,
+        header: net::Header,
         request: &mut dyn net::host::HostRequest<'req>,
         arena: &'req Arena,
     ) -> Result<(), Error>;
@@ -277,9 +276,6 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
     ) -> Result<(), Error> {
         let request = host_port.receive()?;
         let header = request.header()?;
-        if !header.is_request {
-            return Err(wire::Error::OutOfRange.into());
-        }
         self.run_with_header(server, header, request, arena)
     }
 }
@@ -299,8 +295,7 @@ where
     {
         match (self.handler)(ctx) {
             Ok(msg) => {
-                let header = Header {
-                    is_request: false,
+                let header = net::Header {
                     command: RespOf::<'out, Command>::TYPE,
                 };
 
@@ -310,8 +305,7 @@ where
                 Ok(())
             }
             Err(err) => {
-                let header = Header {
-                    is_request: false,
+                let header = net::Header {
                     command: CommandType::Error,
                 };
 
@@ -341,7 +335,7 @@ where
     fn run_with_header(
         self,
         server: Server,
-        header: Header,
+        header: net::Header,
         request: &mut dyn net::host::HostRequest<'req>,
         arena: &'req Arena,
     ) -> Result<(), Error> {
@@ -380,7 +374,7 @@ where
     fn run_with_header(
         self,
         server: Server,
-        header: Header,
+        header: net::Header,
         request: &mut dyn net::host::HostRequest<'req>,
         arena: &'req Arena,
     ) -> Result<(), Error> {
@@ -421,7 +415,7 @@ impl<'req, 'srv, Server: 'srv, Arena: 'req>
     fn run_with_header(
         self,
         _: Server,
-        header: Header,
+        header: net::Header,
         _: &mut dyn net::host::HostRequest<'req>,
         _: &'req Arena,
     ) -> Result<(), Error> {
@@ -465,8 +459,7 @@ mod test {
         *port_out = Some(net::host::InMemHost::new(port_scratch));
         let port = port_out.as_mut().unwrap();
         port.request(
-            Header {
-                is_request: true,
+            net::Header {
                 command: <C::Req as protocol::Request<'a>>::TYPE,
             },
             request_bytes,
@@ -474,9 +467,7 @@ mod test {
 
         server.0.run(server.1, port, arena)?;
 
-        let (header, mut resp) = port.response().unwrap();
-        assert!(!header.is_request);
-
+        let (_, mut resp) = port.response().unwrap();
         let resp_val = FromWire::from_wire(&mut resp, arena)
             .expect("failed to read response");
         assert_eq!(resp.len(), 0);

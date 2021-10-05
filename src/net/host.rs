@@ -11,8 +11,6 @@ use crate::io::ReadZero;
 use crate::io::Write;
 use crate::net;
 
-pub use crate::protocol::Header;
-
 /// Represents a physical port that can be used to interact with host devices.
 ///
 /// This trait provides a generic mechanism for receiving and responding to
@@ -101,7 +99,7 @@ pub trait HostRequest<'req> {
     /// Returns the header sent by the host for this request.
     ///
     /// This function should not be called after calling `reply()`.
-    fn header(&self) -> Result<Header, net::Error>;
+    fn header(&self) -> Result<net::Header, net::Error>;
 
     /// Returns the raw byte stream for the payload of the request.
     ///
@@ -115,7 +113,7 @@ pub trait HostRequest<'req> {
     /// the caller via the returned [`HostResponse`].
     fn reply(
         &mut self,
-        header: Header,
+        header: net::Header,
     ) -> Result<&mut dyn HostResponse<'req>, net::Error>;
 }
 
@@ -145,6 +143,7 @@ pub trait HostResponse<'req> {
 /// ```
 /// # use manticore::io::*;
 /// # use manticore::mem::*;
+/// # use manticore::net;
 /// # use manticore::net::*;
 /// # use manticore::net::host::*;
 /// # use manticore::protocol::*;
@@ -155,9 +154,8 @@ pub trait HostResponse<'req> {
 /// let mut host = InMemHost::new(&mut buf);
 ///
 /// // Prepare a request to push into the host.
-/// let header = Header {
+/// let header = net::Header {
 ///     command: CommandType::FirmwareVersion,
-///     is_request: true,
 /// };
 /// let req = [0];
 /// host.request(header, &req);
@@ -170,7 +168,6 @@ pub trait HostResponse<'req> {
 /// let mut host_req = host.receive()?;
 /// let header = host_req.header()?;
 /// assert_eq!(header.command, CommandType::FirmwareVersion);
-/// assert!(header.is_request);
 ///
 /// // Parse and process the message.
 /// let req = FirmwareVersionRequest::from_wire(
@@ -178,9 +175,8 @@ pub trait HostResponse<'req> {
 /// assert_eq!(req.index, 0);
 ///
 /// // Prepare to reply to the message.
-/// let mut host_resp = host_req.reply(Header {
+/// let mut host_resp = host_req.reply(net::Header {
 ///     command: CommandType::FirmwareVersion,
-///     is_request: false,
 /// })?;
 ///
 /// // Build and write a reply.
@@ -193,7 +189,6 @@ pub trait HostResponse<'req> {
 /// // Check that we got the right data back.
 /// let (header, mut resp_bytes) = host.response().unwrap();
 /// assert_eq!(header.command, CommandType::FirmwareVersion);
-/// assert!(!header.is_request);
 ///
 /// // Now, parse the response.
 /// arena.reset();
@@ -215,9 +210,9 @@ pub struct InMemHost<'buf>(InMemInner<'buf>);
 /// Implementors of `HostPort` should take care that the same is not possible
 /// with their implementation.
 struct InMemInner<'buf> {
-    rx_header: Option<Header>,
+    rx_header: Option<net::Header>,
     rx: &'buf [u8],
-    tx_header: Option<Header>,
+    tx_header: Option<net::Header>,
     tx: Cursor<'buf>,
     finished: bool,
 }
@@ -240,7 +235,7 @@ impl<'buf> InMemHost<'buf> {
     ///
     /// Calling this function will make `recieve()` start working; otherwise,
     /// it will assert that the port is disconnected.
-    pub fn request(&mut self, header: Header, message: &'buf [u8]) {
+    pub fn request(&mut self, header: net::Header, message: &'buf [u8]) {
         self.0.rx_header = Some(header);
         self.0.rx = message;
 
@@ -252,7 +247,7 @@ impl<'buf> InMemHost<'buf> {
 
     /// Gets the most recent response recieved until `request()` is called
     /// again.
-    pub fn response(&self) -> Option<(Header, &[u8])> {
+    pub fn response(&self) -> Option<(net::Header, &[u8])> {
         self.0.tx_header.map(|h| (h, self.0.tx.consumed_bytes()))
     }
 }
@@ -267,7 +262,7 @@ impl<'req, 'buf: 'req> HostPort<'req> for InMemHost<'buf> {
 }
 
 impl<'req, 'buf: 'req> HostRequest<'req> for InMemInner<'buf> {
-    fn header(&self) -> Result<Header, net::Error> {
+    fn header(&self) -> Result<net::Header, net::Error> {
         self.rx_header.ok_or(net::Error::OutOfOrder)
     }
 
@@ -280,7 +275,7 @@ impl<'req, 'buf: 'req> HostRequest<'req> for InMemInner<'buf> {
 
     fn reply(
         &mut self,
-        header: Header,
+        header: net::Header,
     ) -> Result<&mut dyn HostResponse<'req>, net::Error> {
         self.rx_header = None;
         self.tx_header = Some(header);
