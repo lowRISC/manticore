@@ -23,7 +23,7 @@ instructions for executing them, can be found under the `fuzz` directory.
 Fuzz tests require nightly Rust, though the library itself builds under stable.
 
 In order to build the Manticore command line tool, run
-`cargo build --features=tool --bin manticore-tool`.
+`cargo build -p manticore-tool`.
 
 ## How to contribute
 
