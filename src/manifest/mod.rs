@@ -89,6 +89,9 @@ pub use container::Metadata;
 pub use container::Toc;
 pub use container::TocEntry;
 
+mod manager;
+pub use manager::Manager;
+
 #[cfg(feature = "std")]
 pub mod owned;
 pub mod pfm;
@@ -242,6 +245,15 @@ pub trait Manifest: Sized {
     /// Manticore. All manifest elements must be future-compatible, so knowing
     /// a "maximum version" is not necessary.
     fn min_version(ty: Self::ElementType) -> u8;
+
+    /// The type of data this manifest guards.
+    ///
+    /// For example, this might be the region of flash that a PFM describes.
+    ///
+    /// See [`Parse::validate()`]. This type is here, rather than in [`Parse`],
+    /// because it cannot depend on any parse-time parameters. This allows
+    /// different parsed manifest to validate against the same guarded value.
+    type Guarded;
 }
 
 /// A moment in which a [`Parse`]able manifest is validated.
@@ -285,8 +297,6 @@ pub trait Parse<'f, Flash, Provenance>: Manifest {
         dest: &mut F,
     ) -> Result<(), Error>;
 
-    /// The type of data this manifest guards.
-    type Guarded;
     /// Validates that `manifest` is "valid"; that is, whatever state of
     /// the system this manifest protects is consistent with the manifest's
     /// expectation.

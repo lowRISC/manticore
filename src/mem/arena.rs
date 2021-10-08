@@ -31,6 +31,18 @@ use core::mem;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OutOfMemory;
 
+impl OutOfMemory {
+    /// Returns a static, mutable reference to an `OutOfMemory`.
+    ///
+    /// This function is the moral equivalent of `&mut []`; `OutOfMemory`
+    /// holds no data, so any non-null pointer is a suitable reference to
+    /// `OutOfMemory`.
+    pub fn static_mut() -> &'static mut Self {
+        // SAFETY: See the note below about zero-length slices.
+        unsafe { &mut *(mem::align_of::<Self>() as *mut Self) }
+    }
+}
+
 unsafe impl Arena for OutOfMemory {
     fn alloc_raw(&self, layout: Layout) -> Result<&mut [u8], OutOfMemory> {
         if layout.size() == 0 {
