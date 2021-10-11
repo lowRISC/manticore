@@ -56,7 +56,7 @@ pub trait Element: Sized {
     const TYPE: ManifestType;
 
     /// Returns the element type of a specific element.
-    fn element_type(&self) -> Self::ElementType;
+    fn element_type(&self) -> manifest::ElementType<Self::ElementType>;
 
     /// Attempts to encode this `Element` into bytes, using the given
     /// padding byte as "filler".

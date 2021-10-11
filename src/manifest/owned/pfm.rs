@@ -14,10 +14,10 @@ use crate::crypto::hash;
 use crate::crypto::ring;
 use crate::hardware::flash::Flash;
 use crate::hardware::flash::Region;
-use crate::manifest;
 use crate::manifest::owned;
 use crate::manifest::owned::EncodingError;
-use crate::manifest::pfm::ElementType;
+use crate::manifest;
+use crate::manifest::pfm;
 use crate::manifest::provenance;
 use crate::manifest::Error;
 use crate::manifest::ManifestType;
@@ -134,15 +134,16 @@ pub struct Image {
 }
 
 impl owned::Element for Element {
-    type ElementType = ElementType;
+    type ElementType = pfm::ElementType;
     const TYPE: ManifestType = ManifestType::Pfm;
 
-    fn element_type(&self) -> ElementType {
+    fn element_type(&self) -> manifest::ElementType<pfm::ElementType> {
         match self {
-            Self::FlashDevice { .. } => ElementType::FlashDevice,
-            Self::AllowableFw { .. } => ElementType::AllowableFw,
-            Self::FwVersion { .. } => ElementType::FwVersion,
-            Self::PlatformId { .. } => ElementType::PlatformId,
+            Self::PlatformId { .. } => manifest::ElementType::PlatformId,
+
+            Self::FlashDevice { .. } => pfm::ElementType::FlashDevice.into(),
+            Self::AllowableFw { .. } => pfm::ElementType::AllowableFw.into(),
+            Self::FwVersion { .. } => pfm::ElementType::FwVersion.into(),
         }
     }
 

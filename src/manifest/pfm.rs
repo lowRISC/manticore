@@ -38,6 +38,7 @@ use crate::manifest::Parse;
 use crate::manifest::ParsedManifest;
 use crate::manifest::TocEntry;
 use crate::manifest::ValidationTime;
+use crate::manifest;
 use crate::mem::misalign_of;
 use crate::mem::Arena;
 
@@ -47,9 +48,6 @@ use crate::protocol::wire::WireEnum as _;
 wire_enum! {
     /// A PFM element type.
     pub enum ElementType: u8 {
-      /// A bytestring identifier for the platform that this PFM describes.
-      PlatformId = 0x01,
-
       /// A `FlashDevice` defines global information pertinent to the entire
       /// flash device a particular PFM describes.
       FlashDevice = 0x10,
@@ -156,7 +154,7 @@ where
         arena: &'pfm impl Arena,
     ) -> Result<Option<PlatformId<'a, 'pfm>>, Error> {
         let entry =
-            match self.container.toc().singleton(ElementType::PlatformId) {
+            match self.container.toc().singleton(manifest::ElementType::PlatformId) {
                 Some(x) => x,
                 None => return Ok(None),
             };
@@ -210,7 +208,7 @@ where
         arena: &'pfm impl Arena,
     ) -> Result<Option<FlashDeviceInfo<'a, 'pfm>>, Error> {
         let entry =
-            match self.container.toc().singleton(ElementType::FlashDevice) {
+            match self.container.toc().singleton(ElementType::FlashDevice.into()) {
                 Some(x) => x,
                 None => return Ok(None),
             };
@@ -255,8 +253,7 @@ where
     ) -> impl Iterator<Item = AllowableFwEntry<'_, 'pfm, F, P>> + '_ {
         self.container
             .toc()
-            .entries()
-            .filter(|e| e.element_type() == Some(ElementType::AllowableFw))
+            .entries_of(ElementType::AllowableFw.into())
             .map(move |entry| AllowableFwEntry { pfm: self, entry })
     }
 }
@@ -420,8 +417,7 @@ impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
         &self,
     ) -> impl Iterator<Item = FwVersionEntry<'_, 'pfm, F, P>> + '_ {
         self.entry()
-            .children()
-            .filter(|e| e.element_type() == Some(ElementType::FwVersion))
+            .children_of(ElementType::FwVersion.into())
             .map(move |entry| FwVersionEntry {
                 version: self,
                 entry,
