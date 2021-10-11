@@ -24,6 +24,7 @@ use crate::manifest::provenance;
 use crate::manifest::Error;
 use crate::manifest::Manifest;
 use crate::manifest::ManifestType;
+use crate::manifest::ElementsOf;
 use crate::mem::Arena;
 use crate::protocol::wire::WireEnum;
 
@@ -85,8 +86,8 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
     }
 
     /// Returns the type of the element this entry refers to.
-    pub fn element_type(self) -> Option<M::ElementType> {
-        <M::ElementType as WireEnum>::from_wire_value(self.raw().element_type)
+    pub fn element_type(self) -> Option<ElementsOf<M>> {
+        <ElementsOf<M> as WireEnum>::from_wire_value(self.raw().element_type)
     }
 
     /// Returns the format version of this TOC entry.
@@ -166,6 +167,13 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
             }
         })
     }
+    /// Returns an iterator over all of this entry's children of a specific
+    /// type.
+    pub fn children_of(self, ty: ElementsOf<M>) -> impl Iterator<Item = TocEntry<'entry, 'toc, M>> where
+    ElementsOf<M>: PartialEq, {
+        self.children().filter(move |e| e.element_type() == Some(ty))
+    }
+
 }
 
 // NOTE: Implemented manually, since derive() would generate incorrect bounds
@@ -299,16 +307,22 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
         })
     }
 
+    /// Returns an iterator over this `Toc`'s entries of a specific type.
+    pub fn entries_of(&self, ty: ElementsOf<M>) -> impl Iterator<Item = TocEntry<'_, 'toc, M>> + '_
+        where ElementsOf<M>: PartialEq,
+    {
+        self.entries().filter(move |e| e.element_type() == Some(ty))
+    }
+
     /// Returns the first element of the given type in this `Toc`.
     ///
     /// This function should be used to discover "singleton" entries, entries
     /// such that only the very first appearance thereof in a TOC is used, with
     /// the rest ignored.
-    pub fn singleton(&self, ty: M::ElementType) -> Option<TocEntry<'_, 'toc, M>>
-    where
-        M::ElementType: PartialEq,
+    pub fn singleton(&self, ty: ElementsOf<M>) -> Option<TocEntry<'_, 'toc, M>>
+    where ElementsOf<M>: PartialEq,
     {
-        self.entries().find(move |e| e.element_type() == Some(ty))
+        self.entries_of(ty).next()
     }
 }
 
@@ -575,6 +589,7 @@ pub(crate) mod test {
 
     use crate::crypto::ring;
     use crate::hardware::flash::Ram;
+    use crate::manifest;
     use crate::manifest::owned;
     use crate::manifest::pfm;
     use crate::manifest::pfm::Pfm;
@@ -653,7 +668,7 @@ pub(crate) mod test {
 
         let first = toc.entry(0).unwrap();
         assert_eq!(first.index(), 0);
-        assert_eq!(first.element_type().unwrap(), pfm::ElementType::PlatformId);
+        assert_eq!(first.element_type().unwrap(), manifest::ElementType::PlatformId);
         assert!(first.parent().is_none());
         assert!(first.hash().is_some());
         assert_eq!(first.children().count(), 0);
@@ -700,7 +715,7 @@ pub(crate) mod test {
 
         let first = toc.entry(0).unwrap();
         assert_eq!(first.index(), 0);
-        assert_eq!(first.element_type().unwrap(), pfm::ElementType::PlatformId);
+        assert_eq!(first.element_type().unwrap(), manifest::ElementType::PlatformId);
         assert!(first.parent().is_none());
         assert!(first.hash().is_some());
 
@@ -710,7 +725,7 @@ pub(crate) mod test {
         assert_eq!(second.index(), 1);
         assert_eq!(
             second.element_type().unwrap(),
-            pfm::ElementType::FlashDevice
+            manifest::ElementType::Specific(pfm::ElementType::FlashDevice),
         );
         assert_eq!(second.parent().unwrap().index(), 0);
         assert!(second.hash().is_none());

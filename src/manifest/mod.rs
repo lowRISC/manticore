@@ -109,6 +109,93 @@ wire_enum! {
     }
 }
 
+/// A manifest element type.
+///
+/// In general, you'll want to work with [`ElementsOf`] instead.
+///
+/// There are three kinds of element types:
+/// - Types shared by all manifests.
+/// - Types specific to a manifest (see [`ElementType::Specific`]).
+/// - Vendor-defined types (see [`ElementType::Vendor`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum ElementType<Specific> {
+    /// A bytestring describing the platform a manifest is intended for.
+    PlatformId,
+
+    /// A manifest-specific element type.
+    Specific(Specific),
+
+    /// A vendor-defined type, in the range `0xe0..=0xfe`.
+    Vendor(u8),
+}
+
+// We can't use macro, unfortunately.
+impl<S: WireEnum<Wire = u8>> WireEnum for ElementType<S> {
+    type Wire = u8;
+
+    fn to_wire_value(self) -> Self::Wire {
+        match self {
+            Self::PlatformId => 0x00,
+            Self::Specific(s) => s.to_wire_value(),
+            Self::Vendor(v) => v,
+        }
+    }
+
+    fn from_wire_value(wire: Self::Wire) -> Option<Self> {
+        match wire {
+            0x00 => Some(Self::PlatformId),
+            0x01..=0x0f | 0xff => None,
+            0xe0..=0xfe => Some(Self::Vendor(wire)),
+            _ => S::from_wire_value(wire).map(Self::Specific),
+        }
+    }
+
+    fn name(self) -> &'static str {
+        macro_rules! names {
+            (vendor: [$($n:tt,)*]) => { match self {
+                Self::PlatformId => "PlatformId",
+                Self::Specific(s) => s.name(),
+                $(Self::Vendor($n) => concat!("Vendor(", stringify!($n), ")"),)*
+                Self::Vendor(_) => "Vendor(_)",
+            }}
+        }
+
+        names!(vendor: [
+            0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
+            0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+            0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
+            0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe,
+        ])
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        macro_rules! names {
+            (vendor: [$($n:tt,)*]) => { match name {
+                "PlatformId" => Some(Self::PlatformId),
+                $(concat!("Vendor(", stringify!($n), ")") => Some(Self::Vendor($n)),)*
+                _ => S::from_name(name).map(Self::Specific),
+            }}
+        }
+
+        names!(vendor: [
+            0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
+            0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+            0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
+            0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe,
+        ])
+    }
+}
+
+impl<S> From<S> for ElementType<S> {
+    fn from(s: S) -> Self {
+        Self::Specific(s)
+    }
+}
+
+/// Convenience alias for obtaining the full [`ElementType`] for a manifest.
+pub type ElementsOf<M> = ElementType<<M as Manifest>::ElementType>;
+
 /// An error returned by a manifestoperation.
 #[derive(Clone, Copy, Debug)]
 pub enum Error {
