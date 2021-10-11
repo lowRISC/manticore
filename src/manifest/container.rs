@@ -172,10 +172,7 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
     pub fn children_of(
         self,
         ty: ElementsOf<M>,
-    ) -> impl Iterator<Item = TocEntry<'entry, 'toc, M>>
-    where
-        ElementsOf<M>: PartialEq,
-    {
+    ) -> impl Iterator<Item = TocEntry<'entry, 'toc, M>> {
         self.children()
             .filter(move |e| e.element_type() == Some(ty))
     }
@@ -316,10 +313,7 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
     pub fn entries_of(
         &self,
         ty: ElementsOf<M>,
-    ) -> impl Iterator<Item = TocEntry<'_, 'toc, M>> + '_
-    where
-        ElementsOf<M>: PartialEq,
-    {
+    ) -> impl Iterator<Item = TocEntry<'_, 'toc, M>> + '_ {
         self.entries().filter(move |e| e.element_type() == Some(ty))
     }
 
@@ -328,10 +322,10 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
     /// This function should be used to discover "singleton" entries, entries
     /// such that only the very first appearance thereof in a TOC is used, with
     /// the rest ignored.
-    pub fn singleton(&self, ty: ElementsOf<M>) -> Option<TocEntry<'_, 'toc, M>>
-    where
-        ElementsOf<M>: PartialEq,
-    {
+    pub fn singleton(
+        &self,
+        ty: ElementsOf<M>,
+    ) -> Option<TocEntry<'_, 'toc, M>> {
         self.entries_of(ty).next()
     }
 }

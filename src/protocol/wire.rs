@@ -10,6 +10,7 @@
 //! to and from Cerberus's wire format, which has a unique, ad-hoc data model.
 
 use core::fmt;
+use core::hash::Hash;
 
 use crate::io;
 use crate::io::endian::LeInt;
@@ -86,7 +87,7 @@ pub trait ToWire: Sized {
 /// assert_eq!(T::from_name(T::name(x)), Some(x));
 /// # }
 /// ```
-pub trait WireEnum: Sized + Copy {
+pub trait WireEnum: Sized + Copy + Eq + Ord + Hash {
     /// The unrelying "wire type". This is almost always some kind of
     /// unsigned integer.
     type Wire;
