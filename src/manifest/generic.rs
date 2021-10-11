@@ -10,7 +10,6 @@ use crate::manifest::provenance::Provenance;
 use crate::manifest::Container;
 use crate::manifest::ElementType;
 use crate::manifest::Error;
-use crate::manifest::Manifest;
 use crate::manifest::Parse;
 use crate::manifest::ParsedManifest;
 use crate::manifest::TocEntry;
@@ -84,9 +83,7 @@ where
         hasher: &mut impl hash::Engine,
         arena: &'f impl Arena,
     ) -> Result<Option<PlatformId<'a, 'f, M::Manifest>>, Error>
-    where
-        <M::Manifest as Manifest>::ElementType: PartialEq,
-    {
+where {
         let entry =
             match self.container().toc().singleton(ElementType::PlatformId) {
                 Some(x) => x,
