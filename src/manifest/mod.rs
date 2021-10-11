@@ -80,14 +80,14 @@ use crate::io;
 use crate::mem::OutOfMemory;
 use crate::protocol::wire::WireEnum;
 
-#[cfg(doc)]
-use flash::Flash;
-
 mod container;
 pub use container::Container;
 pub use container::Metadata;
 pub use container::Toc;
 pub use container::TocEntry;
+
+mod generic;
+pub use generic::*;
 
 #[cfg(feature = "std")]
 pub mod owned;
@@ -95,6 +95,9 @@ pub mod pfm;
 
 #[cfg(test)]
 mod testdata;
+
+#[cfg(doc)]
+use crate::hardware::flash::Flash;
 
 wire_enum! {
     /// A Cerberus manifest type.
@@ -363,14 +366,12 @@ pub trait Parse<'f, Flash, Provenance>: Manifest {
         container: Container<'f, Self, Flash, Provenance>,
     ) -> Result<Self::Parsed, Error>;
 
-    /// Copies the serialized contents of `manifest` to `dest`.
+    /// Returns the container wrapped by a parsed manifest.
     ///
-    /// `dest` may be an altogether different flash type from the one
-    /// `manifest` originated from.
-    fn copy_to<F: flash::Flash>(
+    /// See [`ManifestExt::container()`].
+    fn container(
         manifest: &Self::Parsed,
-        dest: &mut F,
-    ) -> Result<(), Error>;
+    ) -> &Container<'f, Self, Flash, Provenance>;
 
     /// The type of data this manifest guards.
     type Guarded;
@@ -406,7 +407,7 @@ pub mod provenance {
     /// A provenance. This trait can be used to write code that is generic
     /// on provenances but which might choose to skip certain operations for
     /// the `Adhoc` provenenace.
-    pub trait Provenance {
+    pub trait Provenance: 'static {
         /// Whether this provenance represents an authenticated source,
         /// i.e., whether it comes from a continuous chain of trust (via
         /// hashes) to a signature.

@@ -21,10 +21,10 @@ use crate::hardware::flash::FlashIo;
 use crate::hardware::flash::Region;
 use crate::io::Read as _;
 use crate::manifest::provenance;
+use crate::manifest::ElementsOf;
 use crate::manifest::Error;
 use crate::manifest::Manifest;
 use crate::manifest::ManifestType;
-use crate::manifest::ElementsOf;
 use crate::mem::Arena;
 use crate::protocol::wire::WireEnum;
 
@@ -169,11 +169,16 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
     }
     /// Returns an iterator over all of this entry's children of a specific
     /// type.
-    pub fn children_of(self, ty: ElementsOf<M>) -> impl Iterator<Item = TocEntry<'entry, 'toc, M>> where
-    ElementsOf<M>: PartialEq, {
-        self.children().filter(move |e| e.element_type() == Some(ty))
+    pub fn children_of(
+        self,
+        ty: ElementsOf<M>,
+    ) -> impl Iterator<Item = TocEntry<'entry, 'toc, M>>
+    where
+        ElementsOf<M>: PartialEq,
+    {
+        self.children()
+            .filter(move |e| e.element_type() == Some(ty))
     }
-
 }
 
 // NOTE: Implemented manually, since derive() would generate incorrect bounds
@@ -308,8 +313,12 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
     }
 
     /// Returns an iterator over this `Toc`'s entries of a specific type.
-    pub fn entries_of(&self, ty: ElementsOf<M>) -> impl Iterator<Item = TocEntry<'_, 'toc, M>> + '_
-        where ElementsOf<M>: PartialEq,
+    pub fn entries_of(
+        &self,
+        ty: ElementsOf<M>,
+    ) -> impl Iterator<Item = TocEntry<'_, 'toc, M>> + '_
+    where
+        ElementsOf<M>: PartialEq,
     {
         self.entries().filter(move |e| e.element_type() == Some(ty))
     }
@@ -320,7 +329,8 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
     /// such that only the very first appearance thereof in a TOC is used, with
     /// the rest ignored.
     pub fn singleton(&self, ty: ElementsOf<M>) -> Option<TocEntry<'_, 'toc, M>>
-    where ElementsOf<M>: PartialEq,
+    where
+        ElementsOf<M>: PartialEq,
     {
         self.entries_of(ty).next()
     }
@@ -668,7 +678,10 @@ pub(crate) mod test {
 
         let first = toc.entry(0).unwrap();
         assert_eq!(first.index(), 0);
-        assert_eq!(first.element_type().unwrap(), manifest::ElementType::PlatformId);
+        assert_eq!(
+            first.element_type().unwrap(),
+            manifest::ElementType::PlatformId
+        );
         assert!(first.parent().is_none());
         assert!(first.hash().is_some());
         assert_eq!(first.children().count(), 0);
@@ -715,7 +728,10 @@ pub(crate) mod test {
 
         let first = toc.entry(0).unwrap();
         assert_eq!(first.index(), 0);
-        assert_eq!(first.element_type().unwrap(), manifest::ElementType::PlatformId);
+        assert_eq!(
+            first.element_type().unwrap(),
+            manifest::ElementType::PlatformId
+        );
         assert!(first.parent().is_none());
         assert!(first.hash().is_some());
 

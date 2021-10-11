@@ -38,7 +38,6 @@ use crate::manifest::Parse;
 use crate::manifest::ParsedManifest;
 use crate::manifest::TocEntry;
 use crate::manifest::ValidationTime;
-use crate::manifest;
 use crate::mem::misalign_of;
 use crate::mem::Arena;
 
@@ -95,27 +94,8 @@ impl<'f, F: 'f + Flash, P> Parse<'f, F, P> for Pfm {
         Ok(ParsedPfm::new(container))
     }
 
-    fn copy_to<F2: Flash>(
-        manifest: &Self::Parsed,
-        dest: &mut F2,
-    ) -> Result<(), Error> {
-        let src = manifest.container.flash();
-        let len = src.size()? as usize;
-        let mut bytes_left = len;
-
-        let mut buf = [0; 32];
-        while bytes_left > 0 {
-            let bytes_to_copy = bytes_left.min(buf.len());
-            let buf = &mut buf[..bytes_to_copy];
-
-            let offset = (len - bytes_left) as u32;
-            src.read(offset, buf)?;
-            dest.program(offset, buf)?;
-
-            bytes_left -= bytes_to_copy;
-        }
-        dest.flush()?;
-        Ok(())
+    fn container(manifest: &Self::Parsed) -> &Container<'f, Self, F, P> {
+        &manifest.container
     }
 
     type Guarded = ();
@@ -143,61 +123,6 @@ impl<'pfm, F: Flash, P> ParsedPfm<'pfm, F, P>
 where
     P: Provenance,
 {
-    /// Extracts the Platform ID from this PFM, allocating it onto the provided
-    /// arena. Returns `None` if the Platform ID is missing.
-    ///
-    /// This function will also verify the hash of the Platform ID, if one is
-    /// present.
-    pub fn platform_id<'a>(
-        &'a self,
-        hasher: &mut impl hash::Engine,
-        arena: &'pfm impl Arena,
-    ) -> Result<Option<PlatformId<'a, 'pfm>>, Error> {
-        let entry =
-            match self.container.toc().singleton(manifest::ElementType::PlatformId) {
-                Some(x) => x,
-                None => return Ok(None),
-            };
-        if entry.region().len < 4 {
-            return Err(Error::OutOfRange);
-        }
-
-        let data =
-            self.container
-                .flash()
-                .read_direct(entry.region(), arena, 1)?;
-
-        #[derive(FromBytes)]
-        #[repr(C)]
-        struct PlatformIdHeader {
-            len: u8,
-            _unused: [u8; 3],
-        }
-        let (header, rest) =
-            LayoutVerified::<_, PlatformIdHeader>::new_from_prefix(data)
-                .ok_or(Error::TooShort {
-                    toc_index: entry.index(),
-                })?;
-
-        let len = header.len as usize;
-        if rest.len() < len {
-            return Err(Error::TooShort {
-                toc_index: entry.index(),
-            });
-        }
-        let id = &rest[..len];
-
-        if P::AUTHENTICATED {
-            entry.check_hash(data, hasher)?;
-        }
-
-        Ok(Some(PlatformId {
-            _data: data,
-            entry,
-            id,
-        }))
-    }
-
     /// Extracts the `FlashDeviceInfo` element from this PFM.
     ///
     /// This function will also verify the hash of the `FlashDeviceInfo` if one
@@ -207,11 +132,14 @@ where
         hasher: &mut impl hash::Engine,
         arena: &'pfm impl Arena,
     ) -> Result<Option<FlashDeviceInfo<'a, 'pfm>>, Error> {
-        let entry =
-            match self.container.toc().singleton(ElementType::FlashDevice.into()) {
-                Some(x) => x,
-                None => return Ok(None),
-            };
+        let entry = match self
+            .container
+            .toc()
+            .singleton(ElementType::FlashDevice.into())
+        {
+            Some(x) => x,
+            None => return Ok(None),
+        };
         if entry.region().len < 4 {
             return Err(Error::OutOfRange);
         }
@@ -255,26 +183,6 @@ where
             .toc()
             .entries_of(ElementType::AllowableFw.into())
             .map(move |entry| AllowableFwEntry { pfm: self, entry })
-    }
-}
-
-/// An identifier for the platform a PFM is for.
-pub struct PlatformId<'a, 'pfm> {
-    _data: &'pfm [u8],
-    entry: TocEntry<'a, 'pfm, Pfm>,
-    id: &'pfm [u8],
-}
-
-impl<'a, 'pfm> PlatformId<'a, 'pfm> {
-    /// Returns the `Toc` entry defining this element.
-    pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm> {
-        self.entry
-    }
-
-    /// Returns the byte-string identifier that represents the platform this
-    /// PFM is for.
-    pub fn id_string(&self) -> &'pfm [u8] {
-        self.id
     }
 }
 
@@ -416,12 +324,12 @@ impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
     pub fn firmware_versions(
         &self,
     ) -> impl Iterator<Item = FwVersionEntry<'_, 'pfm, F, P>> + '_ {
-        self.entry()
-            .children_of(ElementType::FwVersion.into())
-            .map(move |entry| FwVersionEntry {
+        self.entry().children_of(ElementType::FwVersion.into()).map(
+            move |entry| FwVersionEntry {
                 version: self,
                 entry,
-            })
+            },
+        )
     }
 }
 
@@ -810,6 +718,7 @@ mod test {
     use crate::io::Write as _;
     use crate::manifest::owned;
     use crate::manifest::testdata;
+    use crate::manifest::ManifestExt as _;
     use crate::manifest::ManifestType;
     use crate::manifest::Metadata;
     use crate::mem::BumpArena;
