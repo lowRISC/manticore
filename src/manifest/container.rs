@@ -133,7 +133,7 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
     pub(crate) fn check_hash(
         self,
         data_vec: &[&[u8]],
-        hasher: &mut impl hash::Engine,
+        hasher: &mut dyn hash::Engine,
     ) -> Result<(), Error> {
         let expected = match self.hash() {
             Some(h) => h,
@@ -154,18 +154,15 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
 
     /// Helper for the common case of wanting to read an entry that has some
     /// kind of header, and then check its hash.
-    pub(crate) fn read_with_header<'f, H, P, F, A, E>(
+    pub(crate) fn read_with_header<'f, H, P>(
         self,
-        flash: &'f F,
-        arena: &'f A,
-        hasher: &mut E,
+        flash: &'f dyn Flash,
+        arena: &'f dyn Arena,
+        hasher: &mut dyn hash::Engine,
     ) -> Result<(&'f H, &'f [u8]), Error>
     where
         H: Copy + FromBytes + AsBytes,
         P: provenance::Provenance,
-        F: Flash,
-        A: Arena,
-        E: hash::Engine,
     {
         let (header, rest) =
             flash.read_with_header::<H>(self.region(), arena)?;
@@ -381,14 +378,14 @@ pub(crate) struct RawHeader {
 /// not possible to parse a `Container` without also verifying it.
 ///
 /// See the [module documentation](index.html) for more information.
-pub struct Container<'f, M, F, Provenance = provenance::Signed> {
+pub struct Container<'f, M, Provenance = provenance::Signed> {
     header: &'f RawHeader,
-    flash: &'f F,
+    flash: &'f dyn Flash,
     toc: Toc<'f, M>,
     _ph: PhantomData<Provenance>,
 }
 
-impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Signed> {
+impl<'f, M: Manifest> Container<'f, M, provenance::Signed> {
     /// Parses and verifies a `Container` using the provided cryptographic
     /// primitives.
     ///
@@ -397,11 +394,11 @@ impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Signed> {
     ///
     /// `buf` must be aligned to a four-byte boundary.
     pub fn parse_and_verify(
-        flash: &'f F,
-        hasher: &mut impl hash::Engine,
-        sig_verify: &mut impl sig::Verify,
-        toc_arena: &'f impl Arena,
-        verify_arena: &impl Arena,
+        flash: &'f dyn Flash,
+        hasher: &mut dyn hash::Engine,
+        sig_verify: &mut dyn sig::Verify,
+        toc_arena: &'f dyn Arena,
+        verify_arena: &dyn Arena,
     ) -> Result<Self, Error> {
         let c = Self::parse_inner(flash, toc_arena)?;
 
@@ -412,25 +409,25 @@ impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Signed> {
     }
 }
 
-impl<'f, M: Manifest, F: Flash> Container<'f, M, F, provenance::Adhoc> {
+impl<'f, M: Manifest> Container<'f, M, provenance::Adhoc> {
     /// Parses a `Container` without verifying the signature.
     ///
     /// The value returned by this function cannot be used for trusted
     /// operations. See [`Container::parse_and_verify()`].
     #[inline]
     pub fn parse(
-        flash: &'f F,
-        toc_arena: &'f impl Arena,
+        flash: &'f dyn Flash,
+        toc_arena: &'f dyn Arena,
     ) -> Result<Self, Error> {
         Self::parse_inner(flash, toc_arena)
     }
 }
 
-impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
+impl<'f, M: Manifest, Provenance> Container<'f, M, Provenance> {
     /// Downgrades this `Container`'s provenance to `Adhoc`, forgetting that
     /// this container might have had a valid signature.
     #[inline(always)]
-    pub fn downgrade(self) -> Container<'f, M, F, provenance::Adhoc> {
+    pub fn downgrade(self) -> Container<'f, M, provenance::Adhoc> {
         Container {
             header: self.header,
             flash: self.flash,
@@ -442,8 +439,8 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     /// Verifies the TOC hash for this `Container`.
     pub(crate) fn verify_toc_hash(
         &self,
-        hasher: &mut impl hash::Engine,
-        verify_arena: &impl Arena,
+        hasher: &mut dyn hash::Engine,
+        verify_arena: &dyn Arena,
     ) -> Result<(), Error> {
         let expected_hash_offset = mem::size_of::<RawHeader>()
             + mem::size_of_val(self.toc().entries)
@@ -472,9 +469,9 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     /// Verifies the signature for this `Container`.
     pub(crate) fn verify_signature(
         &self,
-        hasher: &mut impl hash::Engine,
-        sig_verify: &mut impl sig::Verify,
-        verify_arena: &impl Arena,
+        hasher: &mut dyn hash::Engine,
+        sig_verify: &mut dyn sig::Verify,
+        verify_arena: &dyn Arena,
     ) -> Result<(), Error> {
         let mut bytes = [0u8; 16];
         let signed_region = self.signed_region();
@@ -506,8 +503,8 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     /// the necessary arguments to pass to `verify_signature()`, if that were
     /// necessary.
     fn parse_inner(
-        flash: &'f F,
-        toc_arena: &'f impl Arena,
+        flash: &'f dyn Flash,
+        toc_arena: &'f dyn Arena,
     ) -> Result<Self, Error> {
         // TODO(#58): Manticore currently ignores header.sig_type.
         let header = flash.read_object::<RawHeader>(0, toc_arena)?;
@@ -592,7 +589,7 @@ impl<'f, M: Manifest, F: Flash, Provenance> Container<'f, M, F, Provenance> {
     }
 
     /// Returns the backing storage for this `Container`.
-    pub fn flash(&self) -> &'f F {
+    pub fn flash(&self) -> &'f dyn Flash {
         self.flash
     }
 
@@ -643,9 +640,8 @@ pub(crate) mod test {
         let bytes = Ram(pfm
             .sign(0x0, hash::Algo::Sha256, &mut hasher, &mut signer)
             .unwrap());
-        type Flash = Ram<Vec<u8>>;
 
-        let container: Container<'_, Pfm, Flash> = Container::parse_and_verify(
+        let container: Container<Pfm> = Container::parse_and_verify(
             &bytes,
             &mut hasher,
             &mut rsa,
@@ -677,9 +673,8 @@ pub(crate) mod test {
         let bytes = Ram(pfm
             .sign(0x0, hash::Algo::Sha256, &mut hasher, &mut signer)
             .unwrap());
-        type Flash = Ram<Vec<u8>>;
 
-        let container: Container<'_, Pfm, Flash> = Container::parse_and_verify(
+        let container: Container<Pfm> = Container::parse_and_verify(
             &bytes,
             &mut hasher,
             &mut rsa,
@@ -727,9 +722,8 @@ pub(crate) mod test {
         let bytes = Ram(pfm
             .sign(0x0, hash::Algo::Sha256, &mut hasher, &mut signer)
             .unwrap());
-        type Flash = Ram<Vec<u8>>;
 
-        let container: Container<'_, Pfm, Flash> = Container::parse_and_verify(
+        let container: Container<Pfm> = Container::parse_and_verify(
             &bytes,
             &mut hasher,
             &mut rsa,

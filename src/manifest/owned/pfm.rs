@@ -12,7 +12,6 @@ use core::convert::TryInto;
 
 use crate::crypto::hash;
 use crate::crypto::ring;
-use crate::hardware::flash::Flash;
 use crate::hardware::flash::Region;
 use crate::manifest;
 use crate::manifest::owned;
@@ -261,16 +260,11 @@ impl owned::Element for Element {
     }
 }
 
-impl<'f, F: 'f + Flash> owned::FromUnowned<'f, F> for Element {
+impl owned::FromUnowned for Element {
     type Manifest = manifest::pfm::Pfm;
 
     fn from_container(
-        container: manifest::Container<
-            'f,
-            Self::Manifest,
-            F,
-            provenance::Adhoc,
-        >,
+        container: manifest::Container<Self::Manifest, provenance::Adhoc>,
     ) -> Result<Vec<owned::Node<Self>>, Error> {
         let mut arena = BumpArena::new(vec![0; 2048]);
         let pfm = manifest::pfm::ParsedPfm::new(container);

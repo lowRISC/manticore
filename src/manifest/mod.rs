@@ -353,25 +353,23 @@ pub enum ValidationTime {
 /// A subtrait of [`Manifest`] that describes how to parse a manifest from a
 /// specific [`Container`] specialization.
 ///
-/// Users of this trait should, given `M: Manifest` and a flash type `MyFlash`
+/// Users of this trait should, given `M: Manifest`
 /// in a function signature, include a further bound of
-/// `M: Parse<'f, MyFlash, ...>` to obtain the appropriate specialized parsing
+/// `M: Parse<'f, ...>` to obtain the appropriate specialized parsing
 /// function.
-pub trait Parse<'f, Flash, Provenance>: Manifest {
+pub trait Parse<'f, Provenance>: Manifest {
     /// The actual type the parsing operation produces.
     type Parsed: ParsedManifest;
 
     /// Parses a manifest of this type out of `container`.
     fn parse(
-        container: Container<'f, Self, Flash, Provenance>,
+        container: Container<'f, Self, Provenance>,
     ) -> Result<Self::Parsed, Error>;
 
     /// Returns the container wrapped by a parsed manifest.
     ///
     /// See [`ManifestExt::container()`].
-    fn container(
-        manifest: &Self::Parsed,
-    ) -> &Container<'f, Self, Flash, Provenance>;
+    fn container(manifest: &Self::Parsed) -> &Container<'f, Self, Provenance>;
 
     /// The type of data this manifest guards.
     type Guarded;
