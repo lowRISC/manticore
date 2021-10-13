@@ -140,33 +140,20 @@ where
             Some(x) => x,
             None => return Ok(None),
         };
-        if entry.region().len < 4 {
-            return Err(Error::OutOfRange);
-        }
 
-        let data =
-            self.container
-                .flash()
-                .read_direct(entry.region(), arena, 1)?;
-
-        #[derive(FromBytes)]
+        #[derive(Clone, Copy, FromBytes, AsBytes)]
         #[repr(C)]
-        pub struct FlashDeviceHeader {
+        pub struct Header {
             blank_byte: u8,
             _unused: [u8; 3],
         }
-        let (header, _) =
-            LayoutVerified::<_, FlashDeviceHeader>::new_from_prefix(data)
-                .ok_or(Error::TooShort {
-                    toc_index: entry.index(),
-                })?;
-
-        if P::AUTHENTICATED {
-            entry.check_hash(data, hasher)?;
-        }
+        let (header, _) = entry.read_with_header::<Header, P, _, _, _>(
+            self.container.flash(),
+            arena,
+            hasher,
+        )?;
 
         Ok(Some(FlashDeviceInfo {
-            _data: data,
             entry,
             blank_byte: header.blank_byte,
         }))
@@ -191,7 +178,6 @@ where
 /// Note that this is distinct from the flash device that the PFM itself is
 /// stored in.
 pub struct FlashDeviceInfo<'a, 'pfm> {
-    _data: &'pfm [u8],
     entry: TocEntry<'a, 'pfm, Pfm>,
     blank_byte: u8,
 }
@@ -237,41 +223,27 @@ where
         hasher: &mut impl hash::Engine,
         arena: &'pfm impl Arena,
     ) -> Result<AllowableFw<'a, 'pfm, F, P>, Error> {
-        let data = self.pfm.container.flash().read_direct(
-            self.entry.region(),
-            arena,
-            1,
-        )?;
-
-        #[derive(FromBytes)]
+        #[derive(Copy, Clone, FromBytes, AsBytes)]
         #[repr(C)]
-        struct AllowableFwHeader {
+        struct Header {
             fw_count: u8,
             id_len: u8,
             flags: u8,
             _unused: u8,
         }
         let (header, rest) =
-            LayoutVerified::<_, AllowableFwHeader>::new_from_prefix(data)
-                .ok_or(Error::TooShort {
-                    toc_index: self.entry.index(),
-                })?;
-
-        let id_len = header.id_len as usize;
-        if rest.len() < id_len {
-            return Err(Error::TooShort {
+            self.entry.read_with_header::<Header, P, _, _, _>(
+                self.pfm.container.flash(),
+                arena,
+                hasher,
+            )?;
+        let fw_id =
+            rest.get(..header.id_len as usize).ok_or(Error::TooShort {
                 toc_index: self.entry.index(),
-            });
-        }
-        let fw_id = &rest[..id_len];
-
-        if P::AUTHENTICATED {
-            self.entry.check_hash(data, hasher)?;
-        }
+            })?;
 
         Ok(AllowableFw {
             entry: self,
-            _data: data,
             fw_count: header.fw_count,
             fw_id,
             flags: header.flags,
@@ -286,7 +258,6 @@ where
 /// [`AllowableFwEntry::read()`].
 pub struct AllowableFw<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     entry: AllowableFwEntry<'a, 'pfm, Flash, Provenance>,
-    _data: &'pfm [u8],
     fw_count: u8,
     fw_id: &'pfm [u8],
     flags: u8,
@@ -358,19 +329,9 @@ where
         hasher: &mut impl hash::Engine,
         arena: &'pfm impl Arena,
     ) -> Result<FwVersion<'a, 'pfm, F, P>, Error> {
-        #[rustfmt::skip]
-        let data = self.version.entry.pfm.container.flash().read_direct(
-            self.entry.region(),
-            arena,
-            mem::align_of::<u32>(),
-        )?;
-        if P::AUTHENTICATED {
-            self.entry.check_hash(data, hasher)?;
-        }
-
-        #[derive(FromBytes)]
+        #[derive(Clone, Copy, FromBytes, AsBytes)]
         #[repr(C)]
-        struct FwVersionHeader {
+        struct Header {
             image_count: u8,
             rw_count: u8,
             version_len: u8,
@@ -378,10 +339,10 @@ where
             version_addr: u32,
         }
         let (header, rest) =
-            LayoutVerified::<_, FwVersionHeader>::new_from_prefix(data).ok_or(
-                Error::TooShort {
-                    toc_index: self.entry.index(),
-                },
+            self.entry.read_with_header::<Header, P, _, _, _>(
+                self.version.entry.pfm.container.flash(),
+                arena,
+                hasher,
             )?;
 
         if rest.len() < header.version_len as usize {
@@ -481,7 +442,6 @@ where
 
         Ok(FwVersion {
             entry: self,
-            _data: data,
             version_addr: header.version_addr,
             version_str,
             rw_regions,
@@ -498,7 +458,6 @@ where
 pub struct FwVersion<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     #[allow(unused)]
     entry: FwVersionEntry<'a, 'pfm, Flash, Provenance>,
-    _data: &'pfm [u8],
     version_addr: u32,
     version_str: &'pfm [u8],
     rw_regions: &'pfm [RwRegion],

@@ -235,6 +235,28 @@ pub impl<F: Flash + ?Sized> F {
         Ok(lv.into_ref())
     }
 
+    /// Reads an entire region, peeling off a header of type `T`.
+    ///
+    /// Returns the header and whatever bytes that follow it.
+    fn read_with_header<'a: 'c, 'b: 'c, 'c, T>(
+        &'a self,
+        region: Region,
+        arena: &'b dyn Arena,
+    ) -> Result<(&'c T, &'c [u8]), Error>
+    where
+        T: AsBytes + FromBytes + Copy,
+    {
+        if region.len < mem::size_of::<T>() as u32 {
+            return Err(Error::OutOfRange);
+        }
+
+        let bytes = self.read_direct(region, arena, mem::align_of::<T>())?;
+
+        let (lv, rest) = LayoutVerified::<_, T>::new_from_prefix(bytes)
+            .expect("read_direct() implemented incorrectly");
+        Ok((lv.into_ref(), rest))
+    }
+
     /// Reads a slice of type `[T]`.
     ///
     /// See [`ArenaExt::alloc_slice()`].
