@@ -39,15 +39,14 @@ impl<'a, 'f, Manifest> PlatformId<'a, 'f, Manifest> {
 
 /// Helpers for working with manifests.
 #[extend::ext(name = ManifestExt)]
-pub impl<'f, F, P, M> M
+pub impl<'f, P, M> M
 where
-    F: 'f + Flash,
     P: Provenance,
     M: ParsedManifest,
-    M::Manifest: Parse<'f, F, P, Parsed = Self>,
+    M::Manifest: Parse<'f, P, Parsed = Self>,
 {
     /// Gets the [`Container`] that this manifest wraps.
-    fn container(&self) -> &Container<'f, M::Manifest, F, P> {
+    fn container(&self) -> &Container<'f, M::Manifest, P> {
         M::Manifest::container(self)
     }
 
@@ -80,11 +79,11 @@ where
     ///
     /// This function will also verify the hash of the Platform ID, if one is
     /// present.
-    fn platform_id<'a>(
-        &'a self,
-        hasher: &mut impl hash::Engine,
-        arena: &'f impl Arena,
-    ) -> Result<Option<PlatformId<'a, 'f, M::Manifest>>, Error> {
+    fn platform_id(
+        &self,
+        hasher: &mut dyn hash::Engine,
+        arena: &'f dyn Arena,
+    ) -> Result<Option<PlatformId<'_, 'f, M::Manifest>>, Error> {
         let entry =
             match self.container().toc().singleton(ElementType::PlatformId) {
                 Some(x) => x,
@@ -97,7 +96,7 @@ where
             len: u8,
             _unused: [u8; 3],
         }
-        let (header, rest) = entry.read_with_header::<Header, P, _, _, _>(
+        let (header, rest) = entry.read_with_header::<Header, P>(
             self.container().flash(),
             arena,
             hasher,

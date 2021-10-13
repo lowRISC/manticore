@@ -143,7 +143,7 @@ pub unsafe trait Flash {
 }
 impl dyn Flash {} // Ensure object-safety.
 
-unsafe impl<F: Flash> Flash for &F {
+unsafe impl<F: Flash + ?Sized> Flash for &F {
     #[inline]
     fn size(&self) -> Result<u32, Error> {
         F::size(self)
@@ -175,7 +175,7 @@ unsafe impl<F: Flash> Flash for &F {
     }
 }
 
-unsafe impl<F: Flash> Flash for &mut F {
+unsafe impl<F: Flash + ?Sized> Flash for &mut F {
     #[inline]
     fn size(&self) -> Result<u32, Error> {
         F::size(self)

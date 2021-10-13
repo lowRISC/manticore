@@ -26,7 +26,6 @@ use zerocopy::FromBytes;
 use zerocopy::LayoutVerified;
 
 use crate::crypto::hash;
-use crate::hardware::flash::Flash;
 use crate::hardware::flash::Region;
 use crate::manifest::provenance;
 use crate::manifest::provenance::Provenance;
@@ -66,8 +65,8 @@ wire_enum! {
 /// using it to extract other portions of the PFM.
 ///
 /// This type only maintains the TOC in memory for book-keeping.
-pub struct ParsedPfm<'pfm, Flash, Provenance = provenance::Signed> {
-    container: Container<'pfm, Pfm, Flash, Provenance>,
+pub struct ParsedPfm<'pfm, Provenance = provenance::Signed> {
+    container: Container<'pfm, Pfm, Provenance>,
 }
 
 /// A [`Manifest`] implementation mapping onto [`ParsedPfm`], for use in generic
@@ -85,16 +84,14 @@ impl Manifest for Pfm {
     }
 }
 
-impl<'f, F: 'f + Flash, P> Parse<'f, F, P> for Pfm {
-    type Parsed = ParsedPfm<'f, F, P>;
+impl<'f, P> Parse<'f, P> for Pfm {
+    type Parsed = ParsedPfm<'f, P>;
 
-    fn parse(
-        container: Container<'f, Self, F, P>,
-    ) -> Result<Self::Parsed, Error> {
+    fn parse(container: Container<'f, Self, P>) -> Result<Self::Parsed, Error> {
         Ok(ParsedPfm::new(container))
     }
 
-    fn container(manifest: &Self::Parsed) -> &Container<'f, Self, F, P> {
+    fn container(manifest: &Self::Parsed) -> &Container<'f, Self, P> {
         &manifest.container
     }
 
@@ -108,18 +105,18 @@ impl<'f, F: 'f + Flash, P> Parse<'f, F, P> for Pfm {
     }
 }
 
-impl<F, P> ParsedManifest for ParsedPfm<'_, F, P> {
+impl<P> ParsedManifest for ParsedPfm<'_, P> {
     type Manifest = Pfm;
 }
 
-impl<'pfm, F, P> ParsedPfm<'pfm, F, P> {
+impl<'pfm, P> ParsedPfm<'pfm, P> {
     /// Creates a new PFM handle using the given `Container`.
-    pub fn new(container: Container<'pfm, Pfm, F, P>) -> Self {
+    pub fn new(container: Container<'pfm, Pfm, P>) -> Self {
         ParsedPfm { container }
     }
 }
 
-impl<'pfm, F: Flash, P> ParsedPfm<'pfm, F, P>
+impl<'pfm, P> ParsedPfm<'pfm, P>
 where
     P: Provenance,
 {
@@ -127,11 +124,11 @@ where
     ///
     /// This function will also verify the hash of the `FlashDeviceInfo` if one
     /// is present.
-    pub fn flash_device_info<'a>(
-        &'a self,
-        hasher: &mut impl hash::Engine,
-        arena: &'pfm impl Arena,
-    ) -> Result<Option<FlashDeviceInfo<'a, 'pfm>>, Error> {
+    pub fn flash_device_info(
+        &self,
+        hasher: &mut dyn hash::Engine,
+        arena: &'pfm dyn Arena,
+    ) -> Result<Option<FlashDeviceInfo<'_, 'pfm>>, Error> {
         let entry = match self
             .container
             .toc()
@@ -147,7 +144,7 @@ where
             blank_byte: u8,
             _unused: [u8; 3],
         }
-        let (header, _) = entry.read_with_header::<Header, P, _, _, _>(
+        let (header, _) = entry.read_with_header::<Header, P>(
             self.container.flash(),
             arena,
             hasher,
@@ -165,7 +162,7 @@ where
     /// allowing the user to lazily select which entries to read from flash.
     pub fn allowable_fws(
         &self,
-    ) -> impl Iterator<Item = AllowableFwEntry<'_, 'pfm, F, P>> + '_ {
+    ) -> impl Iterator<Item = AllowableFwEntry<'_, 'pfm, P>> + '_ {
         self.container
             .toc()
             .entries_of(ElementType::AllowableFw.into())
@@ -202,12 +199,12 @@ impl<'a, 'pfm> FlashDeviceInfo<'a, 'pfm> {
 ///
 /// This type allows for lazily reading the [`AllowableFw`] described by this
 /// entry, as obtained from [`ParsedPfm::allowable_fws()`].
-pub struct AllowableFwEntry<'a, 'pfm, Flash, Provenance = provenance::Signed> {
-    pfm: &'a ParsedPfm<'pfm, Flash, Provenance>,
+pub struct AllowableFwEntry<'a, 'pfm, Provenance = provenance::Signed> {
+    pfm: &'a ParsedPfm<'pfm, Provenance>,
     entry: TocEntry<'a, 'pfm, Pfm>,
 }
 
-impl<'a, 'pfm, F: Flash, P> AllowableFwEntry<'a, 'pfm, F, P>
+impl<'a, 'pfm, P> AllowableFwEntry<'a, 'pfm, P>
 where
     P: Provenance,
 {
@@ -220,9 +217,9 @@ where
     /// and potentially allocating it on `arena`.
     pub fn read(
         self,
-        hasher: &mut impl hash::Engine,
-        arena: &'pfm impl Arena,
-    ) -> Result<AllowableFw<'a, 'pfm, F, P>, Error> {
+        hasher: &mut dyn hash::Engine,
+        arena: &'pfm dyn Arena,
+    ) -> Result<AllowableFw<'a, 'pfm, P>, Error> {
         #[derive(Copy, Clone, FromBytes, AsBytes)]
         #[repr(C)]
         struct Header {
@@ -231,12 +228,11 @@ where
             flags: u8,
             _unused: u8,
         }
-        let (header, rest) =
-            self.entry.read_with_header::<Header, P, _, _, _>(
-                self.pfm.container.flash(),
-                arena,
-                hasher,
-            )?;
+        let (header, rest) = self.entry.read_with_header::<Header, P>(
+            self.pfm.container.flash(),
+            arena,
+            hasher,
+        )?;
         let fw_id =
             rest.get(..header.id_len as usize).ok_or(Error::TooShort {
                 toc_index: self.entry.index(),
@@ -256,14 +252,14 @@ where
 ///
 /// To obtain a value of this type, see [`ParsedPfm::allowable_fws()`] and
 /// [`AllowableFwEntry::read()`].
-pub struct AllowableFw<'a, 'pfm, Flash, Provenance = provenance::Signed> {
-    entry: AllowableFwEntry<'a, 'pfm, Flash, Provenance>,
+pub struct AllowableFw<'a, 'pfm, Provenance = provenance::Signed> {
+    entry: AllowableFwEntry<'a, 'pfm, Provenance>,
     fw_count: u8,
     fw_id: &'pfm [u8],
     flags: u8,
 }
 
-impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
+impl<'a, 'pfm, P> AllowableFw<'a, 'pfm, P> {
     /// Returns the `Toc` entry defining this element.
     pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm> {
         self.entry.entry
@@ -294,7 +290,7 @@ impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
     /// allowing the user to lazily select which entries to read from flash.
     pub fn firmware_versions(
         &self,
-    ) -> impl Iterator<Item = FwVersionEntry<'_, 'pfm, F, P>> + '_ {
+    ) -> impl Iterator<Item = FwVersionEntry<'_, 'pfm, P>> + '_ {
         self.entry().children_of(ElementType::FwVersion.into()).map(
             move |entry| FwVersionEntry {
                 version: self,
@@ -308,12 +304,12 @@ impl<'a, 'pfm, F: Flash, P> AllowableFw<'a, 'pfm, F, P> {
 ///
 /// This type allows for lazily reading the [`FwVersion`] described by this
 /// entry, as obtained from [`AllowableFw::firmware_versions()`].
-pub struct FwVersionEntry<'a, 'pfm, Flash, Provenance = provenance::Signed> {
-    version: &'a AllowableFw<'a, 'pfm, Flash, Provenance>,
+pub struct FwVersionEntry<'a, 'pfm, Provenance = provenance::Signed> {
+    version: &'a AllowableFw<'a, 'pfm, Provenance>,
     entry: TocEntry<'a, 'pfm, Pfm>,
 }
 
-impl<'a, 'pfm, F: Flash, P> FwVersionEntry<'a, 'pfm, F, P>
+impl<'a, 'pfm, P> FwVersionEntry<'a, 'pfm, P>
 where
     P: Provenance,
 {
@@ -326,9 +322,9 @@ where
     /// and potentially allocating it on `arena`.
     pub fn read(
         self,
-        hasher: &mut impl hash::Engine,
-        arena: &'pfm impl Arena,
-    ) -> Result<FwVersion<'a, 'pfm, F, P>, Error> {
+        hasher: &mut dyn hash::Engine,
+        arena: &'pfm dyn Arena,
+    ) -> Result<FwVersion<'a, 'pfm, P>, Error> {
         #[derive(Clone, Copy, FromBytes, AsBytes)]
         #[repr(C)]
         struct Header {
@@ -338,12 +334,11 @@ where
             _unused: u8,
             version_addr: u32,
         }
-        let (header, rest) =
-            self.entry.read_with_header::<Header, P, _, _, _>(
-                self.version.entry.pfm.container.flash(),
-                arena,
-                hasher,
-            )?;
+        let (header, rest) = self.entry.read_with_header::<Header, P>(
+            self.version.entry.pfm.container.flash(),
+            arena,
+            hasher,
+        )?;
 
         if rest.len() < header.version_len as usize {
             return Err(Error::TooShort {
@@ -455,9 +450,9 @@ where
 ///
 /// To obtain a value of this type, see [`AllowableFw::firmware_versions()`] and
 /// [`FwVersionEntry::read()`].
-pub struct FwVersion<'a, 'pfm, Flash, Provenance = provenance::Signed> {
+pub struct FwVersion<'a, 'pfm, Provenance = provenance::Signed> {
     #[allow(unused)]
-    entry: FwVersionEntry<'a, 'pfm, Flash, Provenance>,
+    entry: FwVersionEntry<'a, 'pfm, Provenance>,
     version_addr: u32,
     version_str: &'pfm [u8],
     rw_regions: &'pfm [RwRegion],
@@ -466,7 +461,7 @@ pub struct FwVersion<'a, 'pfm, Flash, Provenance = provenance::Signed> {
     unparsed_image_regions: &'pfm [u8],
 }
 
-impl<'a, 'pfm, F, P> FwVersion<'a, 'pfm, F, P> {
+impl<'a, 'pfm, P> FwVersion<'a, 'pfm, P> {
     /// Returns the `Toc` entry defining this element.
     pub fn entry(&self) -> TocEntry<'a, 'pfm, Pfm> {
         self.entry.entry

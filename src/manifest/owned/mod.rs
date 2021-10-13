@@ -18,7 +18,6 @@ use zerocopy::AsBytes;
 use crate::crypto::hash;
 use crate::crypto::hash::EngineExt as _;
 use crate::crypto::sig;
-use crate::hardware::flash::Flash;
 use crate::hardware::flash::Ram;
 use crate::io::write::StdWrite;
 use crate::io::Write as _;
@@ -67,19 +66,14 @@ pub trait Element: Sized {
 ///
 /// In general, users should not have to implement this trait.
 #[doc(hidden)]
-pub trait FromUnowned<'f, F: Flash>: Element {
+pub trait FromUnowned: Element {
     /// The "unowned" type.
     type Manifest: Manifest;
 
     /// Walks a parsed container of this manifest type, building a tree of
     /// elements along the way.
     fn from_container(
-        container: manifest::Container<
-            'f,
-            Self::Manifest,
-            F,
-            provenance::Adhoc,
-        >,
+        container: manifest::Container<Self::Manifest, provenance::Adhoc>,
     ) -> Result<Vec<Node<Self>>, Error>;
 }
 
@@ -204,7 +198,7 @@ impl<E: Element> Container<E> {
         sig_verify: Option<&mut impl sig::Verify>,
     ) -> Result<Parse<E>, Error>
     where
-        E: for<'f> FromUnowned<'f, Ram<&'f [u8]>>,
+        E: FromUnowned,
     {
         let mut parse = Parse {
             container: Self {
@@ -218,12 +212,10 @@ impl<E: Element> Container<E> {
 
         let ram = Ram(bytes);
         let arena = BumpArena::new(vec![0; 2048]);
-        let container = manifest::Container::<
-            '_,
-            E::Manifest,
-            _,
-            provenance::Adhoc,
-        >::parse(&ram, &arena)?;
+        let container =
+            manifest::Container::<E::Manifest, provenance::Adhoc>::parse(
+                &ram, &arena,
+            )?;
         // TODO(#58): Right now we ignore a bunch of "implied" fields in the
         // manifest, but we may want to either reject failures, use them,
         // or simply report them.
