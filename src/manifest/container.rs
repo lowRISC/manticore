@@ -132,7 +132,7 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
     /// provided.
     pub(crate) fn check_hash(
         self,
-        data: &[u8],
+        data_vec: &[&[u8]],
         hasher: &mut impl hash::Engine,
     ) -> Result<(), Error> {
         let expected = match self.hash() {
@@ -141,13 +141,38 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
         };
 
         let mut hasher = hasher.new_hash(self.toc.hash_type)?;
-        hasher.write(data)?;
+        for data in data_vec {
+            hasher.write(data)?;
+        }
         hasher
             .expect(expected)
             .map_err(|error| Error::BadElementHash {
                 error,
                 toc_index: self.index(),
             })
+    }
+
+    /// Helper for the common case of wanting to read an entry that has some
+    /// kind of header, and then check its hash.
+    pub(crate) fn read_with_header<'f, H, P, F, A, E>(
+        self,
+        flash: &'f F,
+        arena: &'f A,
+        hasher: &mut E,
+    ) -> Result<(&'f H, &'f [u8]), Error>
+    where
+        H: Copy + FromBytes + AsBytes,
+        P: provenance::Provenance,
+        F: Flash,
+        A: Arena,
+        E: hash::Engine,
+    {
+        let (header, rest) =
+            flash.read_with_header::<H>(self.region(), arena)?;
+        if P::AUTHENTICATED {
+            self.check_hash(&[header.as_bytes(), rest], hasher)?;
+        }
+        Ok((header, rest))
     }
 
     /// Returns an iterator over all of this entry's children.

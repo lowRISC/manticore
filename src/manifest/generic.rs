@@ -4,6 +4,9 @@
 
 //! Extension traits for manifest-generic operations.
 
+use zerocopy::AsBytes;
+use zerocopy::FromBytes;
+
 use crate::crypto::hash;
 use crate::hardware::flash::Flash;
 use crate::manifest::provenance::Provenance;
@@ -17,7 +20,6 @@ use crate::mem::Arena;
 
 /// An identifier for the platform a manifest is for.
 pub struct PlatformId<'a, 'f, Manifest> {
-    _data: &'f [u8],
     entry: TocEntry<'a, 'f, Manifest>,
     id: &'f [u8],
 }
@@ -82,53 +84,29 @@ where
         &'a self,
         hasher: &mut impl hash::Engine,
         arena: &'f impl Arena,
-    ) -> Result<Option<PlatformId<'a, 'f, M::Manifest>>, Error>
-where {
+    ) -> Result<Option<PlatformId<'a, 'f, M::Manifest>>, Error> {
         let entry =
             match self.container().toc().singleton(ElementType::PlatformId) {
                 Some(x) => x,
                 None => return Ok(None),
             };
-        if entry.region().len < 4 {
-            return Err(Error::OutOfRange);
-        }
 
-        let data =
-            self.container()
-                .flash()
-                .read_direct(entry.region(), arena, 1)?;
-
-        #[derive(zerocopy::FromBytes)]
+        #[derive(Clone, Copy, FromBytes, AsBytes)]
         #[repr(C)]
-        struct PlatformIdHeader {
+        struct Header {
             len: u8,
             _unused: [u8; 3],
         }
+        let (header, rest) = entry.read_with_header::<Header, P, _, _, _>(
+            self.container().flash(),
+            arena,
+            hasher,
+        )?;
 
-        let (header, rest) =
-            zerocopy::LayoutVerified::<_, PlatformIdHeader>::new_from_prefix(
-                data,
-            )
-            .ok_or(Error::TooShort {
-                toc_index: entry.index(),
-            })?;
+        let id = rest.get(..header.len as usize).ok_or(Error::TooShort {
+            toc_index: entry.index(),
+        })?;
 
-        let len = header.len as usize;
-        if rest.len() < len {
-            return Err(Error::TooShort {
-                toc_index: entry.index(),
-            });
-        }
-        let id = &rest[..len];
-
-        if P::AUTHENTICATED {
-            entry.check_hash(data, hasher)?;
-        }
-
-        Ok(Some(PlatformId {
-            _data: data,
-            entry,
-            id,
-        }))
+        Ok(Some(PlatformId { entry, id }))
     }
 }
