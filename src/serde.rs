@@ -5,19 +5,48 @@
 //! Internal `serde` helpers.
 
 #![allow(clippy::from_str_radix_10)]
+// Some configurations may not use ever helper defined here.
+#![allow(unused)]
 
 use core::fmt;
 use core::fmt::Binary;
 use core::fmt::LowerHex;
+use core::fmt::Write as _;
 use core::marker::PhantomData;
-
-#[cfg(feature = "std")]
-use std::ffi::CString;
 
 use serde::de;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serializer;
+
+/// No-std helper for using as a `write!()` target.
+struct ArrayBuf<const N: usize>([u8; N], usize);
+
+impl<const N: usize> AsRef<str> for ArrayBuf<N> {
+    fn as_ref(&self) -> &str {
+        core::str::from_utf8(&self.0[..self.1]).unwrap()
+    }
+}
+
+impl<const N: usize> Default for ArrayBuf<N> {
+    fn default() -> Self {
+        Self([0; N], 0)
+    }
+}
+
+impl<const N: usize> fmt::Write for ArrayBuf<N> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        let bytes = s.as_bytes();
+        let space_left = N - self.1;
+        if space_left < bytes.len() {
+            return Err(fmt::Error);
+        }
+
+        self.0[self.1..self.1 + bytes.len()].copy_from_slice(bytes);
+        self.1 += bytes.len();
+        Ok(())
+    }
+}
 
 struct ExpectedByDisplay<T>(T);
 impl<T: fmt::Display> de::Expected for ExpectedByDisplay<T> {
@@ -39,17 +68,16 @@ pub fn skip_if_true(b: &bool) -> bool {
 }
 
 /// For deserializing a `Vec<u8>` from either a string or a sequence of bytes.
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std"))]
 pub fn de_bytestring<'de, D>(d: D) -> Result<Vec<u8>, D::Error>
 where
     D: Deserializer<'de>,
 {
     // CString "does the right thing" per serde's implementation.
-    Ok(CString::deserialize(d)?.into_bytes())
+    Ok(std::ffi::CString::deserialize(d)?.into_bytes())
 }
 
 /// For serializing a `Vec<u8>` as a bytestring.
-#[cfg(feature = "std")]
 pub fn se_bytestring<S>(bytes: &[u8], s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -58,14 +86,18 @@ where
 }
 
 /// For deserializing an `&[u8; N]`.
-pub fn de_u8_array_ref<'de: 'a, 'a, D: Deserializer<'de>, const N: usize>(
+pub fn de_u8_array_ref<'de, 'a, D, const N: usize>(
     d: D,
-) -> Result<&'a [u8; N], D::Error> {
+) -> Result<&'a [u8; N], D::Error>
+where
+    'de: 'a,
+    D: Deserializer<'de>,
+{
     use core::convert::TryInto as _;
 
-    let slice: &'a [u8] = Deserialize::deserialize(d)?;
+    let slice = <&[u8]>::deserialize(d)?;
     slice.try_into().map_err(|_| {
-        <D::Error as serde::de::Error>::invalid_length(
+        <D::Error as de::Error>::invalid_length(
             slice.len(),
             &ExpectedByDisplay(N),
         )
@@ -73,17 +105,16 @@ pub fn de_u8_array_ref<'de: 'a, 'a, D: Deserializer<'de>, const N: usize>(
 }
 
 /// For deserializing an `&[[u8; N]]`.
-pub fn de_slice_of_u8_arrays<
-    'de: 'a,
-    'a,
-    D: Deserializer<'de>,
-    const N: usize,
->(
+pub fn de_slice_of_u8_arrays<'de, 'a, D, const N: usize>(
     d: D,
-) -> Result<&'a [[u8; N]], D::Error> {
-    let slice: &'a [u8] = Deserialize::deserialize(d)?;
+) -> Result<&'a [[u8; N]], D::Error>
+where
+    'de: 'a,
+    D: Deserializer<'de>,
+{
+    let slice = <&[u8]>::deserialize(d)?;
     let lv = zerocopy::LayoutVerified::new_slice(slice).ok_or_else(|| {
-        <D::Error as serde::de::Error>::invalid_length(
+        <D::Error as de::Error>::invalid_length(
             slice.len(),
             &ExpectedByDisplay(format_args!("multiple of {}", N)),
         )
@@ -100,8 +131,9 @@ macro_rules! impl_radix {
             type Value = $ty;
 
             fn expecting(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-                write!(f, "integer between 0 and {}", core::$ty::MAX)
+                write!(f, "integer between 0 and {}", $ty::MAX)
             }
+
             fn visit_borrowed_str<E>(self, s: &'de str) -> Result<$ty, E>
                 where E: de::Error,
             {
@@ -153,23 +185,25 @@ where
 /// Serializes an integer as hex.
 ///
 /// This function requires `std` due to what are (apparently?) serde limitations.
-#[cfg(feature = "std")]
 pub fn se_hex<S, X>(x: X, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
     X: LowerHex,
 {
-    s.serialize_str(&format!("0x{:x}", x))
+    let mut buf = ArrayBuf::<18>::default();
+    let _ = write!(buf, "0x{:x}", x);
+    s.serialize_str(buf.as_ref())
 }
 
 /// Serializes an integer as binary.
 ///
 /// This function requires `std` due to what are (apparently?) serde limitations.
-#[cfg(feature = "std")]
 pub fn se_bin<S, X>(x: X, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
     X: Binary,
 {
-    s.serialize_str(&format!("0b{:b}", x))
+    let mut buf = ArrayBuf::<66>::default();
+    let _ = write!(buf, "0b{:b}", x);
+    s.serialize_str(buf.as_ref())
 }
