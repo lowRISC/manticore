@@ -66,6 +66,32 @@ macro_rules! make_fuzz_safe {
     )*};
     (
         $(#[$meta:meta])*
+        $vis:vis struct $name:ident {
+            $($fields:tt)*
+        }
+    ) => {
+        $(#[$meta])*
+        #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+        $vis struct $name {
+            $($fields)*
+        }
+        make_fuzz_safe!($name);
+    };
+    (
+        $(#[$meta:meta])*
+        $vis:vis enum $name:ident {
+            $($fields:tt)*
+        }
+    ) => {
+        $(#[$meta])*
+        #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+        $vis enum $name {
+            $($fields)*
+        }
+        make_fuzz_safe!($name);
+    };
+    (
+        $(#[$meta:meta])*
         $vis:vis struct $name:ident<$lt:lifetime> {$(
             $(#[$field_meta:meta])*
             $field_vis:vis $field:ident: $field_ty:ty,

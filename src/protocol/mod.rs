@@ -57,6 +57,9 @@ pub(crate) mod macros;
 pub use macros::fuzz::FuzzSafe;
 
 #[macro_use]
+pub mod template;
+
+#[macro_use]
 pub mod wire;
 
 #[macro_use]
