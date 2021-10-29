@@ -16,3 +16,6 @@ manticore::protocol::key_exchange::KeyExchange
 manticore::protocol::request_counter::RequestCounter
 manticore::protocol::reset_counter::ResetCounter
 
+manticore::protocol::spdm::get_version::GetVersion
+manticore::protocol::spdm::get_caps::GetCaps
+
