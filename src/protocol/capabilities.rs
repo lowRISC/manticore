@@ -9,7 +9,6 @@
 //! to negotiate a common ground between a Cerberus device and its client.
 
 use core::time::Duration;
-use core::{u32, u8};
 
 use bitflags::bitflags;
 
@@ -22,79 +21,40 @@ use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
 use crate::protocol::wire::WireEnum;
-use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::NoSpecificError;
-use crate::protocol::Request;
-use crate::protocol::Response;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// A command for negotiating shared device capabilities.
-///
-/// Corresponds to [`CommandType::DeviceCapabilities`].
-pub enum DeviceCapabilities {}
+protocol_struct! {
+    /// A command for negotiating shared device capabilities.
+    type DeviceCapabilities;
+    const TYPE: CommandType = DeviceCapabilities;
 
-impl Command<'_> for DeviceCapabilities {
-    type Req = DeviceCapabilitiesRequest;
-    type Resp = DeviceCapabilitiesResponse;
-    type Error = NoSpecificError;
-}
+    struct Request {
+        /// The advertised capabilities of the client.
+        pub capabilities: Capabilities,
+    }
 
-/// The [`DeviceCapabilities`] request.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DeviceCapabilitiesRequest {
-    /// The advertised capabilities of the client.
-    pub capabilities: Capabilities,
-}
-make_fuzz_safe!(DeviceCapabilitiesRequest);
-
-impl Request<'_> for DeviceCapabilitiesRequest {
-    const TYPE: CommandType = CommandType::DeviceCapabilities;
-}
-
-impl<'wire> FromWire<'wire> for DeviceCapabilitiesRequest {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        a: &'wire A,
-    ) -> Result<Self, wire::Error> {
+    fn Request::from_wire(r, a) {
         let capabilities = Capabilities::from_wire(r, a)?;
         Ok(Self { capabilities })
     }
-}
 
-impl ToWire for DeviceCapabilitiesRequest {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
+    fn Request::to_wire(&self, w) {
         self.capabilities.to_wire(&mut w)
     }
-}
 
-/// The [`DeviceCapabilities`] response.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DeviceCapabilitiesResponse {
-    /// Capabilities negotiated based on the request.
-    pub capabilities: Capabilities,
-    /// Timeouts that this device expects the client to observe.
-    pub timeouts: Timeouts,
-}
-make_fuzz_safe!(DeviceCapabilitiesResponse);
+    struct Response {
+        /// Capabilities negotiated based on the request.
+        pub capabilities: Capabilities,
+        /// Timeouts that this device expects the client to observe.
+        pub timeouts: Timeouts,
+    }
 
-impl Response<'_> for DeviceCapabilitiesResponse {
-    const TYPE: CommandType = CommandType::DeviceCapabilities;
-}
-
-impl<'wire> FromWire<'wire> for DeviceCapabilitiesResponse {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        a: &'wire A,
-    ) -> Result<Self, wire::Error> {
+    fn Response::from_wire(r, a) {
         let capabilities = Capabilities::from_wire(r, a)?;
         let response_timeout =
             Duration::from_millis((10 * (r.read_le::<u8>()? as u32)) as _);
@@ -108,12 +68,10 @@ impl<'wire> FromWire<'wire> for DeviceCapabilitiesResponse {
             },
         })
     }
-}
 
-impl ToWire for DeviceCapabilitiesResponse {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
+    fn Response::to_wire(&self, w) {
         self.capabilities.to_wire(&mut w)?;
-        // Carefully compress the millisecond cound (which is a u128!) down
+        // Carefully compress the millisecond count (which is a u128!) down
         // to a byte, saturating when possible, and avoiding expensive
         // division operations.
         let response_time =

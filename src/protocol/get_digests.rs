@@ -13,89 +13,38 @@ use zerocopy::AsBytes as _;
 
 use crate::crypto::hash;
 use crate::io::ReadInt as _;
-use crate::io::ReadZero;
-use crate::io::Write;
-use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
-use crate::protocol::wire;
-use crate::protocol::wire::FromWire;
-use crate::protocol::wire::ToWire;
 use crate::protocol::ChallengeError;
-use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::Request;
-use crate::protocol::Response;
 
-#[cfg(feature = "arbitrary-derive")]
-use libfuzzer_sys::arbitrary::{self, Arbitrary};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
-/// A command for requesting certificate hashes.
-///
-/// Corresponds to [`CommandType::GetDigests`].
-pub enum GetDigests {}
-
-impl<'wire> Command<'wire> for GetDigests {
-    type Req = GetDigestsRequest;
-    type Resp = GetDigestsResponse<'wire>;
+protocol_struct! {
+    /// A command for requesting certificate hashes.
+    type GetDigests;
     type Error = ChallengeError;
-}
+    const TYPE: CommandType = GetDigests;
 
-wire_enum! {
-    /// A key exchange algorithm.
-    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub enum KeyExchangeAlgo: u8 {
-        /// No key exchange.
-        None = 0b00,
-        /// Elliptic-curve Diffe-Hellman.
-        Ecdh = 0b01,
+    struct Request {
+        /// The slot number of the chain to read from.
+        pub slot: u8,
+        /// The key exchange algorithm to eventually use.
+        ///
+        /// Manticore currently ignores this field.
+        pub key_exchange: KeyExchangeAlgo,
     }
-}
 
-/// The [`GetDigests`] request.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct GetDigestsRequest {
-    /// The slot number of the chain to read from.
-    pub slot: u8,
-    /// The key exchange algorithm to eventually use.
-    ///
-    /// Manticore currently ignores this field.
-    pub key_exchange: KeyExchangeAlgo,
-}
-make_fuzz_safe!(GetDigestsRequest);
-
-impl Request<'_> for GetDigestsRequest {
-    const TYPE: CommandType = CommandType::GetDigests;
-}
-
-impl<'wire> FromWire<'wire> for GetDigestsRequest {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        a: &'wire A,
-    ) -> Result<Self, wire::Error> {
+    fn Request::from_wire(r, a) {
         let slot = r.read_le()?;
         let key_exchange = KeyExchangeAlgo::from_wire(r, a)?;
         Ok(Self { slot, key_exchange })
     }
-}
 
-impl ToWire for GetDigestsRequest {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
+    fn Request::to_wire(&self, w) {
         w.write_le(self.slot)?;
         self.key_exchange.to_wire(w)?;
         Ok(())
     }
-}
 
-make_fuzz_safe! {
-    /// The [`GetDigests`] response.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct GetDigestsResponse<'wire> {
+    struct Response<'wire> {
         /// The digests of each certificate in the chain, starting from the
         /// root.
         #[cfg_attr(feature = "serde",
@@ -103,17 +52,8 @@ make_fuzz_safe! {
         #[cfg_attr(feature = "serde", serde(borrow))]
         pub digests: &'wire [[u8; hash::Algo::Sha256.bytes()]],
     }
-}
 
-impl<'wire> Response<'wire> for GetDigestsResponse<'wire> {
-    const TYPE: CommandType = CommandType::GetDigests;
-}
-
-impl<'wire> FromWire<'wire> for GetDigestsResponse<'wire> {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        arena: &'wire A,
-    ) -> Result<Self, wire::Error> {
+    fn Response::from_wire(r, arena) {
         let capabilities = r.read_le::<u8>()?;
         if capabilities != 1 {
             return Err(wire::Error::OutOfRange);
@@ -123,10 +63,8 @@ impl<'wire> FromWire<'wire> for GetDigestsResponse<'wire> {
         r.read_bytes(digests.as_bytes_mut())?;
         Ok(Self { digests })
     }
-}
 
-impl ToWire for GetDigestsResponse<'_> {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
+    fn Response::to_wire(&self, w) {
         w.write_le(1u8)?; // "Capabilities" byte; must be one.
 
         let digests_len: u8 = self
@@ -137,6 +75,21 @@ impl ToWire for GetDigestsResponse<'_> {
         w.write_le(digests_len)?;
         w.write_bytes(self.digests.as_bytes())?;
         Ok(())
+    }
+}
+
+#[cfg(feature = "arbitrary-derive")]
+use libfuzzer_sys::arbitrary::{self, Arbitrary};
+
+wire_enum! {
+    /// A key exchange algorithm.
+    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    pub enum KeyExchangeAlgo: u8 {
+        /// No key exchange.
+        None = 0b00,
+        /// Elliptic-curve Diffe-Hellman.
+        Ecdh = 0b01,
     }
 }
 

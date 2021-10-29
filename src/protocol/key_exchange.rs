@@ -4,67 +4,24 @@
 
 //! `KeyExchange` request and response.
 //!
-//! This module provides a Cerberus command allowing the versions of various
-//! on-device firmware to be queried.
+//! This module provides a Cerberus command for managing secure sessions.
 
 use core::convert::TryInto as _;
 
 use crate::crypto::hash;
 use crate::io::read::ReadZeroExt as _;
 use crate::io::ReadInt as _;
-use crate::io::ReadZero;
-use crate::io::Write;
-use crate::mem::Arena;
-use crate::protocol::wire;
-use crate::protocol::wire::FromWire;
-use crate::protocol::wire::ToWire;
 use crate::protocol::ChallengeError;
-use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::Request;
-use crate::protocol::Response;
 
-#[cfg(feature = "arbitrary-derive")]
-use libfuzzer_sys::arbitrary::{self, Arbitrary};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
-#[cfg(doc)]
-use crate::hardware::Identity;
-
-/// A command for requesting a firmware version.
-///
-/// Corresponds to [`CommandType::KeyExchange`].
-///
-/// See [`Identity::firmware_version()`].
-pub enum KeyExchange {}
-
-impl<'wire> Command<'wire> for KeyExchange {
-    type Req = KeyExchangeRequest<'wire>;
-    type Resp = KeyExchangeResponse<'wire>;
+protocol_struct! {
+    /// A command for managing a secure session.
+    type KeyExchange;
     type Error = ChallengeError;
-}
+    const TYPE: CommandType = KeyExchange;
 
-wire_enum! {
-    /// A type of key exchange request.
-    enum RequestType: u8 {
-        /// A request to establish a shared session key.
-        SessionKey = 0x00,
 
-        /// A request to compare pairing keys, or generate them if
-        /// this is the first time.
-        PairedKeyHmac = 0x01,
-
-        /// A request to destroy an encrypted session.
-        DestroySession = 0x02,
-    }
-}
-
-make_fuzz_safe! {
-    /// The [`KeyExchange`] request.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub enum KeyExchangeRequest<'wire> {
+    enum Request<'wire> {
         /// A request to establish a shared session key.
         SessionKey {
             /// The HMAC algorithm to use throughout the session.
@@ -94,17 +51,8 @@ make_fuzz_safe! {
             session_hmac: &'wire [u8],
         },
     }
-}
 
-impl<'wire> Request<'wire> for KeyExchangeRequest<'wire> {
-    const TYPE: CommandType = CommandType::KeyExchange;
-}
-
-impl<'wire> FromWire<'wire> for KeyExchangeRequest<'wire> {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        arena: &'wire A,
-    ) -> Result<Self, wire::Error> {
+    fn Request::from_wire(r, arena) {
         match RequestType::from_wire(r, arena)? {
             RequestType::SessionKey => {
                 let hmac_algorithm = match r.read_le::<u8>()? {
@@ -133,10 +81,8 @@ impl<'wire> FromWire<'wire> for KeyExchangeRequest<'wire> {
             }
         }
     }
-}
 
-impl ToWire for KeyExchangeRequest<'_> {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
+    fn Request::to_wire(&self, w) {
         match self {
             Self::SessionKey {
                 hmac_algorithm,
@@ -166,13 +112,8 @@ impl ToWire for KeyExchangeRequest<'_> {
 
         Ok(())
     }
-}
 
-make_fuzz_safe! {
-    /// The [`KeyExchange`] response.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub enum KeyExchangeResponse<'wire> {
+    enum Response<'wire> {
         /// A response to a session establishment request.
         SessionKey {
             /// A DER-encoded ECDSA public key, which will be fed into
@@ -194,17 +135,8 @@ make_fuzz_safe! {
         /// A response to a session-destruction request; indicates success.
         DestroySession,
     }
-}
 
-impl<'wire> Response<'wire> for KeyExchangeResponse<'wire> {
-    const TYPE: CommandType = CommandType::KeyExchange;
-}
-
-impl<'wire> FromWire<'wire> for KeyExchangeResponse<'wire> {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        arena: &'wire A,
-    ) -> Result<Self, wire::Error> {
+    fn Response::from_wire(r, arena) {
         match RequestType::from_wire(r, arena)? {
             RequestType::SessionKey => {
                 let pk_len = r.read_le::<u16>()? as usize;
@@ -225,10 +157,8 @@ impl<'wire> FromWire<'wire> for KeyExchangeResponse<'wire> {
             RequestType::DestroySession => Ok(Self::DestroySession),
         }
     }
-}
 
-impl ToWire for KeyExchangeResponse<'_> {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
+    fn Response::to_wire(&self, w) {
         match self {
             Self::SessionKey {
                 pk_resp,
@@ -256,6 +186,21 @@ impl ToWire for KeyExchangeResponse<'_> {
             Self::PairedKeyHmac => RequestType::PairedKeyHmac.to_wire(&mut w),
             Self::DestroySession => RequestType::DestroySession.to_wire(&mut w),
         }
+    }
+}
+
+wire_enum! {
+    /// A type of key exchange request.
+    enum RequestType: u8 {
+        /// A request to establish a shared session key.
+        SessionKey = 0x00,
+
+        /// A request to compare pairing keys, or generate them if
+        /// this is the first time.
+        PairedKeyHmac = 0x01,
+
+        /// A request to destroy an encrypted session.
+        DestroySession = 0x02,
     }
 }
 

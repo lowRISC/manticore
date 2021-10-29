@@ -548,7 +548,7 @@ mod test {
         let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
-        let req = protocol::device_id::DeviceIdRequest;
+        let req = protocol::device_id::DeviceIdRequest {};
         let resp = simulate_request::<protocol::DeviceId, _, _, _>(
             &mut scratch,
             &mut port,

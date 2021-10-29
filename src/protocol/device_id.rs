@@ -14,85 +14,40 @@ use crate::mem::Arena;
 use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
-use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::NoSpecificError;
-use crate::protocol::Request;
-use crate::protocol::Response;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 
 #[cfg(doc)]
 use crate::hardware::Identity;
 
-/// A command for requesting a unique "device ID".
-///
-/// Corresponds to [`CommandType::DeviceId`].
-///
-/// See [`Identity::unique_device_identity()`].
-pub enum DeviceId {}
+protocol_struct! {
+    /// A command for requesting a unique "device ID".
+    type DeviceId;
+    const TYPE: CommandType = DeviceId;
 
-impl Command<'_> for DeviceId {
-    type Req = DeviceIdRequest;
-    type Resp = DeviceIdResponse;
-    type Error = NoSpecificError;
-}
+    struct Request {}
 
-/// The [`DeviceId`] request.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DeviceIdRequest;
-make_fuzz_safe!(DeviceIdRequest);
-
-impl Request<'_> for DeviceIdRequest {
-    const TYPE: CommandType = CommandType::DeviceId;
-}
-
-impl<'wire> FromWire<'wire> for DeviceIdRequest {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        _: &mut R,
-        _: &'wire A,
-    ) -> Result<Self, wire::Error> {
-        Ok(DeviceIdRequest)
+    fn Request::from_wire(_, _) {
+        Ok(Self {})
     }
-}
 
-impl ToWire for DeviceIdRequest {
-    fn to_wire<W: Write>(&self, _: W) -> Result<(), wire::Error> {
+    fn Request::to_wire(&self, _w) {
         Ok(())
     }
-}
 
-/// The [`DeviceId`] response.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DeviceIdResponse {
-    /// A device identifier that uniquely identifies this device's silicon.
-    pub id: DeviceIdentifier,
-}
-make_fuzz_safe!(DeviceIdResponse);
+    struct Response {
+        /// A device identifier that uniquely identifies this device's silicon.
+        pub id: DeviceIdentifier,
+    }
 
-impl Response<'_> for DeviceIdResponse {
-    const TYPE: CommandType = CommandType::DeviceId;
-}
-
-impl<'wire> FromWire<'wire> for DeviceIdResponse {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        a: &'wire A,
-    ) -> Result<Self, wire::Error> {
+    fn Response::from_wire(r, a) {
         let id = DeviceIdentifier::from_wire(r, a)?;
         Ok(Self { id })
     }
-}
 
-impl ToWire for DeviceIdResponse {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
+    fn Response::to_wire(&self, w) {
         self.id.to_wire(&mut w)?;
         Ok(())
     }
@@ -107,7 +62,7 @@ impl ToWire for DeviceIdResponse {
 /// beyond their names.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 // TODO: Remove this once we have a better idea of what Cerberus expects of
 // these fields.
 #[allow(missing_docs)]
@@ -153,7 +108,7 @@ mod test {
     round_trip_test! {
         request_round_trip: {
             bytes: &[],
-            value: DeviceIdRequest,
+            value: DeviceIdRequest {},
         },
         response_round_trip: {
             bytes: b"abcdefgh",
