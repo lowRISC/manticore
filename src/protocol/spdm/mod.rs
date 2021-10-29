@@ -4,8 +4,16 @@
 
 //! SPDM  protocol messages.
 
+use crate::io::Read;
+use crate::io::ReadInt as _;
+use crate::io::Write;
+use crate::protocol::wire;
+
 pub mod get_version;
 pub use get_version::GetVersion;
+
+pub mod get_caps;
+pub use get_caps::GetCaps;
 
 wire_enum! {
     /// An SPDM command type.
@@ -33,4 +41,24 @@ wire_enum! {
         VendorDefined = 0x7e,
         Error = 0x7f,
     }
+}
+
+/// Utility function for reading `count` zeroes in a row.
+fn expect_zeros(
+    r: &mut (impl Read + ?Sized),
+    count: usize,
+) -> Result<(), wire::Error> {
+    for _ in 0..count {
+        if r.read_le::<u8>()? != 0 {
+            return Err(wire::Error::OutOfRange);
+        }
+    }
+    Ok(())
+}
+
+fn write_zeros(w: &mut impl Write, count: usize) -> Result<(), wire::Error> {
+    for _ in 0..count {
+        w.write_le(0u8)?;
+    }
+    Ok(())
 }
