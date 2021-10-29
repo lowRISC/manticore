@@ -766,3 +766,123 @@ jobs:
           manticore_protocol_reset_counter_ResetCounter__resp_to_wire \
           -- -max_total_time=180
 
+  'manticore_protocol_spdm_get_version_GetVersion__req_to_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::spdm::get_version::GetVersion` with `req_to_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_spdm_get_version_GetVersion__req_to_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_spdm_get_version_GetVersion__req_from_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::spdm::get_version::GetVersion` with `req_from_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_spdm_get_version_GetVersion__req_from_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_spdm_get_version_GetVersion__resp_from_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::spdm::get_version::GetVersion` with `resp_from_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_spdm_get_version_GetVersion__resp_from_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_spdm_get_version_GetVersion__resp_to_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::spdm::get_version::GetVersion` with `resp_to_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_spdm_get_version_GetVersion__resp_to_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_spdm_get_caps_GetCaps__req_to_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::spdm::get_caps::GetCaps` with `req_to_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_spdm_get_caps_GetCaps__req_to_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_spdm_get_caps_GetCaps__req_from_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::spdm::get_caps::GetCaps` with `req_from_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_spdm_get_caps_GetCaps__req_from_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_spdm_get_caps_GetCaps__resp_from_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::spdm::get_caps::GetCaps` with `resp_from_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_spdm_get_caps_GetCaps__resp_from_wire \
+          -- -max_total_time=180
+
+  'manticore_protocol_spdm_get_caps_GetCaps__resp_to_wire':
+    runs-on: ubuntu-latest
+    name: 'Fuzz `manticore::protocol::spdm::get_caps::GetCaps` with `resp_to_wire.rs`'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install `cargo fuzz`
+      run: cargo install cargo-fuzz
+    - name: Run `cargo fuzz run --release --sanitizer address`
+      run: |
+        cd fuzz
+        cargo fuzz run \
+          --release --sanitizer address \
+          manticore_protocol_spdm_get_caps_GetCaps__resp_to_wire \
+          -- -max_total_time=180
+

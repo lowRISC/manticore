@@ -229,3 +229,35 @@ path = "gen/manticore_protocol_reset_counter_ResetCounter__resp_from_wire.rs"
 name = "manticore_protocol_reset_counter_ResetCounter__resp_to_wire"
 path = "gen/manticore_protocol_reset_counter_ResetCounter__resp_to_wire.rs"
 
+[[bin]]
+name = "manticore_protocol_spdm_get_version_GetVersion__req_to_wire"
+path = "gen/manticore_protocol_spdm_get_version_GetVersion__req_to_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_spdm_get_version_GetVersion__req_from_wire"
+path = "gen/manticore_protocol_spdm_get_version_GetVersion__req_from_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_spdm_get_version_GetVersion__resp_from_wire"
+path = "gen/manticore_protocol_spdm_get_version_GetVersion__resp_from_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_spdm_get_version_GetVersion__resp_to_wire"
+path = "gen/manticore_protocol_spdm_get_version_GetVersion__resp_to_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_spdm_get_caps_GetCaps__req_to_wire"
+path = "gen/manticore_protocol_spdm_get_caps_GetCaps__req_to_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_spdm_get_caps_GetCaps__req_from_wire"
+path = "gen/manticore_protocol_spdm_get_caps_GetCaps__req_from_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_spdm_get_caps_GetCaps__resp_from_wire"
+path = "gen/manticore_protocol_spdm_get_caps_GetCaps__resp_from_wire.rs"
+
+[[bin]]
+name = "manticore_protocol_spdm_get_caps_GetCaps__resp_to_wire"
+path = "gen/manticore_protocol_spdm_get_caps_GetCaps__resp_to_wire.rs"
+
