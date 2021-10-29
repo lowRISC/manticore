@@ -60,6 +60,8 @@ pub use error::*;
 mod cerberus;
 pub use cerberus::*;
 
+pub mod spdm;
+
 /// A Manticore command.
 ///
 /// A Manticore command is identified by two types, each of which has a
