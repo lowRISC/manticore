@@ -66,6 +66,7 @@ impl ToWire for RawError {
 pub struct Ack;
 
 impl Response<'_> for Ack {
+    type CommandType = CommandType;
     const TYPE: CommandType = CommandType::Error;
 }
 
