@@ -83,18 +83,24 @@ pub trait Command<'wire> {
     type Error: error::SpecificError;
 }
 
-/// A Cerberus request.
+/// A Manticore request.
 ///
 /// See [`Command`].
 pub trait Request<'wire>: wire::FromWire<'wire> + wire::ToWire {
+    /// The enum of command types this `Request` draws its type from.
+    type CommandType;
+
     /// The unique [`CommandType`] for this `Request`.
-    const TYPE: CommandType;
+    const TYPE: Self::CommandType;
 }
 
-/// A Cerberus response.
+/// A Manticore response.
 ///
 /// See [`Command`].
 pub trait Response<'wire>: wire::FromWire<'wire> + wire::ToWire {
+    /// The enum of command types this `Response` draws its type from.
+    type CommandType;
+
     /// The unique [`CommandType`] for this `Response`.
-    const TYPE: CommandType;
+    const TYPE: Self::CommandType;
 }

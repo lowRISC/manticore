@@ -95,6 +95,7 @@ macro_rules! protocol_struct {
             });
 
             impl<'wire> Request<'wire> for Req<'wire> {
+                type CommandType = $CommandType;
                 const TYPE: $CommandType = $CommandType::$TYPE;
             }
 
@@ -145,6 +146,7 @@ macro_rules! protocol_struct {
                 });
 
                 impl<'wire> Response<'wire> for Resp<'wire> {
+                    type CommandType = $CommandType;
                     const TYPE: $CommandType = $CommandType::$TYPE;
                 }
 

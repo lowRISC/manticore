@@ -50,6 +50,8 @@ pub fn send_local<'a, Cmd>(
 ) -> Result<Result<Cmd::Resp, protocol::Error>, server::Error>
 where
     Cmd: Command<'a>,
+    Cmd::Req: Request<'a, CommandType = CommandType>,
+    Cmd::Resp: Response<'a, CommandType = CommandType>,
 {
     log::info!("connecting to 127.0.0.1:{}", port);
     let mut conn = TcpStream::connect(("127.0.0.1", port)).map_err(|e| {

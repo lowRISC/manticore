@@ -76,8 +76,8 @@ use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire as _;
 use crate::protocol::CommandType;
-use crate::protocol::Request as _;
-use crate::protocol::Response as _;
+use crate::protocol::Request;
+use crate::protocol::Response;
 
 /// A `*`-importable prelude that pulls in only the names that are necessary
 /// to make `Handler` work.
@@ -292,6 +292,7 @@ where
     ) -> Result<(), Error>
     where
         F: FnOnce(Ctx) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
+        RespOf<'out, Command>: Response<'out, CommandType = CommandType>,
     {
         match (self.handler)(ctx) {
             Ok(msg) => {
@@ -329,6 +330,8 @@ where
     F: FnOnce(
         Context<'req, (), ReqOf<'req, Command>, Server>,
     ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
+    ReqOf<'req, Command>: Request<'req, CommandType = CommandType>,
+    RespOf<'out, Command>: Response<'out, CommandType = CommandType>,
 {
     #[inline]
     fn run_with_header(
@@ -367,6 +370,8 @@ where
     F: FnOnce(
         Context<'req, &'req [u8], ReqOf<'req, Command>, Server>,
     ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
+    ReqOf<'req, Command>: Request<'req, CommandType = CommandType>,
+    RespOf<'out, Command>: Response<'out, CommandType = CommandType>,
 {
     #[inline]
     fn run_with_header(
@@ -444,7 +449,10 @@ mod test {
         arena: &'a mut dyn Arena,
         server: (H, T),
         request: C::Req,
-    ) -> Result<C::Resp, Error> {
+    ) -> Result<C::Resp, Error>
+    where
+        ReqOf<'a, C>: Request<'a, CommandType = CommandType>,
+    {
         let len = scratch_space.len();
         let (req_scratch, port_scratch) = scratch_space.split_at_mut(len / 2);
         let mut cursor = Cursor::new(req_scratch);
