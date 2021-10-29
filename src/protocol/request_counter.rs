@@ -10,81 +10,31 @@
 //! Note that the command exposed by this module is a `manticore` extension.
 
 use crate::io::ReadInt as _;
-use crate::io::ReadZero;
-use crate::io::Write;
-use crate::mem::Arena;
-use crate::protocol::wire;
-use crate::protocol::wire::FromWire;
-use crate::protocol::wire::ToWire;
-use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::NoSpecificError;
-use crate::protocol::Request;
-use crate::protocol::Response;
 
-#[cfg(feature = "arbitrary-derive")]
-use libfuzzer_sys::arbitrary::{self, Arbitrary};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+protocol_struct! {
+    /// A command for querying the request counters.
+    type RequestCounter;
+    const TYPE: CommandType = RequestCounter;
 
-/// A command for querying the reqest counters.
-///
-/// Corresponds to [`CommandType::RequestCounter`].
-pub enum RequestCounter {}
+    struct Request {}
 
-impl<'wire> Command<'wire> for RequestCounter {
-    type Req = RequestCounterRequest;
-    type Resp = RequestCounterResponse;
-    type Error = NoSpecificError;
-}
-
-/// The [`RequestCounter`] request.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RequestCounterRequest;
-make_fuzz_safe!(RequestCounterRequest);
-
-impl Request<'_> for RequestCounterRequest {
-    const TYPE: CommandType = CommandType::RequestCounter;
-}
-
-impl<'wire> FromWire<'wire> for RequestCounterRequest {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        _: &mut R,
-        _: &'wire A,
-    ) -> Result<Self, wire::Error> {
-        Ok(RequestCounterRequest)
+    fn Request::from_wire(_, _) {
+        Ok(Self {})
     }
-}
 
-impl ToWire for RequestCounterRequest {
-    fn to_wire<W: Write>(&self, _: W) -> Result<(), wire::Error> {
+    fn Request::to_wire(&self, _w) {
         Ok(())
     }
-}
 
-/// The [`RequestCounter`] response.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RequestCounterResponse {
-    /// The number of successful requests since reset.
-    pub ok_count: u16,
-    /// The number of failed requests since reset.
-    pub err_count: u16,
-}
-make_fuzz_safe!(RequestCounterResponse);
+    struct Response {
+        /// The number of successful requests since reset.
+        pub ok_count: u16,
+        /// The number of failed requests since reset.
+        pub err_count: u16,
+    }
 
-impl Response<'_> for RequestCounterResponse {
-    const TYPE: CommandType = CommandType::RequestCounter;
-}
-
-impl<'wire> FromWire<'wire> for RequestCounterResponse {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        _: &'wire A,
-    ) -> Result<Self, wire::Error> {
+    fn Response::from_wire(r, _) {
         let ok_count = r.read_le::<u16>()?;
         let err_count = r.read_le::<u16>()?;
         Ok(Self {
@@ -92,10 +42,8 @@ impl<'wire> FromWire<'wire> for RequestCounterResponse {
             err_count,
         })
     }
-}
 
-impl ToWire for RequestCounterResponse {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
+    fn Response::to_wire(&self, w) {
         w.write_le(self.ok_count)?;
         w.write_le(self.err_count)?;
         Ok(())
@@ -109,7 +57,7 @@ mod test {
     round_trip_test! {
         request_round_trip: {
             bytes: &[],
-            value: RequestCounterRequest,
+            value: RequestCounterRequest {},
         },
         response_round_trip: {
             bytes: &[0x44, 0x01, 0x07, 0x00],

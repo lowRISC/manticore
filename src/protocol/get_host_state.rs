@@ -8,79 +8,51 @@
 //! the reset state of the host processor protected by Cerberus.
 
 use crate::io::ReadInt as _;
-use crate::io::ReadZero;
-use crate::io::Write;
-use crate::mem::Arena;
-use crate::protocol::wire::Error;
-use crate::protocol::wire::FromWire;
-use crate::protocol::wire::ToWire;
-use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::NoSpecificError;
-use crate::protocol::Request;
-use crate::protocol::Response;
 
-#[cfg(feature = "arbitrary-derive")]
-use libfuzzer_sys::arbitrary::{self, Arbitrary};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+protocol_struct! {
+    /// A command for requesting the host reset state.
+    type GetHostState;
+    const TYPE: CommandType = GetHostState;
 
-/// A command for requesting the host reset state.
-///
-/// Corresponds to [`CommandType::GetHostState`].
-pub enum GetHostState {}
+    struct Request {
+        /// The port that the device whose reset counter is being looked up.
+        pub port_id: u8,
+    }
 
-impl Command<'_> for GetHostState {
-    type Req = GetHostStateRequest;
-    type Resp = GetHostStateResponse;
-    type Error = NoSpecificError;
-}
-
-/// The [`GetHostState`] request.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct GetHostStateRequest {
-    /// The port that the device whose reset counter is being looked up.
-    pub port_id: u8,
-}
-make_fuzz_safe!(GetHostStateRequest);
-
-impl Request<'_> for GetHostStateRequest {
-    const TYPE: CommandType = CommandType::GetHostState;
-}
-
-impl<'wire> FromWire<'wire> for GetHostStateRequest {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        _: &'wire A,
-    ) -> Result<Self, Error> {
+    fn Request::from_wire(r, _) {
         let port_id = r.read_le()?;
         Ok(Self { port_id })
     }
-}
 
-impl ToWire for GetHostStateRequest {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), Error> {
+    fn Request::to_wire(&self, w) {
         w.write_le(self.port_id)?;
+        Ok(())
+    }
+
+    struct Response {
+        /// The returned state.
+        pub host_reset_state: HostResetState,
+    }
+
+    fn Response::from_wire(r, arena) {
+        let host_reset_state = HostResetState::from_wire(r, arena)?;
+        Ok(Self { host_reset_state })
+    }
+
+    fn Response::to_wire(&self, w) {
+        self.host_reset_state.to_wire(&mut w)?;
         Ok(())
     }
 }
 
-/// The [`GetHostState`] response.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct GetHostStateResponse {
-    /// The returned state.
-    pub host_reset_state: HostResetState,
-}
-make_fuzz_safe!(GetHostStateResponse);
+#[cfg(feature = "arbitrary-derive")]
+use libfuzzer_sys::arbitrary::{self, Arbitrary};
 
 wire_enum! {
-    /// Host processor reset state
+    /// Host processor reset state.
     #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub enum HostResetState: u8 {
         /// Host is running (out of reset)
         HostRunning = 0x00,
@@ -88,27 +60,6 @@ wire_enum! {
         HostInReset = 0x01,
         /// Host is not being held in reset, but is not running
         HostNotRunning = 0x02,
-    }
-}
-
-impl Response<'_> for GetHostStateResponse {
-    const TYPE: CommandType = CommandType::GetHostState;
-}
-
-impl<'wire> FromWire<'wire> for GetHostStateResponse {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        arena: &'wire A,
-    ) -> Result<Self, Error> {
-        let host_reset_state = HostResetState::from_wire(r, arena)?;
-        Ok(Self { host_reset_state })
-    }
-}
-
-impl ToWire for GetHostStateResponse {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), Error> {
-        self.host_reset_state.to_wire(&mut w)?;
-        Ok(())
     }
 }
 

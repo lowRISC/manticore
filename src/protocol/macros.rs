@@ -108,6 +108,7 @@ macro_rules! make_fuzz_safe {
         const _: () = paste::paste!{{
             use $crate::protocol::macros::fuzz::FuzzSafe;
             use libfuzzer_sys::arbitrary::Arbitrary;
+            use libfuzzer_sys::arbitrary;
 
             $(
                 // The type names may include lifetimes, such as

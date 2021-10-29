@@ -12,100 +12,43 @@
 use core::time::Duration;
 
 use crate::io::ReadInt as _;
-use crate::io::ReadZero;
-use crate::io::Write;
-use crate::mem::Arena;
-use crate::protocol::wire;
-use crate::protocol::wire::FromWire;
-use crate::protocol::wire::ToWire;
-use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::NoSpecificError;
-use crate::protocol::Request;
-use crate::protocol::Response;
 
-#[cfg(feature = "arbitrary-derive")]
-use libfuzzer_sys::arbitrary::{self, Arbitrary};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+protocol_struct! {
+    /// A command for requesting the time since reset.
+    type DeviceUptime;
+    const TYPE: CommandType = DeviceUptime;
 
-#[cfg(doc)]
-use crate::hardware::Reset;
+    struct Request {
+        /// The port of the device whose uptime is being looked up.
+        pub port_id: u8,
+    }
 
-/// A command for requesting a firmware version.
-///
-/// Corresponds to [`CommandType::DeviceUptime`].
-///
-/// See [`Reset::uptime()`].
-pub enum DeviceUptime {}
-
-impl<'wire> Command<'wire> for DeviceUptime {
-    type Req = DeviceUptimeRequest;
-    type Resp = DeviceUptimeResponse;
-    type Error = NoSpecificError;
-}
-
-/// The [`DeviceUptime`] request.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DeviceUptimeRequest {
-    /// The port that the device whose uptime is being looked up.
-    pub port_id: u8,
-}
-make_fuzz_safe!(DeviceUptimeRequest);
-
-impl Request<'_> for DeviceUptimeRequest {
-    const TYPE: CommandType = CommandType::DeviceUptime;
-}
-
-impl<'wire> FromWire<'wire> for DeviceUptimeRequest {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        _: &'wire A,
-    ) -> Result<Self, wire::Error> {
+    fn Request::from_wire(r, _) {
         let port_id = r.read_le::<u8>()?;
         Ok(Self { port_id })
     }
-}
 
-impl ToWire for DeviceUptimeRequest {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
+    fn Request::to_wire(&self, w) {
         w.write_le(self.port_id)?;
         Ok(())
     }
-}
 
-/// The [`DeviceUptime`] response.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DeviceUptimeResponse {
-    /// The requested device uptime.
-    ///
-    /// Note that this value has microsecond accuracy in a range of four
-    /// seconds.
-    pub uptime: Duration,
-}
-make_fuzz_safe!(DeviceUptimeResponse);
+    struct Response {
+        /// The requested device uptime.
+        ///
+        /// Note that this value has microsecond accuracy in a range of four
+        /// seconds.
+        pub uptime: Duration,
+    }
 
-impl Response<'_> for DeviceUptimeResponse {
-    const TYPE: CommandType = CommandType::DeviceUptime;
-}
-
-impl<'wire> FromWire<'wire> for DeviceUptimeResponse {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        _: &'wire A,
-    ) -> Result<Self, wire::Error> {
+    fn Response::from_wire(r, _) {
         let micros = r.read_le::<u32>()?;
         let uptime = Duration::from_micros(micros as u64);
         Ok(Self { uptime })
     }
-}
 
-impl ToWire for DeviceUptimeResponse {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
+    fn Response::to_wire(&self, w) {
         let micros = self.uptime.as_micros() as u32;
         w.write_le(micros)?;
         Ok(())

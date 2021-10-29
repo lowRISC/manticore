@@ -85,7 +85,7 @@ fn device_id() {
     });
 
     let arena = BumpArena::new([0; 64]);
-    let resp = virt.send_local::<DeviceId, _>(DeviceIdRequest, &arena);
+    let resp = virt.send_local::<DeviceId, _>(DeviceIdRequest {}, &arena);
     assert_eq!(
         resp.unwrap().unwrap().id,
         DeviceIdentifier {

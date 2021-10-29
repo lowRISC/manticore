@@ -17,32 +17,15 @@ use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
 use crate::protocol::ChallengeError;
-use crate::protocol::Command;
 use crate::protocol::CommandType;
-use crate::protocol::Request;
-use crate::protocol::Response;
 
-#[cfg(feature = "arbitrary-derive")]
-use libfuzzer_sys::arbitrary::{self, Arbitrary};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
-/// A command for challenging an RoT.
-///
-/// Corresponds to [`CommandType::Challenge`].
-pub enum Challenge {}
-
-impl<'wire> Command<'wire> for Challenge {
-    type Req = ChallengeRequest<'wire>;
-    type Resp = ChallengeResponse<'wire>;
+protocol_struct! {
+    /// A command for challenging an RoT.
+    type Challenge;
     type Error = ChallengeError;
-}
+    const TYPE: CommandType = Challenge;
 
-make_fuzz_safe! {
-    /// The [`Challenge`] request.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct ChallengeRequest<'wire> {
+    struct Request<'wire> {
         /// The slot number of the chain to read from.
         pub slot: u8,
         /// A requester-chosen random nonce.
@@ -51,29 +34,41 @@ make_fuzz_safe! {
         #[cfg_attr(feature = "serde", serde(borrow))]
         pub nonce: &'wire [u8; 32],
     }
-}
 
-impl<'wire> Request<'wire> for ChallengeRequest<'wire> {
-    const TYPE: CommandType = CommandType::Challenge;
-}
-
-impl<'wire> FromWire<'wire> for ChallengeRequest<'wire> {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        arena: &'wire A,
-    ) -> Result<Self, wire::Error> {
+    fn Request::from_wire(r, arena) {
         let slot = r.read_le()?;
         let _: u8 = r.read_le()?;
         let nonce = r.read_object::<[u8; 32]>(arena)?;
         Ok(Self { slot, nonce })
     }
-}
 
-impl ToWire for ChallengeRequest<'_> {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
+    fn Request::to_wire(&self, w) {
         w.write_le(self.slot)?;
         w.write_le(0u8)?;
         w.write_bytes(self.nonce)?;
+        Ok(())
+    }
+
+    struct Response<'wire> {
+        /// The "to be signed" portion.
+        pub tbs: ChallengeResponseTbs<'wire>,
+        /// The challenge signature.
+        ///
+        /// This is a signature over the concatenation of the corresponding
+        /// request and the response up to the signature.
+        #[cfg_attr(feature = "serde", serde(borrow))]
+        pub signature: &'wire [u8],
+    }
+
+    fn Response::from_wire(r, arena) {
+        let tbs = ChallengeResponseTbs::from_wire(r, arena)?;
+        let signature = r.read_slice::<u8>(r.remaining_data(), arena)?;
+        Ok(Self { tbs, signature })
+    }
+
+    fn Response::to_wire(&self, w) {
+        self.tbs.to_wire(&mut w)?;
+        w.write_bytes(self.signature)?;
         Ok(())
     }
 }
@@ -82,7 +77,7 @@ make_fuzz_safe! {
     /// The portion of the [`Challenge`] response that is incorporated into
     /// the signature.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct ChallengeResponseTbs<'wire> {
         /// The slot number of the chain to read from.
         pub slot: u8,
@@ -177,45 +172,6 @@ impl ToWire for ChallengeResponseTbs<'_> {
                 .map_err(|_| wire::Error::OutOfRange)?,
         )?;
         w.write_bytes(self.pmr0)?;
-        Ok(())
-    }
-}
-
-make_fuzz_safe! {
-    /// The [`Challenge`] response.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct ChallengeResponse<'wire> {
-        /// The "to be signed" portion.
-        pub tbs: ChallengeResponseTbs<'wire>,
-        /// The challenge signature.
-        ///
-        /// This is a signature over the concatenation of the corresponding
-        /// request and the response up to the signature.
-        #[cfg_attr(feature = "serde", serde(borrow))]
-        pub signature: &'wire [u8],
-    }
-}
-
-impl<'wire> Response<'wire> for ChallengeResponse<'wire> {
-    const TYPE: CommandType = CommandType::Challenge;
-}
-
-impl<'wire> FromWire<'wire> for ChallengeResponse<'wire> {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
-        r: &mut R,
-        arena: &'wire A,
-    ) -> Result<Self, wire::Error> {
-        let tbs = ChallengeResponseTbs::from_wire(r, arena)?;
-        let signature = r.read_slice::<u8>(r.remaining_data(), arena)?;
-        Ok(Self { tbs, signature })
-    }
-}
-
-impl ToWire for ChallengeResponse<'_> {
-    fn to_wire<W: Write>(&self, mut w: W) -> Result<(), wire::Error> {
-        self.tbs.to_wire(&mut w)?;
-        w.write_bytes(self.signature)?;
         Ok(())
     }
 }
