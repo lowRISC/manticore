@@ -17,7 +17,7 @@ use crate::net;
 ///
 /// This trait provides a generic mechanism for sending and receiving requests
 /// from devices.
-pub trait DevicePort {
+pub trait DevicePort<Header> {
     /// The send function takes a `header` and `msg` to send to a device.
     /// The implementation of this function must send the header and msg
     /// to the device specified by `dest`.
@@ -29,7 +29,7 @@ pub trait DevicePort {
     fn send(
         &mut self,
         dest: u8,
-        header: net::Header,
+        header: Header,
         msg: &[u8],
     ) -> Result<(), net::Error>;
 
@@ -49,40 +49,40 @@ pub trait DevicePort {
     /// On success returns the response.
     fn receive_response(
         &mut self,
-    ) -> Result<&mut dyn DeviceResponse, net::Error>;
+    ) -> Result<&mut dyn DeviceResponse<Header>, net::Error>;
 }
-impl dyn DevicePort {} // Ensure object-safety.
+impl<H> dyn DevicePort<H> {} // Ensure object-safety.
 
 /// Provides the "response" half of a transaction with a device.
 ///
 /// This for example is used for a PA RoT to send messages to a AC RoT.
-pub trait DeviceResponse {
+pub trait DeviceResponse<Header> {
     /// Returns the header sent by the device for this response.
-    fn header(&self) -> Result<net::Header, net::Error>;
+    fn header(&self) -> Result<Header, net::Error>;
 
     /// Returns the raw byte stream for the payload of the response.
     fn payload(&mut self) -> Result<&mut dyn Read, net::Error>;
 }
 
 /// A simple in-memory [`DevicePort`].
-pub struct InMemDevice<'buf>(InMemInner<'buf>);
+pub struct InMemDevice<'buf, Header>(InMemInner<'buf, Header>);
 
-struct InMemInner<'buf> {
-    rx_header: Cell<Option<net::Header>>,
+struct InMemInner<'buf, Header> {
+    rx_header: Cell<Option<Header>>,
     rx: &'buf [u8],
     tx_dest: Cell<u8>,
-    tx_header: Cell<Option<net::Header>>,
+    tx_header: Cell<Option<Header>>,
     tx: &'buf mut [u8],
     finished: Cell<bool>,
 }
 
-impl<'buf> Default for InMemDevice<'buf> {
+impl<'buf, Header> Default for InMemDevice<'buf, Header> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'buf> InMemDevice<'buf> {
+impl<'buf, Header> InMemDevice<'buf, Header> {
     /// Creates a new `InMemDevice`, with the given output buffer for holding
     /// messages to be "transmitted", acting as the final destination for
     /// replies to this host.
@@ -98,17 +98,17 @@ impl<'buf> InMemDevice<'buf> {
     }
 
     /// Schedules a response.
-    pub fn response(&mut self, header: net::Header, message: &'buf [u8]) {
+    pub fn response(&mut self, header: Header, message: &'buf [u8]) {
         self.0.rx_header.set(Some(header));
         self.0.rx = message;
     }
 }
 
-impl<'buf> DevicePort for InMemDevice<'buf> {
+impl<'buf, Header: Copy> DevicePort<Header> for InMemDevice<'buf, Header> {
     fn send(
         &mut self,
         dest: u8,
-        header: net::Header,
+        header: Header,
         msg: &[u8],
     ) -> Result<(), net::Error> {
         self.0.tx_dest.set(dest);
@@ -126,12 +126,12 @@ impl<'buf> DevicePort for InMemDevice<'buf> {
 
     fn receive_response(
         &mut self,
-    ) -> Result<&mut dyn DeviceResponse, net::Error> {
+    ) -> Result<&mut dyn DeviceResponse<Header>, net::Error> {
         Ok(&mut self.0)
     }
 }
-impl DeviceResponse for InMemInner<'_> {
-    fn header(&self) -> Result<net::Header, net::Error> {
+impl<Header: Copy> DeviceResponse<Header> for InMemInner<'_, Header> {
+    fn header(&self) -> Result<Header, net::Error> {
         if !self.finished.get() {
             return Err(net::Error::OutOfOrder);
         }

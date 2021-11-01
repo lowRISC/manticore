@@ -48,6 +48,23 @@ impl From<io::Error> for Error {
     }
 }
 
+/// A header type, which represents a protocol over the wire.
+pub trait Header: Copy {
+    /// The command type enum associated with this header.
+    type CommandType;
+
+    /// Returns the [`Self::CommandType`] contained within `self`.
+    fn command(&self) -> Self::CommandType;
+
+    /// Constructs a new header for replying to a request that used this header,
+    /// but with the given `command_type` in the response.
+    fn reply_with(&self, command: Self::CommandType) -> Self;
+
+    /// Constructs a new header for replying to a request that used this header,
+    /// indicating that the reply contains an error.
+    fn reply_with_error(&self) -> Self;
+}
+
 /// An abstract Cerberus message header.
 ///
 /// This type records fields extracted out of an incoming Cerberus message's
@@ -58,7 +75,22 @@ impl From<io::Error> for Error {
 /// implementation.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Header {
+pub struct CerberusHeader {
     /// The [`CommandType`] for a request.
     pub command: CommandType,
+}
+
+impl Header for CerberusHeader {
+    type CommandType = CommandType;
+
+    fn command(&self) -> CommandType {
+        self.command
+    }
+    fn reply_with(&self, command: CommandType) -> Self {
+        Self { command }
+    }
+
+    fn reply_with_error(&self) -> Self {
+        self.reply_with(CommandType::Error)
+    }
 }
