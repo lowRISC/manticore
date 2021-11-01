@@ -16,6 +16,7 @@ use crate::hardware;
 use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
 use crate::net;
+use crate::net::CerberusHeader;
 use crate::protocol;
 use crate::protocol::capabilities;
 use crate::protocol::device_id;
@@ -100,12 +101,12 @@ impl<'a> PaRot<'a> {
     /// Process a single incoming request.
     pub fn process_request<'req>(
         &mut self,
-        host_port: &mut dyn net::host::HostPort<'req>,
+        host_port: &mut dyn net::host::HostPort<'req, CerberusHeader>,
         arena: &'req dyn Arena,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error<CerberusHeader>> {
         // Style note: when defining a new handler, if it is more than a
         // handful of lines long, define it out-of-line instead.
-        let result = Handler::<&mut Self>::new()
+        let result = Handler::<&mut Self, CerberusHeader>::new()
             .handle::<protocol::FirmwareVersion, _>(|ctx| {
                 ctx.server.handle_fw_version(&ctx.req)
             })

@@ -19,11 +19,14 @@ use crate::net;
 /// know how to speak the physical layer and assemble messages out of that
 /// physical layer's packets.
 ///
+/// This trait is parametrized over the lifetime of the request, `'req`, and over
+/// the [`net::Header`] type it is responsible for parsing.
+///
 /// `HostPort` uses the traits [`HostRequest`] and [`HostResponse`] to describe
 /// a generic state machine, where a request is processed and replied to.
 /// ```
 /// # use manticore::net::{*, host::*};
-/// fn process_request<'req>(port: &mut impl HostPort<'req>) -> Result<(), Error> {
+/// fn process_request<'req, Header>(port: &mut impl HostPort<'req, Header>) -> Result<(), Error> {
 ///     let req = port.receive()?;
 ///     let header = req.header()?;
 ///     let message = req.payload()?;
@@ -78,7 +81,7 @@ use crate::net;
 /// Implementing this trait in a way that makes the borrow checker happy is
 /// non-trivial, so [`InMemHost`] is also a useful example of how to build the
 /// required "Russian nesting dolls" of trait objects.
-pub trait HostPort<'req> {
+pub trait HostPort<'req, Header> {
     /// Receives an incomming message from a connected host device.
     ///
     /// This function will block until a host device indicates that it wishes
@@ -88,18 +91,20 @@ pub trait HostPort<'req> {
     ///
     /// When a request begins, this function returns a [`HostRequest`], which
     /// can be used to respond to the request.
-    fn receive(&mut self) -> Result<&mut dyn HostRequest<'req>, net::Error>;
+    fn receive(
+        &mut self,
+    ) -> Result<&mut dyn HostRequest<'req, Header>, net::Error>;
 }
-impl dyn HostPort<'_> {} // Ensure object-safety.
+impl<P> dyn HostPort<'_, P> {} // Ensure object-safety.
 
 /// Provides the "request" half of a transaction with a host.
 ///
-/// See [`HostPort`](trait.HostPort.html) for more information.
-pub trait HostRequest<'req> {
+/// See [`HostPort`] for more information.
+pub trait HostRequest<'req, Header> {
     /// Returns the header sent by the host for this request.
     ///
     /// This function should not be called after calling `reply()`.
-    fn header(&self) -> Result<net::Header, net::Error>;
+    fn header(&self) -> Result<Header, net::Error>;
 
     /// Returns the raw byte stream for the payload of the request.
     ///
@@ -113,13 +118,13 @@ pub trait HostRequest<'req> {
     /// the caller via the returned [`HostResponse`].
     fn reply(
         &mut self,
-        header: net::Header,
+        header: Header,
     ) -> Result<&mut dyn HostResponse<'req>, net::Error>;
 }
 
 /// Provides the "reponse" half of a transaction with a host.
 ///
-/// See [`HostPort`](trait.HostPort.html) for more information.
+/// See [`HostPort`] for more information.
 pub trait HostResponse<'req> {
     /// Returns the raw byte stream for building the payload of the response.
     ///
@@ -154,7 +159,7 @@ pub trait HostResponse<'req> {
 /// let mut host = InMemHost::new(&mut buf);
 ///
 /// // Prepare a request to push into the host.
-/// let header = net::Header {
+/// let header = net::CerberusHeader {
 ///     command: CommandType::FirmwareVersion,
 /// };
 /// let req = [0];
@@ -175,7 +180,7 @@ pub trait HostResponse<'req> {
 /// assert_eq!(req.index, 0);
 ///
 /// // Prepare to reply to the message.
-/// let mut host_resp = host_req.reply(net::Header {
+/// let mut host_resp = host_req.reply(net::CerberusHeader {
 ///     command: CommandType::FirmwareVersion,
 /// })?;
 ///
@@ -196,7 +201,7 @@ pub trait HostResponse<'req> {
 /// assert_eq!(resp.version, &[0xba; 32]);
 /// # Ok::<(), manticore::net::Error>(())
 /// ```
-pub struct InMemHost<'buf>(InMemInner<'buf>);
+pub struct InMemHost<'buf, Header>(InMemInner<'buf, Header>);
 
 /// The actual guts of an `InMemHost`. This struct is used to implement the two
 /// "connection state" traits used by `HostPort`.
@@ -209,15 +214,15 @@ pub struct InMemHost<'buf>(InMemInner<'buf>);
 ///
 /// Implementors of `HostPort` should take care that the same is not possible
 /// with their implementation.
-struct InMemInner<'buf> {
-    rx_header: Option<net::Header>,
+struct InMemInner<'buf, Header> {
+    rx_header: Option<Header>,
     rx: &'buf [u8],
-    tx_header: Option<net::Header>,
+    tx_header: Option<Header>,
     tx: Cursor<'buf>,
     finished: bool,
 }
 
-impl<'buf> InMemHost<'buf> {
+impl<'buf, Header: Copy> InMemHost<'buf, Header> {
     /// Creates a new `InMemHost`, with the given output buffer for holding
     /// messages to be "transmitted", acting as the final destination for
     /// replies to this host.
@@ -235,7 +240,7 @@ impl<'buf> InMemHost<'buf> {
     ///
     /// Calling this function will make `recieve()` start working; otherwise,
     /// it will assert that the port is disconnected.
-    pub fn request(&mut self, header: net::Header, message: &'buf [u8]) {
+    pub fn request(&mut self, header: Header, message: &'buf [u8]) {
         self.0.rx_header = Some(header);
         self.0.rx = message;
 
@@ -247,13 +252,17 @@ impl<'buf> InMemHost<'buf> {
 
     /// Gets the most recent response recieved until `request()` is called
     /// again.
-    pub fn response(&self) -> Option<(net::Header, &[u8])> {
+    pub fn response(&self) -> Option<(Header, &[u8])> {
         self.0.tx_header.map(|h| (h, self.0.tx.consumed_bytes()))
     }
 }
 
-impl<'req, 'buf: 'req> HostPort<'req> for InMemHost<'buf> {
-    fn receive(&mut self) -> Result<&mut dyn HostRequest<'req>, net::Error> {
+impl<'req, 'buf: 'req, Header: Copy> HostPort<'req, Header>
+    for InMemHost<'buf, Header>
+{
+    fn receive(
+        &mut self,
+    ) -> Result<&mut dyn HostRequest<'req, Header>, net::Error> {
         if self.0.rx_header.is_none() {
             return Err(net::Error::Disconnected);
         }
@@ -261,8 +270,10 @@ impl<'req, 'buf: 'req> HostPort<'req> for InMemHost<'buf> {
     }
 }
 
-impl<'req, 'buf: 'req> HostRequest<'req> for InMemInner<'buf> {
-    fn header(&self) -> Result<net::Header, net::Error> {
+impl<'req, 'buf: 'req, Header: Copy> HostRequest<'req, Header>
+    for InMemInner<'buf, Header>
+{
+    fn header(&self) -> Result<Header, net::Error> {
         self.rx_header.ok_or(net::Error::OutOfOrder)
     }
 
@@ -275,7 +286,7 @@ impl<'req, 'buf: 'req> HostRequest<'req> for InMemInner<'buf> {
 
     fn reply(
         &mut self,
-        header: net::Header,
+        header: Header,
     ) -> Result<&mut dyn HostResponse<'req>, net::Error> {
         self.rx_header = None;
         self.tx_header = Some(header);
@@ -283,7 +294,9 @@ impl<'req, 'buf: 'req> HostRequest<'req> for InMemInner<'buf> {
     }
 }
 
-impl<'req, 'buf: 'req> HostResponse<'req> for InMemInner<'buf> {
+impl<'req, 'buf: 'req, Header: Copy> HostResponse<'req>
+    for InMemInner<'buf, Header>
+{
     fn sink(&mut self) -> Result<&mut dyn Write, net::Error> {
         if self.finished {
             return Err(net::Error::OutOfOrder);

@@ -20,6 +20,7 @@ use manticore::cert::CertFormat;
 use manticore::crypto::ring;
 use manticore::mem::Arena;
 use manticore::mem::BumpArena;
+use manticore::net;
 use manticore::protocol;
 use manticore::protocol::capabilities;
 use manticore::protocol::device_id::DeviceIdentifier;
@@ -202,7 +203,10 @@ impl Virtual {
         &self,
         req: Cmd::Req,
         arena: &'a dyn Arena,
-    ) -> Result<Result<Cmd::Resp, protocol::Error>, server::Error>
+    ) -> Result<
+        Result<Cmd::Resp, protocol::Error>,
+        server::Error<net::CerberusHeader>,
+    >
     where
         Cmd: protocol::Command<'a>,
         Cmd::Req: protocol::Request<'a, CommandType = protocol::CommandType>,

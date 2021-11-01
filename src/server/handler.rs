@@ -15,7 +15,7 @@
 //! let server = ...;  // Your "server context" type.
 //! let req = ...;     // A `Read` with an incoming message.
 //! let resp = ...;    // A `Write` to write a response to.
-//! Handler::<Server>::new()
+//! Handler::<Server, Header>::new()
 //!   .handle::<MyCommand, _>(|ctx| {
 //!     // Do stuff...
 //!     Ok(response)
@@ -25,8 +25,9 @@
 //! ```
 //! This defines a request handler; nothing happens until `run()` is called.
 //! When called, `run()` performs the following steps:
-//! - It parses a `protocol::net::Header` out of `req`, asserting that the header
-//!   has the request bit set.
+//! - It parses a `Header` out of `req`, asserting that the header
+//!   has the request bit set. `Header` can be any [`net::Header`] type, so
+//!   long as `req` supports it.
 //! - It selects a `.handle<MyCommand, _>()` call, such that
 //!   `MyCommand::Req::TYPE` matches the header's command type (if multiple
 //!   handlers could match, an unspecified one is chosen).
@@ -44,7 +45,7 @@
 //! Suppose we have types `A, B, C: Command<'req>` which we want to handle, so
 //! we write the following code:
 //! ```text
-//! Handler::<Server>::new()
+//! Handler::<Server, Header>::new()
 //!   .handle::<A, _>(...)
 //!   .handle::<B, _>(...)
 //!   .handle::<C, _>(...)
@@ -75,7 +76,6 @@ use crate::protocol;
 use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire as _;
-use crate::protocol::CommandType;
 use crate::protocol::Request;
 use crate::protocol::Response;
 
@@ -88,7 +88,10 @@ pub mod prelude {
 
 /// An error returned by a request handler.
 #[derive(Copy, Clone, Debug)]
-pub enum Error {
+pub enum Error<Header>
+where
+    Header: net::Header,
+{
     /// Indicates an error originating from a network connection.
     Network(net::Error),
 
@@ -104,17 +107,17 @@ pub enum Error {
 
     /// Indicates that a request could not be handled, because no handler was
     /// provided for it.
-    UnhandledCommand(CommandType),
+    UnhandledCommand(Header::CommandType),
 }
 
-impl From<wire::Error> for Error {
-    fn from(e: wire::Error) -> Error {
+impl<H: net::Header> From<wire::Error> for Error<H> {
+    fn from(e: wire::Error) -> Self {
         Error::Wire(e)
     }
 }
 
-impl From<net::Error> for Error {
-    fn from(e: net::Error) -> Error {
+impl<H: net::Header> From<net::Error> for Error<H> {
+    fn from(e: net::Error) -> Self {
         Error::Network(e)
     }
 }
@@ -126,11 +129,11 @@ impl From<net::Error> for Error {
 /// Note: the type parameter on this type is only necessary to make type
 /// inference work out. It can be left off, but rustc will complain about
 /// missing type annotations.
-pub struct Handler<Server> {
-    _ph: PhantomData<fn(Server)>,
+pub struct Handler<Server, Header> {
+    _ph: PhantomData<fn(Server, Header)>,
 }
 
-impl<Server> Handler<Server> {
+impl<Server, Header> Handler<Server, Header> {
     /// Creates a new, default `Handler`.
     pub fn new() -> Self {
         Self { _ph: PhantomData }
@@ -181,8 +184,10 @@ pub struct Context<'req, Buf, Req, Server> {
 /// must be placed here to ensure that all inputs into a request handling
 /// operation (including the `FromWire` and `Command` traits, which have
 /// lifetimes in them) have a single, coherent lifetime.
-pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
+pub trait HandlerMethods<'req, 'srv, Server: 'srv, Header>:
     Sized + sealed::Sealed
+where
+    Header: net::Header,
 {
     /// Attaches a new handler function to a `Handler`.
     ///
@@ -222,7 +227,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
         //
         // Once we have GATs, we can make a breaking change to eliminate this
         // kludge.
-        C: for<'c> protocol::Command<'c>,
+        for<'c> C: protocol::Command<'c>,
         F: FnOnce(
             Context<'req, (), ReqOf<'req, C>, Server>,
         ) -> Result<RespOf<'out, C>, ErrOf<'out, C>>,
@@ -240,7 +245,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
     fn handle_buffered<'out, C, F>(self, handler: F) -> Cons<Self, C, F, true>
     where
         // See above for an explanation of these bounds.
-        C: for<'c> protocol::Command<'c>,
+        for<'c> C: protocol::Command<'c>,
         F: FnOnce(
             Context<'req, &'req [u8], ReqOf<'req, C>, Server>,
         ) -> Result<RespOf<'out, C>, ErrOf<'out, C>>,
@@ -259,10 +264,10 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
     fn run_with_header(
         self,
         server: Server,
-        header: net::Header,
-        request: &mut dyn net::host::HostRequest<'req>,
+        header: Header,
+        request: &mut dyn net::host::HostRequest<'req, Header>,
         arena: &'req dyn Arena,
-    ) -> Result<(), Error>;
+    ) -> Result<(), Error<Header>>;
 
     /// Executes a `Handler` with the given context.
     ///
@@ -271,46 +276,42 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
     fn run(
         self,
         server: Server,
-        host_port: &mut dyn net::host::HostPort<'req>,
+        host_port: &mut dyn net::host::HostPort<'req, Header>,
         arena: &'req dyn Arena,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error<Header>> {
         let request = host_port.receive()?;
         let header = request.header()?;
         self.run_with_header(server, header, request, arena)
     }
 }
 
-impl<Prev, Command, F, const B: bool> Cons<Prev, Command, F, B>
-where
-    Command: for<'c> protocol::Command<'c>,
-{
+impl<Prev, Command, F, const B: bool> Cons<Prev, Command, F, B> {
     #[inline]
-    fn run_inner<'out, Ctx>(
+    fn run_inner<'out, Ctx, Header>(
         self,
-        request: &mut dyn net::host::HostRequest,
+        request: &mut dyn net::host::HostRequest<'_, Header>,
         ctx: Ctx,
-    ) -> Result<(), Error>
+        original_header: Header,
+    ) -> Result<(), Error<Header>>
     where
+        for<'c> Command: protocol::Command<'c>,
         F: FnOnce(Ctx) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
-        RespOf<'out, Command>: Response<'out, CommandType = CommandType>,
+        Header: net::Header,
+        RespOf<'out, Command>:
+            Response<'out, CommandType = Header::CommandType>,
     {
         match (self.handler)(ctx) {
             Ok(msg) => {
-                let header = net::Header {
-                    command: RespOf::<'out, Command>::TYPE,
-                };
-
-                let reply = request.reply(header)?;
+                let reply = request.reply(
+                    original_header.reply_with(RespOf::<'out, Command>::TYPE),
+                )?;
                 msg.to_wire(reply.sink()?)?;
                 reply.finish()?;
                 Ok(())
             }
             Err(err) => {
-                let header = net::Header {
-                    command: CommandType::Error,
-                };
-
-                let reply = request.reply(header)?;
+                let reply =
+                    request.reply(original_header.reply_with_error())?;
                 err.to_wire(reply.sink()?)?;
                 reply.finish()?;
                 Ok(())
@@ -319,29 +320,31 @@ where
     }
 }
 
-impl<'req, 'srv, 'out, Server, Prev, Command, F>
-    HandlerMethods<'req, 'srv, Server> for Cons<Prev, Command, F, false>
+impl<'req, 'srv, 'out, Server, Header, Prev, Command, F>
+    HandlerMethods<'req, 'srv, Server, Header> for Cons<Prev, Command, F, false>
 where
     // See `HandlerMethods::handle` for an explanation of these
     // where-clauses.
     Server: 'srv,
-    Prev: HandlerMethods<'req, 'srv, Server>,
+    Prev: HandlerMethods<'req, 'srv, Server, Header>,
     Command: for<'c> protocol::Command<'c>,
+    Header: net::Header,
+    Header::CommandType: PartialEq,
     F: FnOnce(
         Context<'req, (), ReqOf<'req, Command>, Server>,
     ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
-    ReqOf<'req, Command>: Request<'req, CommandType = CommandType>,
-    RespOf<'out, Command>: Response<'out, CommandType = CommandType>,
+    ReqOf<'req, Command>: Request<'req, CommandType = Header::CommandType>,
+    RespOf<'out, Command>: Response<'out, CommandType = Header::CommandType>,
 {
     #[inline]
     fn run_with_header(
         self,
         server: Server,
-        header: net::Header,
-        request: &mut dyn net::host::HostRequest<'req>,
+        header: Header,
+        request: &mut dyn net::host::HostRequest<'req, Header>,
         arena: &'req dyn Arena,
-    ) -> Result<(), Error> {
-        if header.command != ReqOf::<'req, Command>::TYPE {
+    ) -> Result<(), Error<Header>> {
+        if header.command() != ReqOf::<'req, Command>::TYPE {
             // Recurse into the next handler case. Note that this cannot be
             // `run`, since that would re-parse the header incorrectly.
             return self.prev.run_with_header(server, header, request, arena);
@@ -355,33 +358,35 @@ where
             server,
             arena,
         };
-        self.run_inner(request, ctx)
+        self.run_inner(request, ctx, header)
     }
 }
 
-impl<'req, 'srv, 'out, Server, Prev, Command, F>
-    HandlerMethods<'req, 'srv, Server> for Cons<Prev, Command, F, true>
+impl<'req, 'srv, 'out, Server, Header, Prev, Command, F>
+    HandlerMethods<'req, 'srv, Server, Header> for Cons<Prev, Command, F, true>
 where
     // See `HandlerMethods::handle` for an explanation of these
     // where-clauses.
     Server: 'srv,
-    Prev: HandlerMethods<'req, 'srv, Server>,
+    Prev: HandlerMethods<'req, 'srv, Server, Header>,
     Command: for<'c> protocol::Command<'c>,
+    Header: net::Header,
+    Header::CommandType: PartialEq,
     F: FnOnce(
         Context<'req, &'req [u8], ReqOf<'req, Command>, Server>,
     ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
-    ReqOf<'req, Command>: Request<'req, CommandType = CommandType>,
-    RespOf<'out, Command>: Response<'out, CommandType = CommandType>,
+    ReqOf<'req, Command>: Request<'req, CommandType = Header::CommandType>,
+    RespOf<'out, Command>: Response<'out, CommandType = Header::CommandType>,
 {
     #[inline]
     fn run_with_header(
         self,
         server: Server,
-        header: net::Header,
-        request: &mut dyn net::host::HostRequest<'req>,
+        header: Header,
+        request: &mut dyn net::host::HostRequest<'req, Header>,
         arena: &'req dyn Arena,
-    ) -> Result<(), Error> {
-        if header.command != ReqOf::<'req, Command>::TYPE {
+    ) -> Result<(), Error<Header>> {
+        if header.command() != ReqOf::<'req, Command>::TYPE {
             // Recurse into the next handler case. Note that this cannot be
             // `run`, since that would re-parse the header incorrectly.
             return self.prev.run_with_header(server, header, request, arena);
@@ -407,49 +412,54 @@ where
             server,
             arena,
         };
-        self.run_inner(request, ctx)
+        self.run_inner(request, ctx, header)
     }
 }
 
-impl<'req, 'srv, Server: 'srv> HandlerMethods<'req, 'srv, Server>
-    for Handler<Server>
+impl<'req, 'srv, Server: 'srv, Header>
+    HandlerMethods<'req, 'srv, Server, Header> for Handler<Server, Header>
+where
+    Header: net::Header,
 {
     #[inline]
     fn run_with_header(
         self,
         _: Server,
-        header: net::Header,
-        _: &mut dyn net::host::HostRequest<'req>,
+        header: Header,
+        _: &mut dyn net::host::HostRequest<'req, Header>,
         _: &'req dyn Arena,
-    ) -> Result<(), Error> {
-        Err(Error::UnhandledCommand(header.command))
+    ) -> Result<(), Error<Header>> {
+        Err(Error::UnhandledCommand(header.command()))
     }
 }
 
 impl<P, C, F, const B: bool> sealed::Sealed for Cons<P, C, F, B> {}
-impl<S> sealed::Sealed for Handler<S> {}
+impl<S, H> sealed::Sealed for Handler<S, H> {}
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::io::Cursor;
     use crate::mem::BumpArena;
+    use crate::protocol::CommandType;
 
     const VERSION1: &[u8; 32] = &[2; 32];
     const VERSION2: &[u8; 32] = &[5; 32];
+
+    type Handler<S> = super::Handler<S, net::CerberusHeader>;
 
     fn simulate_request<
         'a,
         C: protocol::Command<'a>,
         T: 'a,
-        H: HandlerMethods<'a, 'a, T>,
+        H: HandlerMethods<'a, 'a, T, net::CerberusHeader>,
     >(
         scratch_space: &'a mut [u8],
-        port_out: &'a mut Option<net::host::InMemHost<'a>>,
+        port_out: &'a mut Option<net::host::InMemHost<'a, net::CerberusHeader>>,
         arena: &'a mut dyn Arena,
         server: (H, T),
         request: C::Req,
-    ) -> Result<C::Resp, Error>
+    ) -> Result<C::Resp, Error<net::CerberusHeader>>
     where
         ReqOf<'a, C>: Request<'a, CommandType = CommandType>,
     {
@@ -464,7 +474,7 @@ mod test {
         *port_out = Some(net::host::InMemHost::new(port_scratch));
         let port = port_out.as_mut().unwrap();
         port.request(
-            net::Header {
+            net::CerberusHeader {
                 command: <C::Req as protocol::Request<'a>>::TYPE,
             },
             request_bytes,

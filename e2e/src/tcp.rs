@@ -47,7 +47,10 @@ pub fn send_local<'a, Cmd>(
     port: u16,
     req: Cmd::Req,
     arena: &'a dyn Arena,
-) -> Result<Result<Cmd::Resp, protocol::Error>, server::Error>
+) -> Result<
+    Result<Cmd::Resp, protocol::Error>,
+    server::Error<net::CerberusHeader>,
+>
 where
     Cmd: Command<'a>,
     Cmd::Req: Request<'a, CommandType = CommandType>,
@@ -58,7 +61,7 @@ where
         log::error!("{}", e);
         net::Error::Io(io::Error::Internal)
     })?;
-    let mut writer = Writer::new(net::Header {
+    let mut writer = Writer::new(net::CerberusHeader {
         command: <Cmd::Req as Request>::TYPE,
     });
     log::info!("serializing {}", type_name::<Cmd::Req>());
@@ -108,7 +111,7 @@ where
 /// Returns a pair of abstract header and payload length.
 fn header_from_wire(
     mut r: impl std::io::Read,
-) -> Result<(net::Header, usize), net::Error> {
+) -> Result<(net::CerberusHeader, usize), net::Error> {
     let mut header_bytes = [0u8; 3];
     r.read_exact(&mut header_bytes).map_err(|e| {
         log::error!("{}", e);
@@ -116,7 +119,7 @@ fn header_from_wire(
     })?;
     let [cmd_byte, len_lo, len_hi] = header_bytes;
 
-    let header = net::Header {
+    let header = net::CerberusHeader {
         command: CommandType::from_wire_value(cmd_byte).ok_or_else(|| {
             log::error!("bad command byte: {}", cmd_byte);
             net::Error::BadHeader
@@ -136,13 +139,13 @@ fn header_from_wire(
 ///
 /// This type implements [`manticore::io::Write`].
 struct Writer {
-    header: net::Header,
+    header: net::CerberusHeader,
     buf: Vec<u8>,
 }
 
 impl Writer {
-    /// Creates a new `Writer` that will encode the given abstract [`net::Header`].
-    pub fn new(header: net::Header) -> Self {
+    /// Creates a new `Writer` that will encode the given abstract [`net::CerberusHeader`].
+    pub fn new(header: net::CerberusHeader) -> Self {
         Self {
             header,
             buf: Vec::new(),
@@ -194,7 +197,7 @@ struct Inner {
     listener: TcpListener,
     // State for `HostRequest`: a parsed header, the length of the payload, and
     // a stream to read it from.
-    stream: Option<(net::Header, usize, TcpStream)>,
+    stream: Option<(net::CerberusHeader, usize, TcpStream)>,
     // State for `HostResponse`: a `Writer` to dump the response bytes into.
     output_buffer: Option<Writer>,
 }
@@ -219,8 +222,11 @@ impl TcpHostPort {
     }
 }
 
-impl<'req> HostPort<'req> for TcpHostPort {
-    fn receive(&mut self) -> Result<&mut dyn HostRequest<'req>, net::Error> {
+impl<'req> HostPort<'req, net::CerberusHeader> for TcpHostPort {
+    fn receive(
+        &mut self,
+    ) -> Result<&mut dyn HostRequest<'req, net::CerberusHeader>, net::Error>
+    {
         let inner = &mut self.0;
         inner.stream = None;
 
@@ -238,8 +244,8 @@ impl<'req> HostPort<'req> for TcpHostPort {
     }
 }
 
-impl<'req> HostRequest<'req> for Inner {
-    fn header(&self) -> Result<net::Header, net::Error> {
+impl<'req> HostRequest<'req, net::CerberusHeader> for Inner {
+    fn header(&self) -> Result<net::CerberusHeader, net::Error> {
         if self.output_buffer.is_some() {
             log::error!("header() called out-of-order");
             return Err(net::Error::OutOfOrder);
@@ -265,7 +271,7 @@ impl<'req> HostRequest<'req> for Inner {
 
     fn reply(
         &mut self,
-        header: net::Header,
+        header: net::CerberusHeader,
     ) -> Result<&mut dyn HostResponse<'req>, net::Error> {
         if self.stream.is_none() {
             log::error!("payload() called out-of-order");
