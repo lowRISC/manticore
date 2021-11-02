@@ -12,13 +12,14 @@ use libfuzzer_sys::fuzz_target;
 
 use manticore::protocol::Command;
 use manticore::protocol::wire::ToWire;
-use manticore::protocol::FuzzSafe;
+use manticore::protocol::borrowed::AsStatic;
+use manticore::protocol::borrowed::Borrowed;
 
 use manticore::protocol::get_host_state::GetHostState as C;
 type Req<'a> = <C as Command<'a>>::Req;
 
-fuzz_target!(|data: <Req<'static> as FuzzSafe>::Safe| {
+fuzz_target!(|data: AsStatic<'static, Req<'static>>| {
     let mut out = [0u8; 1024];
-    let _ = Req::from_safe(&data).to_wire(&mut &mut out[..]);
+    let _ = Req::borrow(&data).to_wire(&mut &mut out[..]);
 });
 

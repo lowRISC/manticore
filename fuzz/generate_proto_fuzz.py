@@ -41,7 +41,7 @@ def eprint(*args):
 
 def cargo_fuzz_build():
   out = subprocess.run(
-      ['cargo', '+nightly', '--quiet', 'fuzz', 'build'],
+      ['cargo', '--quiet', 'fuzz', 'build'],
       cwd = str(FUZZ_DIR))
   eprint()
   eprint(f'Cargo exited with {out.returncode}')
