@@ -9,7 +9,7 @@ Manticore aims to eventually achieve parity with Microsoft's C implementation,
 while also being a proving ground for improvements and enhancements of the
 protocol.
 
-[Cerberus]: https://github.com/opencomputeproject/security/RoT/Protocol
+[Cerberus]: https://github.com/opencomputeproject/Security/blob/master/RoT/Protocol
 [OpenTitan project]: https://opentitan.org
 
 ## Building Manticore
