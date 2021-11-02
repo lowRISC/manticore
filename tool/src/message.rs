@@ -13,6 +13,8 @@ use serde::de::Deserialize;
 use manticore::io::write::StdWrite;
 use manticore::mem::BumpArena;
 use manticore::protocol;
+use manticore::protocol::borrowed::AsStatic;
+use manticore::protocol::borrowed::Borrowed;
 use manticore::protocol::wire::FromWire;
 use manticore::protocol::wire::ToWire;
 use manticore::protocol::Command;
@@ -144,12 +146,12 @@ impl Message {
                 proto_match!((command, request) in |Msg: type| {
                     let mut de = serde_json::Deserializer::from_reader(r);
                     let msg = check!(
-                        Msg::deserialize(&mut de),
+                        AsStatic::<'static, Msg>::deserialize(&mut de),
                         "failed to deserialize {} from JSON",
                         type_name::<Msg>(),
                     );
                     check!(
-                        msg.to_wire(&mut w),
+                        Msg::borrow(&msg).to_wire(&mut w),
                         "failed to serialize {}",
                         type_name::<Msg>(),
                     );
