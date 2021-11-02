@@ -49,28 +49,14 @@ macro_rules! protocol_struct {
 
             #[cfg(feature = "arbitrary-derive")]
             use libfuzzer_sys::arbitrary::{self, Arbitrary};
-            #[cfg(feature = "serde")]
-            use serde::{Deserialize, Serialize};
 
             $(#[$cmd_meta])*
             #[doc = "Corresponds to [`" $CommandType "::" $TYPE "`]."]
             pub enum $Command {}
 
             impl<'wire> Command<'wire> for $Command {
-                type Req = protocol_struct!(@internal if_nonempty ($($req_lt)?) {
-                    [<$Command Request>]<'wire>
-                } else {
-                    [<$Command Request>]
-                });
-                type Resp = protocol_struct!(@internal if_nonempty ($($rsp_kw)?) {
-                    protocol_struct!(@internal if_nonempty ($($($rsp_lt)?)?) {
-                        [<$Command Response>]<'wire>
-                    } else {
-                        [<$Command Response>]
-                    })
-                } else {
-                    i32
-                });
+                type Req = Req<'wire>;
+                type Resp = Resp<'wire>;
                 type Error = protocol_struct!(@internal if_nonempty ($($Error)?) {
                     $($Error)?
                 } else {
@@ -78,29 +64,41 @@ macro_rules! protocol_struct {
                 });
             }
 
-            make_fuzz_safe! {
-                #[doc = "The [`" $Command "`] request."]
-                #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-                #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-                $(#[$req_meta])*
-                pub $req_kw [<$Command Request>] $(<$req_lt>)? {
-                    $($req_fields)*
+            protocol_struct!(@internal if_nonempty ($($req_lt)?) {
+                derive_borrowed! {
+                    #[doc = "The [`" $Command "`] request."]
+                    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+                    #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+                    $(#[$req_meta])*
+                    #[@static(
+                        derive(Clone, PartialEq, Eq, Debug),
+                        cfg_attr(feature = "serde", derive(serde::Deserialize)),
+                        cfg_attr(feature = "arbitrary-derive", derive(Arbitrary)),
+                    )]
+                    pub $req_kw [<$Command Request>] $(<$req_lt>)? {
+                        $($req_fields)*
+                    }
                 }
-            }
-
-            impl<'wire> Request<'wire> for protocol_struct!(@internal if_nonempty ($($req_lt)?) {
-                [<$Command Request>]<'wire>
+                type Req<'wire> = [<$Command Request>]<'wire>;
             } else {
-                [<$Command Request>]
-            }) {
+                derive_borrowed! {
+                    #[doc = "The [`" $Command "`] request."]
+                    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+                    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+                    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+                    $(#[$req_meta])*
+                    pub $req_kw [<$Command Request>] {
+                        $($req_fields)*
+                    }
+                }
+                type Req<'wire> = [<$Command Request>];
+            });
+
+            impl<'wire> Request<'wire> for Req<'wire> {
                 const TYPE: $CommandType = $CommandType::$TYPE;
             }
 
-            impl<'wire> FromWire<'wire> for protocol_struct!(@internal if_nonempty ($($req_lt)?) {
-                [<$Command Request>]<'wire>
-            } else {
-                [<$Command Request>]
-            }) {
+            impl<'wire> FromWire<'wire> for Req<'wire> {
                 fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
                     $r_req: &mut R,
                     $a_req: &'wire A,
@@ -109,40 +107,48 @@ macro_rules! protocol_struct {
                 }
             }
 
-            impl ToWire for protocol_struct!(@internal if_nonempty ($($req_lt)?) {
-                [<$Command Request>]<'_>
-            } else {
-                [<$Command Request>]
-            }) {
+            impl ToWire for Req<'_> {
                 fn to_wire<W: Write>(&$self_req, mut $w_req: W) -> Result<(), wire::Error> {
                     $req_to
                 }
             }
 
             $(
-                make_fuzz_safe! {
-                    #[doc = "The [`" $Command "`] rspuest."]
-                    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-                    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-                    $(#[$rsp_meta])*
-                    pub $rsp_kw [<$Command Response>] $(<$rsp_lt>)? {
-                        $($rsp_fields)*
+                protocol_struct!(@internal if_nonempty ($($rsp_lt)?) {
+                    derive_borrowed! {
+                        #[doc = "The [`" $Command "`] response."]
+                        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+                        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+                        $(#[$rsp_meta])*
+                        #[@static(
+                            derive(Clone, PartialEq, Eq, Debug),
+                            cfg_attr(feature = "serde", derive(serde::Deserialize)),
+                            cfg_attr(feature = "arbitrary-derive", derive(Arbitrary)),
+                        )]
+                        pub $rsp_kw [<$Command Response>] $(<$rsp_lt>)? {
+                            $($rsp_fields)*
+                        }
                     }
-                }
-
-                impl<'wire> Response<'wire> for protocol_struct!(@internal if_nonempty ($($rsp_lt)?) {
-                    [<$Command Response>]<'wire>
+                    type Resp<'wire> = [<$Command Response>]<'wire>;
                 } else {
-                    [<$Command Response>]
-                }) {
+                    derive_borrowed! {
+                        #[doc = "The [`" $Command "`] response."]
+                        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+                        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+                        #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+                        $(#[$rsp_meta])*
+                        pub $rsp_kw [<$Command Response>] {
+                            $($rsp_fields)*
+                        }
+                    }
+                    type Resp<'wire> = [<$Command Response>];
+                });
+
+                impl<'wire> Response<'wire> for Resp<'wire> {
                     const TYPE: $CommandType = $CommandType::$TYPE;
                 }
 
-                impl<'wire> FromWire<'wire> for protocol_struct!(@internal if_nonempty ($($rsp_lt)?) {
-                    [<$Command Response>]<'wire>
-                } else {
-                    [<$Command Response>]
-                }) {
+                impl<'wire> FromWire<'wire> for Resp<'wire> {
                     fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
                         $r_rsp: &mut R,
                         $a_rsp: &'wire A,
@@ -151,11 +157,7 @@ macro_rules! protocol_struct {
                     }
                 }
 
-                impl ToWire for protocol_struct!(@internal if_nonempty ($($rsp_lt)?) {
-                    [<$Command Response>]<'_>
-                } else {
-                    [<$Command Response>]
-                }) {
+                impl ToWire for Resp<'_> {
                     fn to_wire<W: Write>(&$self_rsp, mut $w_rsp: W) -> Result<(), wire::Error> {
                         $rsp_to
                     }

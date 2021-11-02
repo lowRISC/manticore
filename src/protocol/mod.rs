@@ -52,9 +52,10 @@ use crate::protocol::wire::ToWire;
 use serde::{Deserialize, Serialize};
 
 #[macro_use]
-pub(crate) mod macros;
-#[cfg(feature = "arbitrary-derive")]
-pub use macros::fuzz::FuzzSafe;
+mod macros;
+
+#[macro_use]
+pub mod borrowed;
 
 #[macro_use]
 pub mod template;

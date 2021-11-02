@@ -27,7 +27,7 @@ pub enum Algo {
     /// 512-bit SHA-2.
     Sha512,
 }
-make_fuzz_safe!(Algo);
+derive_borrowed!(Algo);
 
 impl Algo {
     /// The number of bits in a digest or HMAC of this strength.
