@@ -98,14 +98,14 @@ impl<'a> PaRot<'a> {
     }
 
     /// Process a single incoming request.
-    pub fn process_request<'req, A: Arena>(
+    pub fn process_request<'req>(
         &mut self,
         host_port: &mut dyn net::host::HostPort<'req>,
-        arena: &'req A,
+        arena: &'req dyn Arena,
     ) -> Result<(), Error> {
         // Style note: when defining a new handler, if it is more than a
         // handful of lines long, define it out-of-line instead.
-        let result = Handler::<&mut Self, A>::new()
+        let result = Handler::<&mut Self>::new()
             .handle::<protocol::FirmwareVersion, _>(|ctx| {
                 ctx.server.handle_fw_version(&ctx.req)
             })
@@ -230,7 +230,7 @@ impl<'a> PaRot<'a> {
 
     fn handle_digests<'req>(
         &mut self,
-        arena: &'req impl Arena,
+        arena: &'req dyn Arena,
         req: &protocol::get_digests::GetDigestsRequest,
     ) -> Result<
         protocol::get_digests::GetDigestsResponse<'req>,
@@ -288,7 +288,7 @@ impl<'a> PaRot<'a> {
 
     fn handle_challenge<'req>(
         &'req mut self,
-        arena: &'req impl Arena,
+        arena: &'req dyn Arena,
         req: &protocol::challenge::ChallengeRequest,
         req_buf: &[u8],
     ) -> Result<
@@ -329,7 +329,7 @@ impl<'a> PaRot<'a> {
 
     fn handle_key_xchg<'req>(
         &mut self,
-        arena: &'req impl Arena,
+        arena: &'req dyn Arena,
         req: &protocol::key_exchange::KeyExchangeRequest,
     ) -> Result<
         protocol::key_exchange::KeyExchangeResponse<'req>,

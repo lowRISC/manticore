@@ -273,9 +273,9 @@ mod consts {
 }
 
 impl<'wire> FromWire<'wire> for Capabilities {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+    fn from_wire<R: ReadZero<'wire> + ?Sized>(
         r: &mut R,
-        _: &'wire A,
+        _: &'wire dyn Arena,
     ) -> Result<Capabilities, wire::Error> {
         use consts::*;
         let max_message_size = r.read_le::<u16>()?;

@@ -137,9 +137,9 @@ impl ChallengeResponseTbs<'_> {
 }
 
 impl<'wire> FromWire<'wire> for ChallengeResponseTbs<'wire> {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+    fn from_wire<R: ReadZero<'wire> + ?Sized>(
         r: &mut R,
-        arena: &'wire A,
+        arena: &'wire dyn Arena,
     ) -> Result<Self, wire::Error> {
         let slot = r.read_le()?;
         let slot_mask = r.read_le()?;

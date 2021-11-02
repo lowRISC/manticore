@@ -46,7 +46,7 @@ fn challenge() {
 
     let mut arena = BumpArena::new(vec![0; 1024]);
     let resp = virt
-        .send_local::<GetDigests, _>(
+        .send_local::<GetDigests>(
             GetDigestsRequest {
                 slot: 0,
                 key_exchange: KeyExchangeAlgo::Ecdh,
@@ -71,7 +71,7 @@ fn challenge() {
         let mut cert = Vec::new();
         loop {
             let resp = virt
-                .send_local::<GetCert, _>(
+                .send_local::<GetCert>(
                     GetCertRequest {
                         slot: 0,
                         cert_number: i as u8,
@@ -115,10 +115,7 @@ fn challenge() {
         slot: 0,
         nonce: &[99; 32],
     };
-    let resp = virt
-        .send_local::<Challenge, _>(req, &arena)
-        .unwrap()
-        .unwrap();
+    let resp = virt.send_local::<Challenge>(req, &arena).unwrap().unwrap();
     log::info!("got nonce: {:?}", resp.tbs.nonce);
 
     // Compute the expected signee: our challenge, plus the response's
@@ -149,7 +146,7 @@ fn challenge() {
         pk_req,
     };
     let resp = virt
-        .send_local::<KeyExchange, _>(req, &arena)
+        .send_local::<KeyExchange>(req, &arena)
         .unwrap()
         .unwrap();
     let (pk_resp, pk_sig, alias_hmac) = match resp {

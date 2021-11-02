@@ -43,14 +43,13 @@ use manticore::server;
 /// Cerberus-over-TCP.
 ///
 /// Blocks until a response comes back.
-pub fn send_local<'a, Cmd, A>(
+pub fn send_local<'a, Cmd>(
     port: u16,
     req: Cmd::Req,
-    arena: &'a A,
+    arena: &'a dyn Arena,
 ) -> Result<Result<Cmd::Resp, protocol::Error>, server::Error>
 where
     Cmd: Command<'a>,
-    A: Arena,
 {
     log::info!("connecting to 127.0.0.1:{}", port);
     let mut conn = TcpStream::connect(("127.0.0.1", port)).map_err(|e| {

@@ -48,7 +48,7 @@ impl Algo {
 
     /// Allocates sufficient storage from `arena` to hold a hash of this type.
     #[inline]
-    pub fn alloc(self, arena: &impl Arena) -> Result<&mut [u8], OutOfMemory> {
+    pub fn alloc(self, arena: &dyn Arena) -> Result<&mut [u8], OutOfMemory> {
         arena.alloc_slice(self.bytes())
     }
 }
