@@ -73,11 +73,19 @@ protocol_struct! {
     }
 }
 
-make_fuzz_safe! {
+#[cfg(feature = "arbitrary-derive")]
+use libfuzzer_sys::arbitrary::{self, Arbitrary};
+
+derive_borrowed! {
     /// The portion of the [`Challenge`] response that is incorporated into
     /// the signature.
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+    #[@static(
+        derive(Clone, PartialEq, Eq, Debug),
+        cfg_attr(feature = "serde", derive(serde::Deserialize)),
+        cfg_attr(feature = "arbitrary-derive", derive(Arbitrary)),
+    )]
     pub struct ChallengeResponseTbs<'wire> {
         /// The slot number of the chain to read from.
         pub slot: u8,
