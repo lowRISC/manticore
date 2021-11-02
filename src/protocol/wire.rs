@@ -25,9 +25,9 @@ use crate::mem::OutOfMemory;
 /// buffer of lifetime `'wire`.
 pub trait FromWire<'wire>: Sized {
     /// Deserializes a `Self` w of `r`.
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+    fn from_wire<R: ReadZero<'wire> + ?Sized>(
         r: &mut R,
-        arena: &'wire A,
+        arena: &'wire dyn Arena,
     ) -> Result<Self, Error>;
 }
 
@@ -111,9 +111,9 @@ where
     E: WireEnum,
     E::Wire: LeInt,
 {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+    fn from_wire<R: ReadZero<'wire> + ?Sized>(
         r: &mut R,
-        _: &'wire A,
+        _: &'wire dyn Arena,
     ) -> Result<Self, Error> {
         let wire = <Self as WireEnum>::Wire::read_from(r)?;
         Self::from_wire_value(wire).ok_or(Error::OutOfRange)

@@ -99,9 +99,9 @@ macro_rules! protocol_struct {
             }
 
             impl<'wire> FromWire<'wire> for Req<'wire> {
-                fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+                fn from_wire<R: ReadZero<'wire> + ?Sized>(
                     $r_req: &mut R,
-                    $a_req: &'wire A,
+                    $a_req: &'wire dyn Arena,
                 ) -> Result<Self, wire::Error> {
                     $req_from
                 }
@@ -149,9 +149,9 @@ macro_rules! protocol_struct {
                 }
 
                 impl<'wire> FromWire<'wire> for Resp<'wire> {
-                    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+                    fn from_wire<R: ReadZero<'wire> + ?Sized>(
                         $r_rsp: &mut R,
-                        $a_rsp: &'wire A,
+                        $a_rsp: &'wire dyn Arena,
                     ) -> Result<Self, wire::Error> {
                         $rsp_from
                     }

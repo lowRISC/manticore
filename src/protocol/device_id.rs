@@ -74,9 +74,9 @@ pub struct DeviceIdentifier {
 }
 
 impl<'wire> FromWire<'wire> for DeviceIdentifier {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+    fn from_wire<R: ReadZero<'wire> + ?Sized>(
         r: &mut R,
-        _: &'wire A,
+        _: &'wire dyn Arena,
     ) -> Result<Self, wire::Error> {
         let vendor_id = r.read_le::<u16>()?;
         let device_id = r.read_le::<u16>()?;

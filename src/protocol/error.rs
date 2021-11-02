@@ -34,9 +34,9 @@ pub struct RawError {
 }
 
 impl<'wire> FromWire<'wire> for RawError {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+    fn from_wire<R: ReadZero<'wire> + ?Sized>(
         r: &mut R,
-        _: &'wire A,
+        _: &'wire dyn Arena,
     ) -> Result<Self, wire::Error> {
         let code = r.read_le()?;
         let mut data = [0; 4];
@@ -70,9 +70,9 @@ impl Response<'_> for Ack {
 }
 
 impl<'wire> FromWire<'wire> for Ack {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+    fn from_wire<R: ReadZero<'wire> + ?Sized>(
         r: &mut R,
-        a: &'wire A,
+        a: &'wire dyn Arena,
     ) -> Result<Self, wire::Error> {
         RawError::from_wire(r, a)?.try_into()
     }
@@ -163,9 +163,9 @@ pub enum Error<E = NoSpecificError> {
 }
 
 impl<'wire, E: SpecificError> FromWire<'wire> for Error<E> {
-    fn from_wire<R: ReadZero<'wire> + ?Sized, A: Arena>(
+    fn from_wire<R: ReadZero<'wire> + ?Sized>(
         r: &mut R,
-        a: &'wire A,
+        a: &'wire dyn Arena,
     ) -> Result<Self, wire::Error> {
         let error = RawError::from_wire(r, a)?;
 

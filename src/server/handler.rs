@@ -15,7 +15,7 @@
 //! let server = ...;  // Your "server context" type.
 //! let req = ...;     // A `Read` with an incoming message.
 //! let resp = ...;    // A `Write` to write a response to.
-//! Handler::<Server, _>::new()
+//! Handler::<Server>::new()
 //!   .handle::<MyCommand, _>(|ctx| {
 //!     // Do stuff...
 //!     Ok(response)
@@ -44,7 +44,7 @@
 //! Suppose we have types `A, B, C: Command<'req>` which we want to handle, so
 //! we write the following code:
 //! ```text
-//! Handler::<Server, _>::new()
+//! Handler::<Server>::new()
 //!   .handle::<A, _>(...)
 //!   .handle::<B, _>(...)
 //!   .handle::<C, _>(...)
@@ -68,7 +68,7 @@
 
 use core::marker::PhantomData;
 
-use crate::mem;
+use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
 use crate::net;
 use crate::protocol;
@@ -126,11 +126,11 @@ impl From<net::Error> for Error {
 /// Note: the type parameter on this type is only necessary to make type
 /// inference work out. It can be left off, but rustc will complain about
 /// missing type annotations.
-pub struct Handler<Server, Arena> {
-    _ph: PhantomData<fn(Server, Arena)>,
+pub struct Handler<Server> {
+    _ph: PhantomData<fn(Server)>,
 }
 
-impl<Server, Arena> Handler<Server, Arena> {
+impl<Server> Handler<Server> {
     /// Creates a new, default `Handler`.
     pub fn new() -> Self {
         Self { _ph: PhantomData }
@@ -168,11 +168,11 @@ pub type RespOf<'a, C> = <C as protocol::Command<'a>>::Resp;
 pub type ErrOf<'a, C> = protocol::Error<<C as protocol::Command<'a>>::Error>;
 
 /// Context for a request, i.e., all relevant variables for handling a request.
-pub struct Context<'req, Buf, Req, Server, Arena> {
+pub struct Context<'req, Buf, Req, Server> {
     pub req_buf: Buf,
     pub req: Req,
     pub server: Server,
-    pub arena: &'req Arena,
+    pub arena: &'req dyn Arena,
 }
 
 /// The core trait that makes handler building possible.
@@ -181,7 +181,7 @@ pub struct Context<'req, Buf, Req, Server, Arena> {
 /// must be placed here to ensure that all inputs into a request handling
 /// operation (including the `FromWire` and `Command` traits, which have
 /// lifetimes in them) have a single, coherent lifetime.
-pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
+pub trait HandlerMethods<'req, 'srv, Server: 'srv>:
     Sized + sealed::Sealed
 {
     /// Attaches a new handler function to a `Handler`.
@@ -224,7 +224,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
         // kludge.
         C: for<'c> protocol::Command<'c>,
         F: FnOnce(
-            Context<'req, (), ReqOf<'req, C>, Server, Arena>,
+            Context<'req, (), ReqOf<'req, C>, Server>,
         ) -> Result<RespOf<'out, C>, ErrOf<'out, C>>,
         'srv: 'out,
         'req: 'out,
@@ -242,7 +242,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
         // See above for an explanation of these bounds.
         C: for<'c> protocol::Command<'c>,
         F: FnOnce(
-            Context<'req, &'req [u8], ReqOf<'req, C>, Server, Arena>,
+            Context<'req, &'req [u8], ReqOf<'req, C>, Server>,
         ) -> Result<RespOf<'out, C>, ErrOf<'out, C>>,
         'srv: 'out,
         'req: 'out,
@@ -261,7 +261,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
         server: Server,
         header: net::Header,
         request: &mut dyn net::host::HostRequest<'req>,
-        arena: &'req Arena,
+        arena: &'req dyn Arena,
     ) -> Result<(), Error>;
 
     /// Executes a `Handler` with the given context.
@@ -272,7 +272,7 @@ pub trait HandlerMethods<'req, 'srv, Server: 'srv, Arena: 'req>:
         self,
         server: Server,
         host_port: &mut dyn net::host::HostPort<'req>,
-        arena: &'req Arena,
+        arena: &'req dyn Arena,
     ) -> Result<(), Error> {
         let request = host_port.receive()?;
         let header = request.header()?;
@@ -318,17 +318,16 @@ where
     }
 }
 
-impl<'req, 'srv, 'out, Server, Arena, Prev, Command, F>
-    HandlerMethods<'req, 'srv, Server, Arena> for Cons<Prev, Command, F, false>
+impl<'req, 'srv, 'out, Server, Prev, Command, F>
+    HandlerMethods<'req, 'srv, Server> for Cons<Prev, Command, F, false>
 where
     // See `HandlerMethods::handle` for an explanation of these
     // where-clauses.
-    Arena: 'req + mem::Arena,
     Server: 'srv,
-    Prev: HandlerMethods<'req, 'srv, Server, Arena>,
+    Prev: HandlerMethods<'req, 'srv, Server>,
     Command: for<'c> protocol::Command<'c>,
     F: FnOnce(
-        Context<'req, (), ReqOf<'req, Command>, Server, Arena>,
+        Context<'req, (), ReqOf<'req, Command>, Server>,
     ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
 {
     #[inline]
@@ -337,7 +336,7 @@ where
         server: Server,
         header: net::Header,
         request: &mut dyn net::host::HostRequest<'req>,
-        arena: &'req Arena,
+        arena: &'req dyn Arena,
     ) -> Result<(), Error> {
         if header.command != ReqOf::<'req, Command>::TYPE {
             // Recurse into the next handler case. Note that this cannot be
@@ -357,17 +356,16 @@ where
     }
 }
 
-impl<'req, 'srv, 'out, Server, Arena, Prev, Command, F>
-    HandlerMethods<'req, 'srv, Server, Arena> for Cons<Prev, Command, F, true>
+impl<'req, 'srv, 'out, Server, Prev, Command, F>
+    HandlerMethods<'req, 'srv, Server> for Cons<Prev, Command, F, true>
 where
     // See `HandlerMethods::handle` for an explanation of these
     // where-clauses.
-    Arena: 'req + mem::Arena,
     Server: 'srv,
-    Prev: HandlerMethods<'req, 'srv, Server, Arena>,
+    Prev: HandlerMethods<'req, 'srv, Server>,
     Command: for<'c> protocol::Command<'c>,
     F: FnOnce(
-        Context<'req, &'req [u8], ReqOf<'req, Command>, Server, Arena>,
+        Context<'req, &'req [u8], ReqOf<'req, Command>, Server>,
     ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
 {
     #[inline]
@@ -376,7 +374,7 @@ where
         server: Server,
         header: net::Header,
         request: &mut dyn net::host::HostRequest<'req>,
-        arena: &'req Arena,
+        arena: &'req dyn Arena,
     ) -> Result<(), Error> {
         if header.command != ReqOf::<'req, Command>::TYPE {
             // Recurse into the next handler case. Note that this cannot be
@@ -408,8 +406,8 @@ where
     }
 }
 
-impl<'req, 'srv, Server: 'srv, Arena: 'req>
-    HandlerMethods<'req, 'srv, Server, Arena> for Handler<Server, Arena>
+impl<'req, 'srv, Server: 'srv> HandlerMethods<'req, 'srv, Server>
+    for Handler<Server>
 {
     #[inline]
     fn run_with_header(
@@ -417,14 +415,14 @@ impl<'req, 'srv, Server: 'srv, Arena: 'req>
         _: Server,
         header: net::Header,
         _: &mut dyn net::host::HostRequest<'req>,
-        _: &'req Arena,
+        _: &'req dyn Arena,
     ) -> Result<(), Error> {
         Err(Error::UnhandledCommand(header.command))
     }
 }
 
 impl<P, C, F, const B: bool> sealed::Sealed for Cons<P, C, F, B> {}
-impl<S, A> sealed::Sealed for Handler<S, A> {}
+impl<S> sealed::Sealed for Handler<S> {}
 
 #[cfg(test)]
 mod test {
@@ -439,12 +437,11 @@ mod test {
         'a,
         C: protocol::Command<'a>,
         T: 'a,
-        H: HandlerMethods<'a, 'a, T, A>,
-        A: mem::Arena,
+        H: HandlerMethods<'a, 'a, T>,
     >(
         scratch_space: &'a mut [u8],
         port_out: &'a mut Option<net::host::InMemHost<'a>>,
-        arena: &'a mut A,
+        arena: &'a mut dyn Arena,
         server: (H, T),
         request: C::Req,
     ) -> Result<C::Resp, Error> {
@@ -476,7 +473,7 @@ mod test {
 
     #[test]
     fn empty_handler() {
-        let handler = Handler::<(), _>::new();
+        let handler = Handler::<()>::new();
 
         let mut scratch = [0; 1024];
         let mut port = None;
@@ -484,7 +481,7 @@ mod test {
         let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 0 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
             &mut arena,
@@ -501,7 +498,7 @@ mod test {
     #[test]
     fn single_handler() {
         let mut handler_called = false;
-        let handler = Handler::<&str, _>::new()
+        let handler = Handler::<&str>::new()
             .handle::<protocol::FirmwareVersion, _>(|ctx| {
                 handler_called = true;
                 assert_eq!(ctx.server, "server state");
@@ -518,7 +515,7 @@ mod test {
         let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
             &mut arena,
@@ -533,7 +530,7 @@ mod test {
     #[test]
     fn single_handler_wrong() {
         let mut handler_called = false;
-        let handler = Handler::<&str, _>::new()
+        let handler = Handler::<&str>::new()
             .handle::<protocol::FirmwareVersion, _>(|ctx| {
                 handler_called = true;
                 assert_eq!(ctx.server, "server state");
@@ -549,7 +546,7 @@ mod test {
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
         let req = protocol::device_id::DeviceIdRequest {};
-        let resp = simulate_request::<protocol::DeviceId, _, _, _>(
+        let resp = simulate_request::<protocol::DeviceId, _, _>(
             &mut scratch,
             &mut port,
             &mut arena,
@@ -567,7 +564,7 @@ mod test {
     #[test]
     fn double_handler() {
         let mut handler_called = false;
-        let handler = Handler::<&str, _>::new()
+        let handler = Handler::<&str>::new()
             .handle::<protocol::FirmwareVersion, _>(|ctx| {
                 handler_called = true;
                 assert_eq!(ctx.server, "server state");
@@ -587,7 +584,7 @@ mod test {
         let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
             &mut arena,
@@ -602,7 +599,7 @@ mod test {
     #[test]
     fn double_swapped() {
         let mut handler_called = false;
-        let handler = Handler::<&str, _>::new()
+        let handler = Handler::<&str>::new()
             .handle::<protocol::DeviceId, _>(|_| {
                 panic!("called the wrong handler")
             })
@@ -622,7 +619,7 @@ mod test {
         let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
             &mut arena,
@@ -638,7 +635,7 @@ mod test {
     fn duplicate_handler() {
         let mut handler1_called = false;
         let mut handler2_called = false;
-        let handler = Handler::<&str, _>::new()
+        let handler = Handler::<&str>::new()
             .handle::<protocol::FirmwareVersion, _>(|_| {
                 handler1_called = true;
 
@@ -663,7 +660,7 @@ mod test {
         let mut arena = BumpArena::new(&mut arena);
         let req =
             protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _, _>(
+        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
             &mut arena,
