@@ -55,7 +55,12 @@ protocol_struct! {
         /// The number of the cert to request, indexed from the root.
         pub cert_number: u8,
         /// The data read from the certificate.
-        #[cfg_attr(feature = "serde", serde(borrow))]
+        #[cfg_attr(feature = "serde", serde(
+            serialize_with = "crate::serde::se_hexstring",
+        ))]
+        #[@static(cfg_attr(feature = "serde", serde(
+            deserialize_with = "crate::serde::de_hexstring",
+        )))]
         pub data: &'wire [u8],
     }
 

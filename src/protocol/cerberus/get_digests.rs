@@ -47,9 +47,12 @@ protocol_struct! {
     struct Response<'wire> {
         /// The digests of each certificate in the chain, starting from the
         /// root.
-        #[cfg_attr(feature = "serde",
-                   serde(deserialize_with = "crate::serde::de_slice_of_u8_arrays"))]
-        #[cfg_attr(feature = "serde", serde(borrow))]
+        #[cfg_attr(feature = "serde", serde(
+            serialize_with = "crate::serde::se_hexstrings",
+        ))]
+        #[@static(cfg_attr(feature = "serde", serde(
+            deserialize_with = "crate::serde::de_hexstrings",
+        )))]
         pub digests: &'wire [[u8; hash::Algo::Sha256.bytes()]],
     }
 

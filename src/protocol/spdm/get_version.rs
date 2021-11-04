@@ -33,7 +33,6 @@ protocol_struct! {
 
     struct Response<'wire> {
         /// The set of versions supported.
-        #[cfg_attr(feature = "serde", serde(skip_deserializing))]
         pub versions: &'wire [Version],
     }
 
