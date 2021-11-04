@@ -74,10 +74,10 @@ pub mod spdm;
 /// and responses, for use in generic programming.
 pub trait Command<'wire> {
     /// The unique request type for this `Command`.
-    type Req: Request<'wire>;
+    type Req: Message<'wire>;
     /// The response type for this `Command`, which will either be unique or
     /// [`Ack`].
-    type Resp: Response<'wire>;
+    type Resp: Message<'wire>;
 
     /// The message-specific errors for this `Command`.
     ///
@@ -85,24 +85,11 @@ pub trait Command<'wire> {
     type Error: error::SpecificError;
 }
 
-/// A Manticore request.
-///
-/// See [`Command`].
-pub trait Request<'wire>: wire::FromWire<'wire> + wire::ToWire {
-    /// The enum of command types this `Request` draws its type from.
+/// A Manticore message type, which makes up part of a `Command`.
+pub trait Message<'wire>: wire::FromWire<'wire> + wire::ToWire {
+    /// The enum of command types this `Message` draws its type from.
     type CommandType;
 
     /// The unique [`CommandType`] for this `Request`.
-    const TYPE: Self::CommandType;
-}
-
-/// A Manticore response.
-///
-/// See [`Command`].
-pub trait Response<'wire>: wire::FromWire<'wire> + wire::ToWire {
-    /// The enum of command types this `Response` draws its type from.
-    type CommandType;
-
-    /// The unique [`CommandType`] for this `Response`.
     const TYPE: Self::CommandType;
 }

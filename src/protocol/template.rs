@@ -44,8 +44,7 @@ macro_rules! protocol_struct {
             use $crate::protocol::wire::ToWire;
             use $crate::protocol::Command;
             use $crate::protocol::NoSpecificError;
-            use $crate::protocol::Request;
-            use $crate::protocol::Response;
+            use $crate::protocol::Message;
 
             #[cfg(feature = "arbitrary-derive")]
             use libfuzzer_sys::arbitrary::{self, Arbitrary};
@@ -94,7 +93,7 @@ macro_rules! protocol_struct {
                 type Req<'wire> = [<$Command Request>];
             });
 
-            impl<'wire> Request<'wire> for Req<'wire> {
+            impl<'wire> Message<'wire> for Req<'wire> {
                 type CommandType = $CommandType;
                 const TYPE: $CommandType = $CommandType::$TYPE;
             }
@@ -145,7 +144,7 @@ macro_rules! protocol_struct {
                     type Resp<'wire> = [<$Command Response>];
                 });
 
-                impl<'wire> Response<'wire> for Resp<'wire> {
+                impl<'wire> Message<'wire> for Resp<'wire> {
                     type CommandType = $CommandType;
                     const TYPE: $CommandType = $CommandType::$TYPE;
                 }
