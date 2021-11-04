@@ -204,7 +204,7 @@ impl Virtual {
         req: Cmd::Req,
         arena: &'a dyn Arena,
     ) -> Result<
-        Result<Cmd::Resp, protocol::Error>,
+        Result<Cmd::Resp, protocol::Error<'a, Cmd>>,
         server::Error<net::CerberusHeader>,
     >
     where

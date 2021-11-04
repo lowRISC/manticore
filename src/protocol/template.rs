@@ -43,7 +43,7 @@ macro_rules! protocol_struct {
             use $crate::protocol::wire::FromWire;
             use $crate::protocol::wire::ToWire;
             use $crate::protocol::Command;
-            use $crate::protocol::NoSpecificError;
+            use $crate::protocol::error::NoSpecificError;
             use $crate::protocol::Message;
 
             #[cfg(feature = "arbitrary-derive")]

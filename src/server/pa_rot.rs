@@ -143,7 +143,7 @@ impl<'a> PaRot<'a> {
                 if ctx.req.reset_type != ResetType::Local
                     || ctx.req.port_id != 0
                 {
-                    return Err(protocol::Error::OutOfRange);
+                    return Err(protocol::error::Error::OutOfRange);
                 }
 
                 Ok(ResetCounterResponse {
@@ -153,7 +153,7 @@ impl<'a> PaRot<'a> {
             .handle::<protocol::DeviceUptime, _>(|ctx| {
                 // NOTE: Currently, we only handle port 0, the "self" port.
                 if ctx.req.port_id != 0 {
-                    return Err(protocol::Error::OutOfRange);
+                    return Err(protocol::error::Error::OutOfRange);
                 }
 
                 Ok(protocol::device_uptime::DeviceUptimeResponse {
@@ -180,7 +180,7 @@ impl<'a> PaRot<'a> {
         req: &protocol::firmware_version::FirmwareVersionRequest,
     ) -> Result<
         protocol::firmware_version::FirmwareVersionResponse,
-        protocol::Error,
+        protocol::error::Error,
     > {
         use protocol::firmware_version::*;
 
@@ -194,7 +194,7 @@ impl<'a> PaRot<'a> {
             .opts
             .identity
             .vendor_firmware_version(req.index)
-            .ok_or(protocol::Error::OutOfRange)?;
+            .ok_or(protocol::error::Error::OutOfRange)?;
         Ok(FirmwareVersionResponse { version })
     }
 
@@ -203,7 +203,7 @@ impl<'a> PaRot<'a> {
         req: &protocol::capabilities::DeviceCapabilitiesRequest,
     ) -> Result<
         protocol::capabilities::DeviceCapabilitiesResponse,
-        protocol::Error,
+        protocol::error::Error,
     > {
         use protocol::capabilities::*;
         let mut crypto = req.capabilities.crypto;
@@ -235,13 +235,13 @@ impl<'a> PaRot<'a> {
         req: &protocol::get_digests::GetDigestsRequest,
     ) -> Result<
         protocol::get_digests::GetDigestsResponse<'req>,
-        protocol::Error<protocol::ChallengeError>,
+        protocol::error::Error<protocol::error::ChallengeError>,
     > {
         let digests_len = self
             .opts
             .trust_chain
             .chain_len(req.slot)
-            .ok_or(protocol::ChallengeError::UnknownChain)?
+            .ok_or(protocol::error::ChallengeError::UnknownChain)?
             .get();
         let digests = arena
             .alloc_slice::<[u8; hash::Algo::Sha256.bytes()]>(digests_len)?;
@@ -250,7 +250,7 @@ impl<'a> PaRot<'a> {
                 .opts
                 .trust_chain
                 .cert(req.slot, i)
-                .ok_or(protocol::ChallengeError::UnknownChain)?;
+                .ok_or(protocol::error::ChallengeError::UnknownChain)?;
             self.opts.hasher.contiguous_hash(
                 hash::Algo::Sha256,
                 cert.raw(),
@@ -267,13 +267,13 @@ impl<'a> PaRot<'a> {
         req: &protocol::get_cert::GetCertRequest,
     ) -> Result<
         protocol::get_cert::GetCertResponse,
-        protocol::Error<protocol::ChallengeError>,
+        protocol::error::Error<protocol::error::ChallengeError>,
     > {
         let cert = self
             .opts
             .trust_chain
             .cert(req.slot, req.cert_number as usize)
-            .ok_or(protocol::ChallengeError::UnknownChain)?;
+            .ok_or(protocol::error::ChallengeError::UnknownChain)?;
 
         let start = cert.raw().len().min(req.offset as usize);
         let end = cert
@@ -294,14 +294,14 @@ impl<'a> PaRot<'a> {
         req_buf: &[u8],
     ) -> Result<
         protocol::challenge::ChallengeResponse<'req>,
-        protocol::Error<protocol::ChallengeError>,
+        protocol::error::Error<protocol::error::ChallengeError>,
     > {
         use protocol::challenge::*;
         let signer = self
             .opts
             .trust_chain
             .signer(req.slot)
-            .ok_or(protocol::ChallengeError::UnknownChain)?;
+            .ok_or(protocol::error::ChallengeError::UnknownChain)?;
         let nonce = arena.alloc::<[u8; 32]>()?;
         self.opts.csrng.fill(nonce)?;
 
@@ -334,7 +334,7 @@ impl<'a> PaRot<'a> {
         req: &protocol::key_exchange::KeyExchangeRequest,
     ) -> Result<
         protocol::key_exchange::KeyExchangeResponse<'req>,
-        protocol::Error<protocol::ChallengeError>,
+        protocol::error::Error<protocol::error::ChallengeError>,
     > {
         use protocol::key_exchange::*;
         match req {
@@ -344,12 +344,12 @@ impl<'a> PaRot<'a> {
             } => {
                 let slot = self
                     .current_cert_slot
-                    .ok_or(protocol::Error::OutOfRange)?;
+                    .ok_or(protocol::error::Error::OutOfRange)?;
                 let signer = self
                     .opts
                     .trust_chain
                     .signer(slot)
-                    .ok_or(protocol::ChallengeError::UnknownChain)?;
+                    .ok_or(protocol::error::ChallengeError::UnknownChain)?;
 
                 let pk_resp =
                     arena.alloc_slice(self.opts.session.ephemeral_bytes())?;
@@ -364,20 +364,20 @@ impl<'a> PaRot<'a> {
                     .opts
                     .trust_chain
                     .chain_len(slot)
-                    .ok_or(protocol::Error::OutOfRange)?
+                    .ok_or(protocol::error::Error::OutOfRange)?
                     .get();
                 let alias_cert = self
                     .opts
                     .trust_chain
                     .cert(slot, chain_len - 1)
-                    .ok_or(protocol::Error::OutOfRange)?;
+                    .ok_or(protocol::error::Error::OutOfRange)?;
 
                 let alias_cert_hmac = hmac_algorithm.alloc(arena)?;
                 let (_, hmac_key) = self
                     .opts
                     .session
                     .hmac_key()
-                    .ok_or(protocol::Error::Internal)?;
+                    .ok_or(protocol::error::Error::Internal)?;
                 self.opts.hasher.contiguous_hmac(
                     *hmac_algorithm,
                     hmac_key,
@@ -391,7 +391,7 @@ impl<'a> PaRot<'a> {
                     alias_cert_hmac,
                 })
             }
-            _ => Err(protocol::Error::Internal),
+            _ => Err(protocol::error::Error::Internal),
         }
     }
 }

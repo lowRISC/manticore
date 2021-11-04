@@ -53,8 +53,9 @@ pub mod template;
 pub mod wire;
 
 #[macro_use]
-mod error;
-pub use error::*;
+pub mod error;
+#[cfg(doc)]
+use error::{Ack, NoSpecificError};
 
 mod cerberus;
 pub use cerberus::*;
@@ -71,6 +72,11 @@ pub mod spdm;
 /// This trait is not implemented by any of the request or response types, but
 /// is intead implemented by uninhabited types that represent pairs of requests
 /// and responses, for use in generic programming.
+///
+/// This trait is often used via a bound like `C: for<'a> Command<'a>`, allowing
+/// its members to be used as a sort of faux-generalized associated type. However,
+/// the current syntax for going from `C` to `Req` is somewhat painful, so the
+/// aliases [`Req`], [`Resp`], and [`Error`] are provided to alleviate this.
 pub trait Command<'wire> {
     /// The enum of command types this `Command` draws its types from.
     type CommandType: Copy + Debug + Eq;
@@ -86,6 +92,21 @@ pub trait Command<'wire> {
     /// In general, this will just be [`NoSpecificError`].
     type Error: error::SpecificError;
 }
+
+/// Extracts the request type with lifetime `'a` from `C: for<'a> Command<'a>`.
+///
+/// See [`Command`].
+pub type Req<'a, C> = <C as Command<'a>>::Req;
+
+/// Extracts the response type with lifetime `'a` from `C: for<'a> Command<'a>`.
+///
+/// See [`Command`].
+pub type Resp<'a, C> = <C as Command<'a>>::Resp;
+
+/// Extracts the error type with lifetime `'a` from `C: for<'a> Command<'a>`.
+///
+/// See [`Command`].
+pub type Error<'a, C> = error::Error<<C as Command<'a>>::Error>;
 
 /// A Manticore message type, which makes up part of a `Command`.
 pub trait Message<'wire>: wire::FromWire<'wire> + wire::ToWire {

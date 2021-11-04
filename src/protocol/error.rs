@@ -120,6 +120,10 @@ impl TryFrom<RawError> for Ack {
 ///   error with the first byte of the payload `0xff` and the second by specifying
 ///   the error.
 /// - All other `Unspecified` errors are encoded as-is.
+///
+/// This type will typically be accessed via the [`protocol::Error`] alias.
+///
+/// [`protocol::Error`]: super::Error
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Error<E = NoSpecificError> {
@@ -313,7 +317,7 @@ macro_rules! specific_error {
             $var,
         )*}
 
-        impl $crate::protocol::SpecificError for $name {
+        impl $crate::protocol::error::SpecificError for $name {
             fn from_raw(code: u8) -> Result<Self, $crate::protocol::wire::Error> {
                 match code {
                     $($code => Ok(Self::$var),)*

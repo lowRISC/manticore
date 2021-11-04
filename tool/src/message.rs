@@ -19,6 +19,9 @@ use manticore::protocol::wire::FromWire;
 use manticore::protocol::wire::ToWire;
 use manticore::protocol::Command;
 use manticore::protocol::CommandType;
+use manticore::protocol::Message as _;
+use manticore::protocol::Req;
+use manticore::protocol::Resp;
 
 macro_rules! proto_match {
     (($cmd:expr, $is_req:expr) in |$mty:ident: type| $expr:expr) => {
@@ -40,11 +43,11 @@ macro_rules! proto_match {
     (($cmd:expr, $is_req:expr, $mty:ident, $expr:expr) in {$($t:ty,)*}) => {
         match ($cmd, $is_req) {
             $(
-                (<<$t as Command<'static>>::Req as protocol::Message<'static>>::TYPE, true) => {
+                (Req::<'static, $t>::TYPE, true) => {
                     type $mty = <$t as Command<'static>>::Req;
                     $expr
                 }
-                (<<$t as Command<'static>>::Resp as protocol::Message<'static>>::TYPE, false) => {
+                (Resp::<'static, $t>::TYPE, false) => {
                     type $mty = <$t as Command<'static>>::Resp;
                     $expr
                 }
