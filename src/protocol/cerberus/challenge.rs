@@ -13,10 +13,10 @@ use crate::io::ReadInt as _;
 use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
+use crate::protocol::error::ChallengeError;
 use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
-use crate::protocol::ChallengeError;
 use crate::protocol::CommandType;
 
 protocol_struct! {

@@ -77,6 +77,8 @@ use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire as _;
 use crate::protocol::Message;
+use crate::protocol::Req;
+use crate::protocol::Resp;
 
 /// A `*`-importable prelude that pulls in only the names that are necessary
 /// to make `Handler` work.
@@ -159,16 +161,6 @@ mod sealed {
     pub trait Sealed {}
 }
 
-// Helpers for working with `for<'a> Command<'a>`.
-//
-// See the comment on the `where` clause of `HandlerMethods::handle`.
-#[doc(hidden)]
-pub type ReqOf<'a, C> = <C as protocol::Command<'a>>::Req;
-#[doc(hidden)]
-pub type RespOf<'a, C> = <C as protocol::Command<'a>>::Resp;
-#[doc(hidden)]
-pub type ErrOf<'a, C> = protocol::Error<<C as protocol::Command<'a>>::Error>;
-
 /// Context for a request, i.e., all relevant variables for handling a request.
 pub struct Context<'req, Buf, Req, Server> {
     pub req_buf: Buf,
@@ -214,7 +206,7 @@ where
         // - Given this, we can write `C: for<'c> Command<'c>` (i.e., `C`
         //   implements *every* Command<'c>), and, in lieu of `C::Req<'req>`,
         //   we can write `<C as Command<'c>>::Req` to access a particular
-        //   implementation. `ReqOf<>` and `RespOf<>` are type-alias shortcuts
+        //   implementation. `Req<>` and `Resp<>` are type-alias shortcuts
         //   for this syntax.
         //
         // The reason to want to do this in the first place is because we want
@@ -228,8 +220,8 @@ where
         // kludge.
         for<'c> C: protocol::Command<'c>,
         F: FnOnce(
-            Context<'req, (), ReqOf<'req, C>, Server>,
-        ) -> Result<RespOf<'out, C>, ErrOf<'out, C>>,
+            Context<'req, (), Req<'req, C>, Server>,
+        ) -> Result<Resp<'out, C>, protocol::Error<'out, C>>,
         'srv: 'out,
         'req: 'out,
     {
@@ -246,8 +238,8 @@ where
         // See above for an explanation of these bounds.
         for<'c> C: protocol::Command<'c>,
         F: FnOnce(
-            Context<'req, &'req [u8], ReqOf<'req, C>, Server>,
-        ) -> Result<RespOf<'out, C>, ErrOf<'out, C>>,
+            Context<'req, &'req [u8], Req<'req, C>, Server>,
+        ) -> Result<Resp<'out, C>, protocol::Error<'out, C>>,
         'srv: 'out,
         'req: 'out,
     {
@@ -295,13 +287,18 @@ impl<Prev, Command, F, const B: bool> Cons<Prev, Command, F, B> {
     where
         Command:
             for<'c> protocol::Command<'c, CommandType = Header::CommandType>,
-        F: FnOnce(Ctx) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
+        F: FnOnce(
+            Ctx,
+        ) -> Result<
+            Resp<'out, Command>,
+            protocol::Error<'out, Command>,
+        >,
         Header: net::Header,
     {
         match (self.handler)(ctx) {
             Ok(msg) => {
                 let reply = request.reply(
-                    original_header.reply_with(RespOf::<'out, Command>::TYPE),
+                    original_header.reply_with(Resp::<'out, Command>::TYPE),
                 )?;
                 msg.to_wire(reply.sink()?)?;
                 reply.finish()?;
@@ -328,8 +325,9 @@ where
     Prev: HandlerMethods<'req, 'srv, Server, Header>,
     Command: for<'c> protocol::Command<'c, CommandType = Header::CommandType>,
     F: FnOnce(
-        Context<'req, (), ReqOf<'req, Command>, Server>,
-    ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
+        Context<'req, (), Req<'req, Command>, Server>,
+    )
+        -> Result<Resp<'out, Command>, protocol::Error<'out, Command>>,
 {
     #[inline]
     fn run_with_header(
@@ -339,7 +337,7 @@ where
         request: &mut dyn net::host::HostRequest<'req, Header>,
         arena: &'req dyn Arena,
     ) -> Result<(), Error<Header>> {
-        if header.command() != ReqOf::<'req, Command>::TYPE {
+        if header.command() != Req::<'req, Command>::TYPE {
             // Recurse into the next handler case. Note that this cannot be
             // `run`, since that would re-parse the header incorrectly.
             return self.prev.run_with_header(server, header, request, arena);
@@ -367,8 +365,9 @@ where
     Prev: HandlerMethods<'req, 'srv, Server, Header>,
     Command: for<'c> protocol::Command<'c, CommandType = Header::CommandType>,
     F: FnOnce(
-        Context<'req, &'req [u8], ReqOf<'req, Command>, Server>,
-    ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
+        Context<'req, &'req [u8], Req<'req, Command>, Server>,
+    )
+        -> Result<Resp<'out, Command>, protocol::Error<'out, Command>>,
 {
     #[inline]
     fn run_with_header(
@@ -378,7 +377,7 @@ where
         request: &mut dyn net::host::HostRequest<'req, Header>,
         arena: &'req dyn Arena,
     ) -> Result<(), Error<Header>> {
-        if header.command() != ReqOf::<'req, Command>::TYPE {
+        if header.command() != Req::<'req, Command>::TYPE {
             // Recurse into the next handler case. Note that this cannot be
             // `run`, since that would re-parse the header incorrectly.
             return self.prev.run_with_header(server, header, request, arena);

@@ -47,7 +47,7 @@ pub fn send_local<'a, Cmd: Command<'a, CommandType = CommandType>>(
     req: Cmd::Req,
     arena: &'a dyn Arena,
 ) -> Result<
-    Result<Cmd::Resp, protocol::Error>,
+    Result<Cmd::Resp, protocol::Error<'a, Cmd>>,
     server::Error<net::CerberusHeader>,
 > {
     log::info!("connecting to 127.0.0.1:{}", port);
@@ -93,7 +93,7 @@ pub fn send_local<'a, Cmd: Command<'a, CommandType = CommandType>>(
         log::info!("deserializing {}", type_name::<Cmd::Resp>());
         Ok(Ok(FromWire::from_wire(&mut r, arena)?))
     } else if header.command == CommandType::Error {
-        log::info!("deserializing {}", type_name::<protocol::Error>());
+        log::info!("deserializing {}", type_name::<protocol::Error<'a, Cmd>>());
         Ok(Err(FromWire::from_wire(&mut r, arena)?))
     } else {
         Err(net::Error::BadHeader.into())
