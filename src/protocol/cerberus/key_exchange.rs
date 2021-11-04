@@ -29,7 +29,12 @@ protocol_struct! {
 
             /// A DER-encoded ECDSA public key, which will be fed into
             /// the ECDH.
-            #[cfg_attr(feature = "serde", serde(borrow))]
+            #[cfg_attr(feature = "serde", serde(
+                serialize_with = "crate::serde::se_hexstring",
+            ))]
+            #[@static(cfg_attr(feature = "serde", serde(
+                deserialize_with = "crate::serde::de_hexstring",
+            )))]
             pk_req: &'wire [u8],
         },
 
@@ -40,14 +45,24 @@ protocol_struct! {
             key_len: usize,
 
             /// The HMAC of the pairing key with the session's MAC key.
-            #[cfg_attr(feature = "serde", serde(borrow))]
+            #[cfg_attr(feature = "serde", serde(
+                serialize_with = "crate::serde::se_hexstring",
+            ))]
+            #[@static(cfg_attr(feature = "serde", serde(
+                deserialize_with = "crate::serde::de_hexstring",
+            )))]
             key_hmac: &'wire [u8],
         },
 
         /// A request to destroy an encrypted session.
         DestroySession {
             /// The HMAC of the session key with the session's MAC key.
-            #[cfg_attr(feature = "serde", serde(borrow))]
+            #[cfg_attr(feature = "serde", serde(
+                serialize_with = "crate::serde::se_hexstring",
+            ))]
+            #[@static(cfg_attr(feature = "serde", serde(
+                deserialize_with = "crate::serde::de_hexstring",
+            )))]
             session_hmac: &'wire [u8],
         },
     }
@@ -118,16 +133,31 @@ protocol_struct! {
         SessionKey {
             /// A DER-encoded ECDSA public key, which will be fed into
             /// the ECDH.
-            #[cfg_attr(feature = "serde", serde(borrow))]
+            #[cfg_attr(feature = "serde", serde(
+                serialize_with = "crate::serde::se_hexstring",
+            ))]
+            #[@static(cfg_attr(feature = "serde", serde(
+                deserialize_with = "crate::serde::de_hexstring",
+            )))]
             pk_resp: &'wire [u8],
 
             /// A signature over `pk_req || pk_resp`, using the previously
             /// negotiated Alias Certificate's private key.
-            #[cfg_attr(feature = "serde", serde(borrow))]
+            #[cfg_attr(feature = "serde", serde(
+                serialize_with = "crate::serde::se_hexstring",
+            ))]
+            #[@static(cfg_attr(feature = "serde", serde(
+                deserialize_with = "crate::serde::de_hexstring",
+            )))]
             signature: &'wire [u8],
 
             /// The HMAC of the encoded alias cert with the session's MAC key.
-            #[cfg_attr(feature = "serde", serde(borrow))]
+            #[cfg_attr(feature = "serde", serde(
+                serialize_with = "crate::serde::se_hexstring",
+            ))]
+            #[@static(cfg_attr(feature = "serde", serde(
+                deserialize_with = "crate::serde::de_hexstring",
+            )))]
             alias_cert_hmac: &'wire [u8],
         },
         /// A response to a paired-key HMAC request; indicates success.

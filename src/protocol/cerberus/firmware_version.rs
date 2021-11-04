@@ -35,9 +35,12 @@ protocol_struct! {
 
     struct Response<'wire> {
         /// The firmware version. In practice, this is usually an ASCII string.
-        #[cfg_attr(feature = "serde",
-                   serde(deserialize_with = "crate::serde::de_u8_array_ref"))]
-        #[cfg_attr(feature = "serde", serde(borrow))]
+        #[cfg_attr(feature = "serde", serde(
+            serialize_with = "crate::serde::se_bytestring",
+        ))]
+        #[@static(cfg_attr(feature = "serde", serde(
+            deserialize_with = "crate::serde::de_bytestring",
+        )))]
         pub version: &'wire [u8; 32],
     }
 
