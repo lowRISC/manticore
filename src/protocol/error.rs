@@ -17,7 +17,7 @@ use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
 use crate::protocol::CommandType;
-use crate::protocol::Response;
+use crate::protocol::Message;
 use crate::session;
 
 #[cfg(doc)]
@@ -65,7 +65,7 @@ impl ToWire for RawError {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Ack;
 
-impl Response<'_> for Ack {
+impl Message<'_> for Ack {
     type CommandType = CommandType;
     const TYPE: CommandType = CommandType::Error;
 }

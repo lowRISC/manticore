@@ -76,8 +76,7 @@ use crate::protocol;
 use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire as _;
-use crate::protocol::Request;
-use crate::protocol::Response;
+use crate::protocol::Message;
 
 /// A `*`-importable prelude that pulls in only the names that are necessary
 /// to make `Handler` work.
@@ -203,12 +202,12 @@ where
         //
         // What we would *like* to have is for `Command` to have no parameters,
         // and for the `Req` and `Resp` associated types to have lifetime
-        // parameters, e.g., `type Req<'a>: Request<'a>;`. We would then write
+        // parameters, e.g., `type Req<'a>: Message<'a>;`. We would then write
         // `FnOnce(Server, C::Req<'req>) -> Result<C::Resp<'out>, Error>`.
         //
         // Since this is not possible today, we have the following workaround:
         // - `Command` has a lifetime parameter, and has associated types like
-        //   `type Req: Request<'a>;`.
+        //   `type Req: Message<'a>;`.
         // - We require that a `Command`-implementing type blanket-implement it
         //   for *all* lifetimes. Since `Command` implementations are just
         //   marker types, this is fine; they have no lifetimes in them, either.
@@ -297,8 +296,7 @@ impl<Prev, Command, F, const B: bool> Cons<Prev, Command, F, B> {
         for<'c> Command: protocol::Command<'c>,
         F: FnOnce(Ctx) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
         Header: net::Header,
-        RespOf<'out, Command>:
-            Response<'out, CommandType = Header::CommandType>,
+        RespOf<'out, Command>: Message<'out, CommandType = Header::CommandType>,
     {
         match (self.handler)(ctx) {
             Ok(msg) => {
@@ -333,8 +331,8 @@ where
     F: FnOnce(
         Context<'req, (), ReqOf<'req, Command>, Server>,
     ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
-    ReqOf<'req, Command>: Request<'req, CommandType = Header::CommandType>,
-    RespOf<'out, Command>: Response<'out, CommandType = Header::CommandType>,
+    ReqOf<'req, Command>: Message<'req, CommandType = Header::CommandType>,
+    RespOf<'out, Command>: Message<'out, CommandType = Header::CommandType>,
 {
     #[inline]
     fn run_with_header(
@@ -375,8 +373,8 @@ where
     F: FnOnce(
         Context<'req, &'req [u8], ReqOf<'req, Command>, Server>,
     ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
-    ReqOf<'req, Command>: Request<'req, CommandType = Header::CommandType>,
-    RespOf<'out, Command>: Response<'out, CommandType = Header::CommandType>,
+    ReqOf<'req, Command>: Message<'req, CommandType = Header::CommandType>,
+    RespOf<'out, Command>: Message<'out, CommandType = Header::CommandType>,
 {
     #[inline]
     fn run_with_header(
@@ -461,7 +459,7 @@ mod test {
         request: C::Req,
     ) -> Result<C::Resp, Error<net::CerberusHeader>>
     where
-        ReqOf<'a, C>: Request<'a, CommandType = CommandType>,
+        ReqOf<'a, C>: Message<'a, CommandType = CommandType>,
     {
         let len = scratch_space.len();
         let (req_scratch, port_scratch) = scratch_space.split_at_mut(len / 2);
@@ -475,7 +473,7 @@ mod test {
         let port = port_out.as_mut().unwrap();
         port.request(
             net::CerberusHeader {
-                command: <C::Req as protocol::Request<'a>>::TYPE,
+                command: <C::Req as protocol::Message<'a>>::TYPE,
             },
             request_bytes,
         );

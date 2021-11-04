@@ -209,8 +209,8 @@ impl Virtual {
     >
     where
         Cmd: protocol::Command<'a>,
-        Cmd::Req: protocol::Request<'a, CommandType = protocol::CommandType>,
-        Cmd::Resp: protocol::Response<'a, CommandType = protocol::CommandType>,
+        Cmd::Req: protocol::Message<'a, CommandType = protocol::CommandType>,
+        Cmd::Resp: protocol::Message<'a, CommandType = protocol::CommandType>,
     {
         tcp::send_local::<Cmd>(self.port, req, arena)
     }

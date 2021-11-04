@@ -40,11 +40,11 @@ macro_rules! proto_match {
     (($cmd:expr, $is_req:expr, $mty:ident, $expr:expr) in {$($t:ty,)*}) => {
         match ($cmd, $is_req) {
             $(
-                (<<$t as Command<'static>>::Req as protocol::Request<'static>>::TYPE, true) => {
+                (<<$t as Command<'static>>::Req as protocol::Message<'static>>::TYPE, true) => {
                     type $mty = <$t as Command<'static>>::Req;
                     $expr
                 }
-                (<<$t as Command<'static>>::Resp as protocol::Response<'static>>::TYPE, false) => {
+                (<<$t as Command<'static>>::Resp as protocol::Message<'static>>::TYPE, false) => {
                     type $mty = <$t as Command<'static>>::Resp;
                     $expr
                 }

@@ -35,8 +35,7 @@ use manticore::protocol::wire::ToWire;
 use manticore::protocol::wire::WireEnum;
 use manticore::protocol::Command;
 use manticore::protocol::CommandType;
-use manticore::protocol::Request;
-use manticore::protocol::Response;
+use manticore::protocol::Message;
 use manticore::server;
 
 /// Sends `req` to a virtual RoT listening on `localhost:{port}`, using
@@ -53,8 +52,8 @@ pub fn send_local<'a, Cmd>(
 >
 where
     Cmd: Command<'a>,
-    Cmd::Req: Request<'a, CommandType = CommandType>,
-    Cmd::Resp: Response<'a, CommandType = CommandType>,
+    Cmd::Req: Message<'a, CommandType = CommandType>,
+    Cmd::Resp: Message<'a, CommandType = CommandType>,
 {
     log::info!("connecting to 127.0.0.1:{}", port);
     let mut conn = TcpStream::connect(("127.0.0.1", port)).map_err(|e| {
@@ -62,7 +61,7 @@ where
         net::Error::Io(io::Error::Internal)
     })?;
     let mut writer = Writer::new(net::CerberusHeader {
-        command: <Cmd::Req as Request>::TYPE,
+        command: <Cmd::Req as Message>::TYPE,
     });
     log::info!("serializing {}", type_name::<Cmd::Req>());
     req.to_wire(&mut writer)?;
@@ -95,7 +94,7 @@ where
     let (header, len) = header_from_wire(&mut conn)?;
     let mut r = Reader(conn, len);
 
-    if header.command == <Cmd::Resp as Response>::TYPE {
+    if header.command == <Cmd::Resp as Message>::TYPE {
         log::info!("deserializing {}", type_name::<Cmd::Resp>());
         Ok(Ok(FromWire::from_wire(&mut r, arena)?))
     } else if header.command == CommandType::Error {
