@@ -21,6 +21,8 @@ use crate::protocol;
 use crate::protocol::capabilities;
 use crate::protocol::device_id;
 use crate::protocol::get_digests::KeyExchangeAlgo;
+use crate::protocol::Req;
+use crate::protocol::Resp;
 use crate::server::Error;
 use crate::session::Session;
 
@@ -114,12 +116,12 @@ impl<'a> PaRot<'a> {
                 ctx.server.handle_capabilities(&ctx.req)
             })
             .handle::<protocol::DeviceId, _>(|ctx| {
-                Ok(protocol::device_id::DeviceIdResponse {
+                Ok(Resp::<protocol::DeviceId> {
                     id: ctx.server.opts.device_id,
                 })
             })
             .handle::<protocol::DeviceInfo, _>(|ctx| {
-                Ok(protocol::device_info::DeviceInfoResponse {
+                Ok(Resp::<protocol::DeviceInfo> {
                     info: ctx.server.opts.identity.unique_device_identity(),
                 })
             })
@@ -137,7 +139,7 @@ impl<'a> PaRot<'a> {
                 ctx.server.handle_key_xchg(ctx.arena, &ctx.req)
             })
             .handle::<protocol::ResetCounter, _>(|ctx| {
-                use protocol::reset_counter::*;
+                use protocol::reset_counter::ResetType;
                 // NOTE: Currently, we only handle "local resets" for port 0,
                 // the "self" port.
                 if ctx.req.reset_type != ResetType::Local
@@ -146,7 +148,7 @@ impl<'a> PaRot<'a> {
                     return Err(protocol::error::Error::OutOfRange);
                 }
 
-                Ok(ResetCounterResponse {
+                Ok(Resp::<protocol::ResetCounter> {
                     count: ctx.server.opts.reset.resets_since_power_on() as u16,
                 })
             })
@@ -156,12 +158,12 @@ impl<'a> PaRot<'a> {
                     return Err(protocol::error::Error::OutOfRange);
                 }
 
-                Ok(protocol::device_uptime::DeviceUptimeResponse {
+                Ok(Resp::<protocol::DeviceUptime> {
                     uptime: ctx.server.opts.reset.uptime(),
                 })
             })
             .handle::<protocol::RequestCounter, _>(|ctx| {
-                Ok(protocol::request_counter::RequestCounterResponse {
+                Ok(Resp::<protocol::RequestCounter> {
                     ok_count: ctx.server.ok_count,
                     err_count: ctx.server.err_count,
                 })
@@ -177,15 +179,13 @@ impl<'a> PaRot<'a> {
 
     fn handle_fw_version(
         &mut self,
-        req: &protocol::firmware_version::FirmwareVersionRequest,
+        req: &Req<protocol::FirmwareVersion>,
     ) -> Result<
-        protocol::firmware_version::FirmwareVersionResponse,
-        protocol::error::Error,
+        Resp<protocol::FirmwareVersion>,
+        protocol::Error<protocol::FirmwareVersion>,
     > {
-        use protocol::firmware_version::*;
-
         if req.index == 0 {
-            return Ok(FirmwareVersionResponse {
+            return Ok(Resp::<protocol::FirmwareVersion> {
                 version: self.opts.identity.firmware_version(),
             });
         }
@@ -195,15 +195,15 @@ impl<'a> PaRot<'a> {
             .identity
             .vendor_firmware_version(req.index)
             .ok_or(protocol::error::Error::OutOfRange)?;
-        Ok(FirmwareVersionResponse { version })
+        Ok(Resp::<protocol::FirmwareVersion> { version })
     }
 
     fn handle_capabilities(
         &mut self,
-        req: &protocol::capabilities::DeviceCapabilitiesRequest,
+        req: &Req<protocol::DeviceCapabilities>,
     ) -> Result<
-        protocol::capabilities::DeviceCapabilitiesResponse,
-        protocol::error::Error,
+        Resp<protocol::DeviceCapabilities>,
+        protocol::Error<protocol::DeviceCapabilities>,
     > {
         use protocol::capabilities::*;
         let mut crypto = req.capabilities.crypto;
@@ -223,7 +223,7 @@ impl<'a> PaRot<'a> {
             crypto,
         };
 
-        Ok(protocol::capabilities::DeviceCapabilitiesResponse {
+        Ok(Resp::<protocol::DeviceCapabilities> {
             capabilities,
             timeouts: self.opts.timeouts,
         })
@@ -232,10 +232,10 @@ impl<'a> PaRot<'a> {
     fn handle_digests<'req>(
         &mut self,
         arena: &'req dyn Arena,
-        req: &protocol::get_digests::GetDigestsRequest,
+        req: &Req<protocol::GetDigests>,
     ) -> Result<
-        protocol::get_digests::GetDigestsResponse<'req>,
-        protocol::error::Error<protocol::error::ChallengeError>,
+        Resp<'req, protocol::GetDigests>,
+        protocol::Error<protocol::GetDigests>,
     > {
         let digests_len = self
             .opts
@@ -259,16 +259,14 @@ impl<'a> PaRot<'a> {
         }
 
         self.key_exchange = Some(req.key_exchange);
-        Ok(protocol::get_digests::GetDigestsResponse { digests })
+        Ok(Resp::<protocol::GetDigests> { digests })
     }
 
     fn handle_cert(
         &mut self,
-        req: &protocol::get_cert::GetCertRequest,
-    ) -> Result<
-        protocol::get_cert::GetCertResponse,
-        protocol::error::Error<protocol::error::ChallengeError>,
-    > {
+        req: &Req<protocol::GetCert>,
+    ) -> Result<Resp<protocol::GetCert>, protocol::Error<protocol::GetCert>>
+    {
         let cert = self
             .opts
             .trust_chain
@@ -280,7 +278,7 @@ impl<'a> PaRot<'a> {
             .raw()
             .len()
             .min((req.len as usize).saturating_add(start));
-        Ok(protocol::get_cert::GetCertResponse {
+        Ok(Resp::<protocol::GetCert> {
             slot: req.slot,
             cert_number: req.cert_number,
             data: &cert.raw()[start..end],
@@ -290,13 +288,13 @@ impl<'a> PaRot<'a> {
     fn handle_challenge<'req>(
         &'req mut self,
         arena: &'req dyn Arena,
-        req: &protocol::challenge::ChallengeRequest,
+        req: &Req<protocol::Challenge>,
         req_buf: &[u8],
     ) -> Result<
-        protocol::challenge::ChallengeResponse<'req>,
-        protocol::error::Error<protocol::error::ChallengeError>,
+        Resp<'req, protocol::Challenge>,
+        protocol::Error<protocol::Challenge>,
     > {
-        use protocol::challenge::*;
+        use protocol::challenge::ChallengeResponseTbs;
         let signer = self
             .opts
             .trust_chain
@@ -325,20 +323,20 @@ impl<'a> PaRot<'a> {
             self.current_cert_slot = Some(tbs.slot);
         }
 
-        Ok(ChallengeResponse { tbs, signature })
+        Ok(Resp::<protocol::Challenge> { tbs, signature })
     }
 
     fn handle_key_xchg<'req>(
         &mut self,
         arena: &'req dyn Arena,
-        req: &protocol::key_exchange::KeyExchangeRequest,
+        req: &Req<protocol::KeyExchange>,
     ) -> Result<
-        protocol::key_exchange::KeyExchangeResponse<'req>,
-        protocol::error::Error<protocol::error::ChallengeError>,
+        Resp<'req, protocol::KeyExchange>,
+        protocol::Error<protocol::KeyExchange>,
     > {
         use protocol::key_exchange::*;
         match req {
-            KeyExchangeRequest::SessionKey {
+            Req::<KeyExchange>::SessionKey {
                 hmac_algorithm,
                 pk_req,
             } => {
@@ -385,7 +383,7 @@ impl<'a> PaRot<'a> {
                     alias_cert_hmac,
                 )?;
 
-                Ok(KeyExchangeResponse::SessionKey {
+                Ok(Resp::<KeyExchange>::SessionKey {
                     pk_resp,
                     signature,
                     alias_cert_hmac,

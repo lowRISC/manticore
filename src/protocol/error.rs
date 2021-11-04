@@ -126,7 +126,7 @@ impl TryFrom<RawError> for Ack {
 /// [`protocol::Error`]: super::Error
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Error<E = NoSpecificError> {
+pub enum Error<E> {
     /// Indicates that the device is "busy", usually meaning that other
     /// commands are being serviced.
     Busy,

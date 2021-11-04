@@ -67,6 +67,8 @@ macro_rules! protocol_struct {
             protocol_struct!(@internal if_nonempty ($($req_lt)?) {
                 derive_borrowed! {
                     #[doc = "The [`" $Command "`] request."]
+                    #[doc = ""]
+                    #[doc = "Prefer to refer to this type as `Req<" $Command ">`."]
                     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
                     #[cfg_attr(feature = "serde", derive(serde::Serialize))]
                     $(#[$req_meta])*
@@ -83,6 +85,8 @@ macro_rules! protocol_struct {
             } else {
                 derive_borrowed! {
                     #[doc = "The [`" $Command "`] request."]
+                    #[doc = ""]
+                    #[doc = "Prefer to refer to this type as `Req<" $Command ">`."]
                     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
                     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
                     #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
@@ -118,6 +122,8 @@ macro_rules! protocol_struct {
                 protocol_struct!(@internal if_nonempty ($($rsp_lt)?) {
                     derive_borrowed! {
                         #[doc = "The [`" $Command "`] response."]
+                        #[doc = ""]
+                        #[doc = "Prefer to refer to this type as `Resp<" $Command ">`."]
                         #[derive(Clone, Copy, PartialEq, Eq, Debug)]
                         #[cfg_attr(feature = "serde", derive(serde::Serialize))]
                         $(#[$rsp_meta])*
@@ -134,6 +140,8 @@ macro_rules! protocol_struct {
                 } else {
                     derive_borrowed! {
                         #[doc = "The [`" $Command "`] response."]
+                        #[doc = ""]
+                        #[doc = "Prefer to refer to this type as `Resp<" $Command ">`."]
                         #[derive(Clone, Copy, PartialEq, Eq, Debug)]
                         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
                         #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
