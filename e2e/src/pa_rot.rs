@@ -208,9 +208,7 @@ impl Virtual {
         server::Error<net::CerberusHeader>,
     >
     where
-        Cmd: protocol::Command<'a>,
-        Cmd::Req: protocol::Message<'a, CommandType = protocol::CommandType>,
-        Cmd::Resp: protocol::Message<'a, CommandType = protocol::CommandType>,
+        Cmd: protocol::Command<'a, CommandType = protocol::CommandType>,
     {
         tcp::send_local::<Cmd>(self.port, req, arena)
     }

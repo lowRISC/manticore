@@ -13,8 +13,9 @@
 //! device over a SPI line, it should tie up all the necessary implementation
 //! details into a [`HostPort`] implementation.
 
-use crate::io;
+use core::fmt::Debug;
 
+use crate::io;
 use crate::protocol::CommandType;
 
 pub mod device;
@@ -51,7 +52,7 @@ impl From<io::Error> for Error {
 /// A header type, which represents a protocol over the wire.
 pub trait Header: Copy {
     /// The command type enum associated with this header.
-    type CommandType;
+    type CommandType: Copy + Debug + Eq;
 
     /// Returns the [`Self::CommandType`] contained within `self`.
     fn command(&self) -> Self::CommandType;

@@ -38,8 +38,7 @@
 //! Also, unlike Cerberus, Manticore does not require that a session be
 //! spoken over MCTP, and, as such, does not use the same header as Cerberus.
 
-// This is required due to the make_fuzz_safe! macro.
-#![allow(unused_parens)]
+use core::fmt::Debug;
 
 #[macro_use]
 mod macros;
@@ -73,11 +72,14 @@ pub mod spdm;
 /// is intead implemented by uninhabited types that represent pairs of requests
 /// and responses, for use in generic programming.
 pub trait Command<'wire> {
+    /// The enum of command types this `Command` draws its types from.
+    type CommandType: Copy + Debug + Eq;
+
     /// The unique request type for this `Command`.
-    type Req: Message<'wire>;
+    type Req: Message<'wire, CommandType = Self::CommandType>;
     /// The response type for this `Command`, which will either be unique or
     /// [`Ack`].
-    type Resp: Message<'wire>;
+    type Resp: Message<'wire, CommandType = Self::CommandType>;
 
     /// The message-specific errors for this `Command`.
     ///
@@ -88,7 +90,7 @@ pub trait Command<'wire> {
 /// A Manticore message type, which makes up part of a `Command`.
 pub trait Message<'wire>: wire::FromWire<'wire> + wire::ToWire {
     /// The enum of command types this `Message` draws its type from.
-    type CommandType;
+    type CommandType: Copy + Debug + Eq;
 
     /// The unique [`CommandType`] for this `Request`.
     const TYPE: Self::CommandType;

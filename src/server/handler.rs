@@ -293,10 +293,10 @@ impl<Prev, Command, F, const B: bool> Cons<Prev, Command, F, B> {
         original_header: Header,
     ) -> Result<(), Error<Header>>
     where
-        for<'c> Command: protocol::Command<'c>,
+        Command:
+            for<'c> protocol::Command<'c, CommandType = Header::CommandType>,
         F: FnOnce(Ctx) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
         Header: net::Header,
-        RespOf<'out, Command>: Message<'out, CommandType = Header::CommandType>,
     {
         match (self.handler)(ctx) {
             Ok(msg) => {
@@ -324,15 +324,12 @@ where
     // See `HandlerMethods::handle` for an explanation of these
     // where-clauses.
     Server: 'srv,
-    Prev: HandlerMethods<'req, 'srv, Server, Header>,
-    Command: for<'c> protocol::Command<'c>,
     Header: net::Header,
-    Header::CommandType: PartialEq,
+    Prev: HandlerMethods<'req, 'srv, Server, Header>,
+    Command: for<'c> protocol::Command<'c, CommandType = Header::CommandType>,
     F: FnOnce(
         Context<'req, (), ReqOf<'req, Command>, Server>,
     ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
-    ReqOf<'req, Command>: Message<'req, CommandType = Header::CommandType>,
-    RespOf<'out, Command>: Message<'out, CommandType = Header::CommandType>,
 {
     #[inline]
     fn run_with_header(
@@ -366,15 +363,12 @@ where
     // See `HandlerMethods::handle` for an explanation of these
     // where-clauses.
     Server: 'srv,
-    Prev: HandlerMethods<'req, 'srv, Server, Header>,
-    Command: for<'c> protocol::Command<'c>,
     Header: net::Header,
-    Header::CommandType: PartialEq,
+    Prev: HandlerMethods<'req, 'srv, Server, Header>,
+    Command: for<'c> protocol::Command<'c, CommandType = Header::CommandType>,
     F: FnOnce(
         Context<'req, &'req [u8], ReqOf<'req, Command>, Server>,
     ) -> Result<RespOf<'out, Command>, ErrOf<'out, Command>>,
-    ReqOf<'req, Command>: Message<'req, CommandType = Header::CommandType>,
-    RespOf<'out, Command>: Message<'out, CommandType = Header::CommandType>,
 {
     #[inline]
     fn run_with_header(
@@ -448,7 +442,7 @@ mod test {
 
     fn simulate_request<
         'a,
-        C: protocol::Command<'a>,
+        C: protocol::Command<'a, CommandType = CommandType>,
         T: 'a,
         H: HandlerMethods<'a, 'a, T, net::CerberusHeader>,
     >(
@@ -457,10 +451,7 @@ mod test {
         arena: &'a mut dyn Arena,
         server: (H, T),
         request: C::Req,
-    ) -> Result<C::Resp, Error<net::CerberusHeader>>
-    where
-        ReqOf<'a, C>: Message<'a, CommandType = CommandType>,
-    {
+    ) -> Result<C::Resp, Error<net::CerberusHeader>> {
         let len = scratch_space.len();
         let (req_scratch, port_scratch) = scratch_space.split_at_mut(len / 2);
         let mut cursor = Cursor::new(req_scratch);

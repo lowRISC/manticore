@@ -54,6 +54,7 @@ macro_rules! protocol_struct {
             pub enum $Command {}
 
             impl<'wire> Command<'wire> for $Command {
+                type CommandType = $CommandType;
                 type Req = Req<'wire>;
                 type Resp = Resp<'wire>;
                 type Error = protocol_struct!(@internal if_nonempty ($($Error)?) {
