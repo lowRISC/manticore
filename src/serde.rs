@@ -16,6 +16,7 @@ use core::fmt::Binary;
 use core::fmt::LowerHex;
 use core::fmt::Write as _;
 use core::marker::PhantomData;
+use core::mem;
 
 #[cfg(feature = "std")]
 use std::borrow::Cow;
@@ -174,7 +175,10 @@ where
 }
 
 /// For serializing a `Vec<u8>` as a bytestring.
-pub fn se_bytestring<S>(bytes: &impl AsRef<[u8]>, s: S) -> Result<S::Ok, S::Error>
+pub fn se_bytestring<S>(
+    bytes: &impl AsRef<[u8]>,
+    s: S,
+) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -267,7 +271,10 @@ where
 
 /// For serializing a `Vec<u8>` as a hexstring.
 #[cfg(feature = "std")]
-pub fn se_hexstring<S>(bytes: &impl AsRef<[u8]>, s: S) -> Result<S::Ok, S::Error>
+pub fn se_hexstring<S>(
+    bytes: &impl AsRef<[u8]>,
+    s: S,
+) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -285,7 +292,10 @@ where
 
 /// For serializing a `Vec<u8>` as a hexstring.
 #[cfg(not(feature = "std"))]
-pub fn se_hexstring<S>(bytes: &impl AsRef<[u8]>, s: S) -> Result<S::Ok, S::Error>
+pub fn se_hexstring<S>(
+    bytes: &impl AsRef<[u8]>,
+    s: S,
+) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -302,15 +312,16 @@ where
 
 /// For deserializing a `Vec<Vec<u8>>` from either a string of hex digits or a
 /// sequence of bytes.
-pub fn se_hexstrings<S>(bytes: &[impl AsRef<[u8]>], s: S) -> Result<S::Ok, S::Error>
-where S:Serializer
+pub fn se_hexstrings<S>(
+    bytes: &[impl AsRef<[u8]>],
+    s: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
 {
     #[derive(serde::Serialize)]
     #[serde(transparent)]
-    struct HexString<'a>(
-        #[serde(serialize_with = "se_hexstring")]
-        &'a [u8],
-    );
+    struct HexString<'a>(#[serde(serialize_with = "se_hexstring")] &'a [u8]);
 
     s.collect_seq(bytes.iter().map(|b| HexString(b.as_ref())))
 }
@@ -389,7 +400,7 @@ where
 {
     if s.is_human_readable() {
         let mut buf = ArrayBuf::<18>::default();
-        let _ = write!(buf, "0x{:x}", x);
+        let _ = write!(buf, "{:#01$x}", x, mem::size_of::<X>() * 2 + 2);
         s.serialize_str(buf.as_ref())
     } else {
         s.serialize_u64(x.clone().into())
@@ -406,7 +417,7 @@ where
 {
     if s.is_human_readable() {
         let mut buf = ArrayBuf::<66>::default();
-        let _ = write!(buf, "0b{:b}", x);
+        let _ = write!(buf, "{:#01$b}", x, mem::size_of::<X>() * 8 + 2);
         s.serialize_str(buf.as_ref())
     } else {
         s.serialize_u64(x.clone().into())

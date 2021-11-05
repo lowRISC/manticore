@@ -103,11 +103,25 @@ mod test {
     round_trip_test! {
         request_round_trip: {
             bytes: &[0x01, 0x00],
-            value: GetDigestsRequest { slot: 1, key_exchange: KeyExchangeAlgo::None },
+            json: r#"{
+                "slot": 1,
+                "key_exchange": "None"
+            }"#,
+            value: GetDigestsRequest {
+                slot: 1,
+                key_exchange: KeyExchangeAlgo::None,
+            },
         },
         request_round_trip2: {
             bytes: &[0x05, 0x01],
-            value: GetDigestsRequest { slot: 5, key_exchange: KeyExchangeAlgo::Ecdh },
+            json: r#"{
+                "slot": 5,
+                "key_exchange": "Ecdh"
+            }"#,
+            value: GetDigestsRequest {
+                slot: 5,
+                key_exchange: KeyExchangeAlgo::Ecdh,
+            },
         },
         response_round_trip: {
             bytes: &[
@@ -125,7 +139,15 @@ mod test {
                 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
                 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
             ],
-            value: GetDigestsResponse { digests: &[[0xaa; 32], [0x11; 32]], },
+            json: r#"{
+                "digests": [
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "1111111111111111111111111111111111111111111111111111111111111111"
+                ]
+            }"#,
+            value: GetDigestsResponse {
+                digests: &[[0xaa; 32], [0x11; 32]],
+            },
         },
     }
 }

@@ -62,6 +62,7 @@ use libfuzzer_sys::arbitrary::{self, Arbitrary};
     Clone, Copy, PartialEq, Eq, Debug, zerocopy::FromBytes, zerocopy::AsBytes,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[repr(transparent)]
 pub struct Version {
@@ -113,10 +114,14 @@ mod test {
     round_trip_test! {
         request_round_trip: {
             bytes: &[0x00, 0x00],
+            json: "{}",
             value: GetVersionRequest {},
         },
         response_round_trup: {
             bytes: &[0x00, 0x00, 0x00, 0x01, 0x00, 0x12],
+            json: r#"{
+                "versions": [[0, 18]]
+            }"#,
             value: GetVersionResponse { versions: &[Version::MANTICORE] },
         },
     }

@@ -54,6 +54,8 @@ protocol_struct! {
 
     struct Response<'wire> {
         /// The "to be signed" portion.
+        #[cfg_attr(feature = "serde", serde(flatten))]
+        #[@static(cfg_attr(feature = "serde", serde(flatten)))]
         pub tbs: ChallengeResponseTbs<'wire>,
         /// The challenge signature.
         ///
@@ -215,7 +217,14 @@ mod test {
                 0x77, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77,
                 0x77, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77,
             ],
-            value: ChallengeRequest { slot: 1, nonce: &[0x77; 32] },
+            json: r#"{
+                "slot": 1,
+                "nonce": "7777777777777777777777777777777777777777777777777777777777777777"
+            }"#,
+            value: ChallengeRequest {
+                slot: 1,
+                nonce: &[0x77; 32],
+            },
         },
         response_round_trup: {
             bytes: &[
@@ -234,6 +243,15 @@ mod test {
                 // Signature.
                 b'e', b'c', b'd', b's', b'a',
             ],
+            json: r#"{
+                "slot": 1,
+                "slot_mask": 255,
+                "protocol_range": [5, 7],
+                "nonce": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "pmr0_components": 10,
+                "pmr0": "706d7230",
+                "signature": "6563647361"
+            }"#,
             value: ChallengeResponse {
                 tbs: ChallengeResponseTbs {
                     slot: 1,

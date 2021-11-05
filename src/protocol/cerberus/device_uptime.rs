@@ -21,6 +21,13 @@ protocol_struct! {
 
     struct Request {
         /// The port of the device whose uptime is being looked up.
+        #[cfg_attr(
+            feature = "serde",
+            serde(
+                deserialize_with = "crate::serde::de_radix",
+                serialize_with = "crate::serde::se_hex",
+            )
+        )]
         pub port_id: u8,
     }
 
@@ -62,14 +69,23 @@ mod test {
     round_trip_test! {
         request_round_trip: {
             bytes: &[0x0],
+            json: r#"{
+                "port_id": "0x00"
+            }"#,
             value: DeviceUptimeRequest { port_id: 0 },
         },
         request_round_trip2: {
             bytes: &[0xaa],
+            json: r#"{
+                "port_id": "0xaa"
+            }"#,
             value: DeviceUptimeRequest { port_id: 0xaa },
         },
         response_round_trip: {
             bytes: &5555u32.to_le_bytes(),
+            json: r#"{
+                "uptime": { "nanos": 5555000, "secs": 0 }
+            }"#,
             value: DeviceUptimeResponse {
                 uptime: Duration::from_micros(5555),
             },

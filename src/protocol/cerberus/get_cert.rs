@@ -93,11 +93,31 @@ mod test {
     round_trip_test! {
         request_round_trip: {
             bytes: &[0x01, 0x02, 0x01, 0x01, 0xff, 0x00],
-            value: GetCertRequest { slot: 1, cert_number: 2, offset: 257, len: 255 },
+            json: r#"{
+                "slot": 1,
+                "cert_number": 2,
+                "offset": 257,
+                "len": 255
+            }"#,
+            value: GetCertRequest {
+                slot: 1,
+                cert_number: 2,
+                offset: 257,
+                len: 255,
+            },
         },
         response_round_trip: {
             bytes: &[0x01, 0x02, b'x', b'.', b'5', b'0', b'9'],
-            value: GetCertResponse { slot: 1, cert_number: 2, data: b"x.509" },
+            json: r#"{
+                "slot": 1,
+                "cert_number": 2,
+                "data": "782e353039"
+            }"#,
+            value: GetCertResponse {
+                slot: 1,
+                cert_number: 2,
+                data: b"x.509",
+            },
         },
     }
 }
