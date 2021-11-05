@@ -511,25 +511,11 @@ impl<F: Flash> io::Write for FlashIo<F> {
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Region {
-    #[cfg_attr(
-        feature = "serde",
-        serde(deserialize_with = "crate::serde::de_radix")
-    )]
-    #[cfg_attr(
-        all(feature = "serde", feature = "std"),
-        serde(serialize_with = "crate::serde::se_hex")
-    )]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::hex"))]
     /// The base pointer for this slice.
     pub offset: u32,
 
-    #[cfg_attr(
-        feature = "serde",
-        serde(deserialize_with = "crate::serde::de_radix")
-    )]
-    #[cfg_attr(
-        all(feature = "serde", feature = "std"),
-        serde(serialize_with = "crate::serde::se_hex")
-    )]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::hex"))]
     /// The length of the slice, in bytes.
     pub len: u32,
 }

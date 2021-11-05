@@ -67,40 +67,16 @@ protocol_struct! {
 // these fields.
 #[allow(missing_docs)]
 pub struct DeviceIdentifier {
-    #[cfg_attr(
-        feature = "serde",
-        serde(
-            deserialize_with = "crate::serde::de_radix",
-            serialize_with = "crate::serde::se_hex",
-        )
-    )]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::hex"))]
     pub vendor_id: u16,
 
-    #[cfg_attr(
-        feature = "serde",
-        serde(
-            deserialize_with = "crate::serde::de_radix",
-            serialize_with = "crate::serde::se_hex",
-        )
-    )]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::hex"))]
     pub device_id: u16,
 
-    #[cfg_attr(
-        feature = "serde",
-        serde(
-            deserialize_with = "crate::serde::de_radix",
-            serialize_with = "crate::serde::se_hex",
-        )
-    )]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::hex"))]
     pub subsys_vendor_id: u16,
 
-    #[cfg_attr(
-        feature = "serde",
-        serde(
-            deserialize_with = "crate::serde::de_radix",
-            serialize_with = "crate::serde::se_hex",
-        )
-    )]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::hex"))]
     pub subsys_id: u16,
 }
 

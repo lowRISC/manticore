@@ -193,6 +193,13 @@ where
     }
 }
 
+/// Like `se_bytestring` but for use with `#[serde(with)]`.
+#[cfg(feature = "std")]
+pub mod bytestring {
+    pub use super::de_bytestring as deserialize;
+    pub use super::se_bytestring as serialize;
+}
+
 #[cfg(feature = "std")]
 fn hex_to_bytes<B: TryFrom<Vec<u8>>, E: de::Error>(
     bors: BytesOrStr,
@@ -326,6 +333,13 @@ where
     s.collect_seq(bytes.iter().map(|b| HexString(b.as_ref())))
 }
 
+/// Like `se_hexstring` but for use with `#[serde(with)]`.
+#[cfg(feature = "std")]
+pub mod hexstring {
+    pub use super::de_hexstring as deserialize;
+    pub use super::se_hexstring as serialize;
+}
+
 /// Helper for `de_radix`.
 pub struct Radix<T>(PhantomData<T>);
 
@@ -390,6 +404,21 @@ where
     }
 }
 
+/// Like `de_radix` but for use with `#[serde(with)]`.
+pub mod dec {
+    pub use super::de_radix as deserialize;
+
+    // We cannot just write `use serde::Serialize::serialize;`, so we need to
+    // do this silliness instead.
+    pub fn serialize<S, X>(x: &X, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+        X: serde::Serialize,
+    {
+        x.serialize(s)
+    }
+}
+
 /// Serializes an integer as hex.
 ///
 /// This function requires `std` due to what are (apparently?) serde limitations.
@@ -407,6 +436,12 @@ where
     }
 }
 
+/// Like `se_hex` but for use with `#[serde(with)]`.
+pub mod hex {
+    pub use super::de_radix as deserialize;
+    pub use super::se_hex as serialize;
+}
+
 /// Serializes an integer as binary.
 ///
 /// This function requires `std` due to what are (apparently?) serde limitations.
@@ -422,4 +457,10 @@ where
     } else {
         s.serialize_u64(x.clone().into())
     }
+}
+
+/// Like `se_bin` but for use with `#[serde(with)]`.
+pub mod bin {
+    pub use super::de_radix as deserialize;
+    pub use super::se_bin as serialize;
 }
