@@ -20,13 +20,7 @@ protocol_struct! {
         /// The type of counter being looked up.
         pub reset_type: ResetType,
         /// The port that the device whose reset counter is being looked up.
-        #[cfg_attr(
-            feature = "serde",
-            serde(
-                deserialize_with = "crate::serde::de_radix",
-                serialize_with = "crate::serde::se_hex",
-            )
-        )]
+        #[cfg_attr(feature = "serde", serde(with = "crate::serde::hex"))]
         pub port_id: u8,
     }
 

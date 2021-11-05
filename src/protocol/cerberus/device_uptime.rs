@@ -21,13 +21,7 @@ protocol_struct! {
 
     struct Request {
         /// The port of the device whose uptime is being looked up.
-        #[cfg_attr(
-            feature = "serde",
-            serde(
-                deserialize_with = "crate::serde::de_radix",
-                serialize_with = "crate::serde::se_hex",
-            )
-        )]
+        #[cfg_attr(feature = "serde", serde(with = "crate::serde::hex"))]
         pub port_id: u8,
     }
 

@@ -35,53 +35,26 @@ use serde::{Deserialize, Serialize};
 #[allow(missing_docs)]
 pub enum Element {
     FlashDevice {
-        #[cfg_attr(
-            feature = "serde",
-            serde(
-                deserialize_with = "crate::serde::de_radix",
-                serialize_with = "crate::serde::se_hex",
-            )
-        )]
+        #[cfg_attr(feature = "serde", serde(with = "crate::serde::hex"))]
         blank_byte: u8,
     },
     AllowableFw {
-        #[cfg_attr(
-            feature = "serde",
-            serde(deserialize_with = "crate::serde::de_radix")
-        )]
+        #[cfg_attr(feature = "serde", serde(with = "crate::serde::dec"))]
         version_count: u8,
         #[cfg_attr(
             feature = "serde",
-            serde(
-                deserialize_with = "crate::serde::de_bytestring",
-                serialize_with = "crate::serde::se_bytestring",
-            )
+            serde(with = "crate::serde::bytestring")
         )]
         firmware_id: Vec<u8>,
-        #[cfg_attr(
-            feature = "serde",
-            serde(
-                deserialize_with = "crate::serde::de_radix",
-                serialize_with = "crate::serde::se_bin",
-            )
-        )]
+        #[cfg_attr(feature = "serde", serde(with = "crate::serde::bin"))]
         flags: u8,
     },
     FwVersion {
-        #[cfg_attr(
-            feature = "serde",
-            serde(
-                deserialize_with = "crate::serde::de_radix",
-                serialize_with = "crate::serde::se_hex",
-            )
-        )]
+        #[cfg_attr(feature = "serde", serde(with = "crate::serde::hex"))]
         version_addr: u32,
         #[cfg_attr(
             feature = "serde",
-            serde(
-                deserialize_with = "crate::serde::de_bytestring",
-                serialize_with = "crate::serde::se_bytestring",
-            )
+            serde(with = "crate::serde::bytestring")
         )]
         version_str: Vec<u8>,
         rw_regions: Vec<Rw>,
@@ -90,10 +63,7 @@ pub enum Element {
     PlatformId {
         #[cfg_attr(
             feature = "serde",
-            serde(
-                deserialize_with = "crate::serde::de_bytestring",
-                serialize_with = "crate::serde::se_bytestring",
-            )
+            serde(with = "crate::serde::bytestring")
         )]
         platform_id: Vec<u8>,
     },
@@ -104,13 +74,7 @@ pub enum Element {
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Rw {
-    #[cfg_attr(
-        feature = "serde",
-        serde(
-            deserialize_with = "crate::serde::de_radix",
-            serialize_with = "crate::serde::se_bin",
-        )
-    )]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::bin"))]
     pub flags: u8,
     pub region: Region,
 }
@@ -120,15 +84,10 @@ pub struct Rw {
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Image {
-    #[cfg_attr(
-        feature = "serde",
-        serde(
-            deserialize_with = "crate::serde::de_radix",
-            serialize_with = "crate::serde::se_bin",
-        )
-    )]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::bin"))]
     pub flags: u8,
     pub hash_type: hash::Algo,
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::hexstring"))]
     pub hash: Vec<u8>,
     pub regions: Vec<Region>,
 }
