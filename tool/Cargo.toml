@@ -14,7 +14,7 @@ repository = "https://github.com/lowRISC/manticore"
 description = "A tool for working with Manticore data formats"
 
 [dependencies]
-manticore = { path = "..", features = ["inject-alloc"] }
+manticore = { path = ".." }
 
 serde = "1.0"
 serde_json = "1.0"

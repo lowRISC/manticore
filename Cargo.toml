@@ -61,10 +61,6 @@ std = [
   "ring/std",
 ]
 
-# Enables allocation injection, which makes it possible to replace borrowed
-# content with allocated content in some places.
-inject-alloc = ["std"]
-
 [lib]
 name = "manticore"
 path = "src/lib.rs"

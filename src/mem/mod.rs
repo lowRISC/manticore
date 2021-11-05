@@ -8,8 +8,6 @@
 mod arena;
 pub use arena::*;
 
-pub mod cow;
-
 /// Aligns the given address to the alignment for the given type.
 ///
 /// `align` must be a power of two; otherwise, the returned value
