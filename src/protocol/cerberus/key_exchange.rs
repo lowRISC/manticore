@@ -21,6 +21,8 @@ protocol_struct! {
     const TYPE: CommandType = KeyExchange;
 
 
+    #[cfg_attr(feature = "serde", serde(tag = "type"))]
+    #[@static(cfg_attr(feature = "serde", serde(tag = "type")))]
     enum Request<'wire> {
         /// A request to establish a shared session key.
         SessionKey {
@@ -128,6 +130,8 @@ protocol_struct! {
         Ok(())
     }
 
+    #[cfg_attr(feature = "serde", serde(tag = "type"))]
+    #[@static(cfg_attr(feature = "serde", serde(tag = "type")))]
     enum Response<'wire> {
         /// A response to a session establishment request.
         SessionKey {
@@ -245,6 +249,11 @@ mod test {
                 0x00,  // SHA-256.
                 b'e', b'c', b'd', b's', b'a',
             ],
+            json: r#"{
+                "type": "SessionKey",
+                "hmac_algorithm": "Sha256",
+                "pk_req": "6563647361"
+            }"#,
             value: KeyExchangeRequest::SessionKey {
                 hmac_algorithm: hash::Algo::Sha256,
                 pk_req: b"ecdsa",
@@ -256,6 +265,11 @@ mod test {
                 0x02, 0x01,
                 b'h', b'm', b'a', b'c',
             ],
+            json: r#"{
+                "type": "PairedKeyHmac",
+                "key_len": 258,
+                "key_hmac": "686d6163"
+            }"#,
             value: KeyExchangeRequest::PairedKeyHmac {
                 key_len: 258,
                 key_hmac: b"hmac",
@@ -266,6 +280,10 @@ mod test {
                 0x02,  // Type 2.
                 b'h', b'm', b'a', b'c',
             ],
+            json: r#"{
+                "type": "DestroySession",
+                "session_hmac": "686d6163"
+            }"#,
             value: KeyExchangeRequest::DestroySession {
                 session_hmac: b"hmac",
             },
@@ -280,6 +298,12 @@ mod test {
                 b's', b'i', b'g', b'n', b'a', b't', b'u', b'r', b'e',
                 b'a', b'l', b'i', b'a', b's',
             ],
+            json: r#"{
+                "type": "SessionKey",
+                "pk_resp": "6563647361",
+                "signature": "7369676e6174757265",
+                "alias_cert_hmac": "616c696173"
+            }"#,
             value: KeyExchangeResponse::SessionKey {
                 pk_resp: b"ecdsa",
                 signature: b"signature",
@@ -290,12 +314,18 @@ mod test {
             bytes: &[
                 0x01,  // Type 1.
             ],
+            json: r#"{
+                "type": "PairedKeyHmac"
+            }"#,
             value: KeyExchangeResponse::PairedKeyHmac,
         },
         response_round_trip_destroy: {
             bytes: &[
                 0x02,  // Type 2.
             ],
+            json: r#"{
+                "type": "DestroySession"
+            }"#,
             value: KeyExchangeResponse::DestroySession,
         },
     }

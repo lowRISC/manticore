@@ -67,9 +67,40 @@ protocol_struct! {
 // these fields.
 #[allow(missing_docs)]
 pub struct DeviceIdentifier {
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            deserialize_with = "crate::serde::de_radix",
+            serialize_with = "crate::serde::se_hex",
+        )
+    )]
     pub vendor_id: u16,
+
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            deserialize_with = "crate::serde::de_radix",
+            serialize_with = "crate::serde::se_hex",
+        )
+    )]
     pub device_id: u16,
+
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            deserialize_with = "crate::serde::de_radix",
+            serialize_with = "crate::serde::se_hex",
+        )
+    )]
     pub subsys_vendor_id: u16,
+
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            deserialize_with = "crate::serde::de_radix",
+            serialize_with = "crate::serde::se_hex",
+        )
+    )]
     pub subsys_id: u16,
 }
 
@@ -108,10 +139,19 @@ mod test {
     round_trip_test! {
         request_round_trip: {
             bytes: &[],
+            json: "{}",
             value: DeviceIdRequest {},
         },
         response_round_trip: {
             bytes: b"abcdefgh",
+            json: r#"{
+                "id": {
+                    "vendor_id": "0x6261",
+                    "device_id": "0x6463",
+                    "subsys_vendor_id": "0x6665",
+                    "subsys_id": "0x6867"
+                }
+            }"#,
             value: DeviceIdResponse {
                 id: DeviceIdentifier {
                     vendor_id: 0x6261,

@@ -80,12 +80,18 @@ mod test {
     round_trip_test! {
         request_round_trip: {
             bytes: &[0x0],
+            json: r#"{
+                "index": "UniqueChipIndex"
+            }"#,
             value: DeviceInfoRequest {
                 index: InfoIndex::UniqueChipIndex,
             },
         },
         response_round_trip: {
             bytes: b"some unstructured data of no particular length",
+            json: r#"{
+                "info": "some unstructured data of no particular length"
+            }"#,
             value: DeviceInfoResponse {
                 info: b"some unstructured data of no particular length",
             },

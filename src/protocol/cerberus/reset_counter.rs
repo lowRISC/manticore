@@ -20,6 +20,13 @@ protocol_struct! {
         /// The type of counter being looked up.
         pub reset_type: ResetType,
         /// The port that the device whose reset counter is being looked up.
+        #[cfg_attr(
+            feature = "serde",
+            serde(
+                deserialize_with = "crate::serde::de_radix",
+                serialize_with = "crate::serde::se_hex",
+            )
+        )]
         pub port_id: u8,
     }
 
@@ -79,6 +86,10 @@ mod test {
     round_trip_test! {
         request_round_trip: {
             bytes: &[0x01, 0x00],
+            json: r#"{
+                "reset_type": "External",
+                "port_id": "0x00"
+            }"#,
             value: ResetCounterRequest {
                 reset_type: ResetType::External,
                 port_id: 0
@@ -86,6 +97,10 @@ mod test {
         },
         request_round_trip2: {
             bytes: &[0x00, 0xaa],
+            json: r#"{
+                "reset_type": "Local",
+                "port_id": "0xaa"
+            }"#,
             value: ResetCounterRequest {
                 reset_type: ResetType::Local,
                 port_id: 0xaa
@@ -93,6 +108,9 @@ mod test {
         },
         response_round_trip: {
             bytes: &[0x20, 0x00],
+            json: r#"{
+                "count": 32
+            }"#,
             value: ResetCounterResponse {
                 count: 32
             },

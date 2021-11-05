@@ -60,24 +60,28 @@ protocol_struct! {
 mod test {
     use super::*;
 
-    const FIRMWARE_VERSION: &[u8; 32] = &[
-        0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, //
-        0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, //
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //
-    ];
+    const FIRMWARE_VERSION: &[u8; 32] = b"my cool firmware version 32 byte";
 
     round_trip_test! {
         request_round_trip: {
             bytes: &[0x00],
+            json: r#"{
+                "index": 0
+            }"#,
             value: FirmwareVersionRequest { index: 0 },
         },
         request_round_trip2: {
             bytes: &[0x05],
+            json: r#"{
+                "index": 5
+            }"#,
             value: FirmwareVersionRequest { index: 5 },
         },
-        response_round_trup: {
+        response_round_trip: {
             bytes: FIRMWARE_VERSION,
+            json: r#"{
+                "version": "my cool firmware version 32 byte"
+            }"#,
             value: FirmwareVersionResponse { version: FIRMWARE_VERSION },
         },
     }

@@ -17,6 +17,13 @@ protocol_struct! {
 
     struct Request {
         /// The port that the device whose reset counter is being looked up.
+        #[cfg_attr(
+            feature = "serde",
+            serde(
+                deserialize_with = "crate::serde::de_radix",
+                serialize_with = "crate::serde::se_hex",
+            )
+        )]
         pub port_id: u8,
     }
 
@@ -70,12 +77,18 @@ mod test {
     round_trip_test! {
         request_round_trip: {
             bytes: &[0x7f],
+            json: r#"{
+                "port_id": "0x7f"
+            }"#,
             value: GetHostStateRequest {
                 port_id: 0x7f,
             },
         },
         response_round_trip: {
             bytes: &[0x01],
+            json: r#"{
+                "host_reset_state": "HostInReset"
+            }"#,
             value: GetHostStateResponse {
                 host_reset_state: HostResetState::HostInReset,
             },

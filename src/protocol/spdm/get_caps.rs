@@ -188,6 +188,12 @@ mod test {
                 0x00, 0x01, 0x00, 0x00, //
                 0x00, 0x04, 0x00, 0x00, //
             ],
+            json: r#"{
+                "crypto_timeout": { "nanos": 4096000, "secs": 0 },
+                "caps": { "bits": 270966 },
+                "max_packet_size": 256,
+                "max_message_size": 1024
+            }"#,
             value: GetCapsRequest {
                 crypto_timeout: Duration::from_micros(4096),
                 caps: Capabilities::manticore(),
@@ -203,6 +209,12 @@ mod test {
                 0x00, 0x01, 0x00, 0x00, //
                 0x00, 0x04, 0x00, 0x00, //
             ],
+            json: r#"{
+                "crypto_timeout": { "nanos": 4096000, "secs": 0 },
+                "caps": { "bits": 270966 },
+                "max_packet_size": 256,
+                "max_message_size": 1024
+            }"#,
             value: GetCapsResponse {
                 crypto_timeout: Duration::from_micros(4096),
                 caps: Capabilities::manticore(),

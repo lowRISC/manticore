@@ -432,6 +432,29 @@ mod test {
                 0b1_0_000_001,  // RSA-2048 only.
                 0b0_0000_011,  // AES-128 and -256
             ],
+            json: r#"{
+                "capabilities": {
+                    "networking": {
+                        "max_message_size": 256,
+                        "max_packet_size": 128,
+                        "mode": "Platform",
+                        "roles": { "bits": 3 }
+                    },
+                    "security": { "bits": 3 },
+                    "has_pfm_support": true,
+                    "has_policy_support": false,
+                    "has_firmware_protection": false,
+                    "crypto": {
+                        "has_ecdsa": false,
+                        "has_ecc": false,
+                        "has_rsa": true,
+                        "has_aes": false,
+                        "ecc_strength": { "bits": 0 },
+                        "rsa_strength": { "bits": 1 },
+                        "aes_strength": { "bits": 3 }
+                    }
+                }
+            }"#,
             value: DeviceCapabilitiesRequest {
                 capabilities: Capabilities {
                     networking: Networking {
@@ -467,6 +490,33 @@ mod test {
                 50,  // 500ms normal timeout.
                 2,  // 200ms crypto timeout.
             ],
+            json: r#"{
+                "capabilities": {
+                    "networking": {
+                        "max_message_size": 256,
+                        "max_packet_size": 128,
+                        "mode": "Platform",
+                        "roles": { "bits": 3 }
+                    },
+                    "security": { "bits": 3 },
+                    "has_pfm_support": true,
+                    "has_policy_support": false,
+                    "has_firmware_protection": false,
+                    "crypto": {
+                        "has_ecdsa": false,
+                        "has_ecc": false,
+                        "has_rsa": true,
+                        "has_aes": false,
+                        "ecc_strength": { "bits": 0 },
+                        "rsa_strength": { "bits": 1 },
+                        "aes_strength": { "bits": 3 }
+                    }
+                },
+                "timeouts": {
+                    "regular": { "secs": 0, "nanos": 500000000 },
+                    "crypto": { "secs": 0, "nanos": 200000000 }
+                }
+            }"#,
             value: DeviceCapabilitiesResponse {
                 capabilities: Capabilities {
                     networking: Networking {

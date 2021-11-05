@@ -14,7 +14,8 @@ macro_rules! protocol_struct {
         const TYPE: $CommandType:ty = $TYPE:ident;
 
         $(#[$req_meta:meta])*
-        $req_kw:tt Request $(<$req_lt:lifetime>)? {
+        $(#[@static($sreq_meta:meta)])*
+        $req_kw:ident Request $(<$req_lt:lifetime>)? {
             $($req_fields:tt)*
         }
 
@@ -24,7 +25,8 @@ macro_rules! protocol_struct {
 
         $(
             $(#[$rsp_meta:meta])*
-            $rsp_kw:tt Response $(<$rsp_lt:lifetime>)? {
+            $(#[@static($srsp_meta:meta)])*
+            $rsp_kw:ident Response $(<$rsp_lt:lifetime>)? {
                 $($rsp_fields:tt)*
             }
 
@@ -75,6 +77,7 @@ macro_rules! protocol_struct {
                         cfg_attr(feature = "serde", derive(serde::Deserialize)),
                         cfg_attr(feature = "arbitrary-derive", derive(Arbitrary)),
                     )]
+                    $(#[@static($sreq_meta)])*
                     pub $req_kw [<$Command Request>] $(<$req_lt>)? {
                         $($req_fields)*
                     }
@@ -87,6 +90,7 @@ macro_rules! protocol_struct {
                     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
                     #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
                     $(#[$req_meta])*
+                    $(#[@static($sreq_meta)])*
                     pub $req_kw [<$Command Request>] {
                         $($req_fields)*
                     }
@@ -126,6 +130,7 @@ macro_rules! protocol_struct {
                             cfg_attr(feature = "serde", derive(serde::Deserialize)),
                             cfg_attr(feature = "arbitrary-derive", derive(Arbitrary)),
                         )]
+                        $(#[@static($srsp_meta)])*
                         pub $rsp_kw [<$Command Response>] $(<$rsp_lt>)? {
                             $($rsp_fields)*
                         }
@@ -138,6 +143,7 @@ macro_rules! protocol_struct {
                         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
                         #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
                         $(#[$rsp_meta])*
+                        $(#[@static($srsp_meta)])*
                         pub $rsp_kw [<$Command Response>] {
                             $($rsp_fields)*
                         }
