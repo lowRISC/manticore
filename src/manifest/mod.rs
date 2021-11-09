@@ -153,41 +153,6 @@ impl<S: WireEnum<Wire = u8>> WireEnum for ElementType<S> {
             _ => S::from_wire_value(wire).map(Self::Specific),
         }
     }
-
-    fn name(self) -> &'static str {
-        macro_rules! names {
-            (vendor: [$($n:tt,)*]) => { match self {
-                Self::PlatformId => "PlatformId",
-                Self::Specific(s) => s.name(),
-                $(Self::Vendor($n) => concat!("Vendor(", stringify!($n), ")"),)*
-                Self::Vendor(_) => "Vendor(_)",
-            }}
-        }
-
-        names!(vendor: [
-            0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
-            0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
-            0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
-            0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe,
-        ])
-    }
-
-    fn from_name(name: &str) -> Option<Self> {
-        macro_rules! names {
-            (vendor: [$($n:tt,)*]) => { match name {
-                "PlatformId" => Some(Self::PlatformId),
-                $(concat!("Vendor(", stringify!($n), ")") => Some(Self::Vendor($n)),)*
-                _ => S::from_name(name).map(Self::Specific),
-            }}
-        }
-
-        names!(vendor: [
-            0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
-            0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
-            0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
-            0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe,
-        ])
-    }
 }
 
 impl<S> From<S> for ElementType<S> {
