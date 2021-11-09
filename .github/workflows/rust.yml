@@ -35,6 +35,8 @@ jobs:
       run: cargo build -v -p manticore --no-default-features
     - name: Build with all features
       run: cargo build -v -p manticore --all-features
+    - name: Build no_std serde
+      run: cargo build -v -p manticore --no-default-features --features serde
     - name: Build for baremetal RISC-V
       run: cargo build -v -p manticore --no-default-features --target riscv32imc-unknown-none-elf
     - name: Build CLI tool
