@@ -17,10 +17,12 @@ use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
 use crate::net;
 use crate::net::CerberusHeader;
+use crate::net::SpdmHeader;
 use crate::protocol;
 use crate::protocol::capabilities;
 use crate::protocol::device_id;
 use crate::protocol::get_digests::KeyExchangeAlgo;
+use crate::protocol::spdm;
 use crate::protocol::Req;
 use crate::protocol::Resp;
 use crate::server::Error;
@@ -392,5 +394,36 @@ impl<'a> PaRot<'a> {
             }
             _ => Err(protocol::error::Error::Internal),
         }
+    }
+
+    /// Process a single incoming SPDM request.
+    pub fn process_spdm_request<'req>(
+        &mut self,
+        host_port: &mut dyn net::host::HostPort<'req, SpdmHeader>,
+        arena: &'req dyn Arena,
+    ) -> Result<(), Error<SpdmHeader>> {
+        // Style note: when defining a new handler, if it is more than a
+        // handful of lines long, define it out-of-line instead.
+        let result = Handler::<&mut Self, SpdmHeader>::new()
+            .handle::<spdm::GetVersion, _>(|_| {
+                Ok(Resp::<spdm::GetVersion> {
+                    versions: &[spdm::ExtendedVersion::MANTICORE],
+                })
+            })
+            .handle::<spdm::GetCaps, _>(|ctx| {
+                Ok(Resp::<spdm::GetCaps> {
+                    crypto_timeout: ctx.server.opts.timeouts.crypto,
+                    caps: spdm::get_caps::Caps::manticore(),
+                    max_packet_size: ctx.server.opts.networking.max_packet_size as u32,
+                    max_message_size: ctx.server.opts.networking.max_message_size as u32,
+                })
+            })
+            .run(self, host_port, arena);
+
+        match result {
+            Ok(_) => self.ok_count += 1,
+            Err(_) => self.err_count += 1,
+        }
+        result
     }
 }
