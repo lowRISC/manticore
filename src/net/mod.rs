@@ -16,7 +16,8 @@
 use core::fmt::Debug;
 
 use crate::io;
-use crate::protocol::CommandType;
+use crate::protocol::cerberus;
+use crate::protocol::spdm;
 
 pub mod device;
 pub mod host;
@@ -76,22 +77,65 @@ pub trait Header: Copy {
 /// implementation.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
 pub struct CerberusHeader {
-    /// The [`CommandType`] for a request.
-    pub command: CommandType,
+    pub command: cerberus::CommandType,
 }
 
 impl Header for CerberusHeader {
-    type CommandType = CommandType;
+    type CommandType = cerberus::CommandType;
 
-    fn command(&self) -> CommandType {
+    fn command(&self) -> cerberus::CommandType {
         self.command
     }
-    fn reply_with(&self, command: CommandType) -> Self {
+    fn reply_with(&self, command: cerberus::CommandType) -> Self {
         Self { command }
     }
 
     fn reply_with_error(&self) -> Self {
-        self.reply_with(CommandType::Error)
+        self.reply_with(cerberus::CommandType::Error)
+    }
+}
+
+/// An abstract SPDM message header.
+///
+/// This type corresponds to the prefix of an SPDM message consisting of the
+/// version, whether it is a request, and the command:
+/// ```text
+/// struct {
+///   minor: u4,
+///   major: u4,
+///   command: u7,
+///   is_request: bool,
+/// }
+/// ```
+///
+/// The precise serialization of this type is dependent on a [`HostPort`]
+/// implementation, though the above is normative per the SPDM spec.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+pub struct SpdmHeader {
+    pub version: spdm::Version,
+    pub command: spdm::CommandType,
+    pub is_request: bool,
+}
+
+impl Header for SpdmHeader {
+    type CommandType = spdm::CommandType;
+
+    fn command(&self) -> spdm::CommandType {
+        self.command
+    }
+    fn reply_with(&self, command: spdm::CommandType) -> Self {
+        Self {
+            version: spdm::Version::MANTICORE,
+            command,
+            is_request: false,
+        }
+    }
+
+    fn reply_with_error(&self) -> Self {
+        self.reply_with(spdm::CommandType::Error)
     }
 }
