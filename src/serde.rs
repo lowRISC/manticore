@@ -77,6 +77,11 @@ pub fn skip_if_true(b: &bool) -> bool {
     *b
 }
 
+/// Returns true if `x` is the default value.
+pub fn is_default<T: Default + PartialEq>(x: &T) -> bool {
+    *x == T::default()
+}
+
 #[cfg(feature = "std")]
 enum BytesOrStr<'de> {
     Bytes(Cow<'de, [u8]>),

@@ -57,7 +57,7 @@ pub mod error;
 #[cfg(doc)]
 use error::{Ack, NoSpecificError};
 
-mod cerberus;
+pub mod cerberus;
 pub use cerberus::*;
 
 pub mod spdm;
