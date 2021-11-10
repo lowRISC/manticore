@@ -21,6 +21,9 @@ use core::mem;
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 
+use enumflags2::BitFlag;
+use enumflags2::BitFlags;
+
 use serde::de;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -420,8 +423,6 @@ pub mod dec {
 }
 
 /// Serializes an integer as hex.
-///
-/// This function requires `std` due to what are (apparently?) serde limitations.
 pub fn se_hex<S, X>(x: &X, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -443,8 +444,6 @@ pub mod hex {
 }
 
 /// Serializes an integer as binary.
-///
-/// This function requires `std` due to what are (apparently?) serde limitations.
 pub fn se_bin<S, X>(x: &X, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -463,4 +462,84 @@ where
 pub mod bin {
     pub use super::de_radix as deserialize;
     pub use super::se_bin as serialize;
+}
+
+/// Helper for `de_radix`.
+struct BitsVisitor<B>(PhantomData<B>);
+
+impl<'de, B> de::Visitor<'de> for BitsVisitor<B>
+where
+    B: BitFlag + Deserialize<'de> + fmt::Debug,
+    Radix<B::Numeric>: de::Visitor<'de, Value = B::Numeric>,
+{
+    type Value = BitFlags<B>;
+
+    fn expecting(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(
+            f,
+            "integer representation of {} or list of enum values",
+            type_name::<B>()
+        )
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<BitFlags<B>, A::Error>
+    where
+        A: de::SeqAccess<'de>,
+    {
+        let mut flags = BitFlags::<B>::empty();
+        while let Some(flag) = seq.next_element::<B>()? {
+            flags |= flag;
+        }
+        Ok(flags)
+    }
+
+    fn visit_borrowed_str<E>(self, s: &'de str) -> Result<BitFlags<B>, E>
+    where
+        E: de::Error,
+    {
+        let value = Radix::<B::Numeric>(PhantomData).visit_borrowed_str(s)?;
+        BitFlags::from_bits(value).map_err(E::custom)
+    }
+
+    fn visit_u64<E>(self, n: u64) -> Result<BitFlags<B>, E>
+    where
+        E: de::Error,
+    {
+        let value = Radix::<B::Numeric>(PhantomData).visit_u64(n)?;
+        BitFlags::from_bits(value).map_err(E::custom)
+    }
+}
+
+/// Deserializes bitflags from a list *or* from an integer value.
+pub fn de_bitflags<'de, D, B>(d: D) -> Result<BitFlags<B>, D::Error>
+where
+    D: Deserializer<'de>,
+    B: BitFlag + Deserialize<'de> + fmt::Debug,
+    Radix<B::Numeric>: de::Visitor<'de, Value = B::Numeric>,
+{
+    if d.is_human_readable() {
+        d.deserialize_any(BitsVisitor::<B>(PhantomData))
+    } else {
+        d.deserialize_u64(BitsVisitor::<B>(PhantomData))
+    }
+}
+
+/// Serializes bitflags as a list.
+pub fn se_bitflags<S, B>(b: &BitFlags<B>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    B: BitFlag + serde::Serialize,
+    B::Numeric: Into<u64>,
+{
+    if s.is_human_readable() {
+        s.collect_seq(b.iter())
+    } else {
+        s.serialize_u64(b.bits().into())
+    }
+}
+
+/// Like `se_bin` but for use with `#[serde(with)]`.
+pub mod bitflags {
+    pub use super::de_bitflags as deserialize;
+    pub use super::se_bitflags as serialize;
 }
