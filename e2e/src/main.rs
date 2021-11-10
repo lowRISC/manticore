@@ -27,6 +27,7 @@ pub mod support;
 mod tests {
     mod challenge;
     mod device_queries;
+    mod spdm_device_queries;
 }
 
 /// End-to-end tests for Manticore.

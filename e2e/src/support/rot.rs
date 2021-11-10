@@ -23,7 +23,9 @@ use manticore::mem::BumpArena;
 use manticore::net;
 use manticore::protocol;
 use manticore::protocol::capabilities;
+use manticore::protocol::cerberus;
 use manticore::protocol::device_id::DeviceIdentifier;
+use manticore::protocol::spdm;
 use manticore::server;
 use manticore::server::pa_rot::PaRot;
 use manticore::session::ring::Session;
@@ -35,6 +37,9 @@ use crate::support::tcp::TcpHostPort;
 /// Options for the PA-RoT.
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct Options {
+    /// The protocol to speak.
+    pub protocol: Protocol,
+
     /// A firmware version blob to report to clients.
     pub firmware_version: Vec<u8>,
 
@@ -77,6 +82,14 @@ pub struct Options {
     pub pmr0: Vec<u8>,
 }
 
+/// See [`Options::protocol`].
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[allow(missing_docs)]
+pub enum Protocol {
+    Cerberus,
+    Spdm,
+}
+
 /// See [`Options::alias_keypair`].
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub enum KeyPairFormat {
@@ -87,6 +100,7 @@ pub enum KeyPairFormat {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            protocol: Protocol::Cerberus,
             firmware_version: b"<version unspecified>".to_vec(),
             vendor_firmware_versions: vec![],
             unique_device_identity: b"<uid unspecified>".to_vec(),
@@ -208,9 +222,26 @@ impl Virtual {
         server::Error<net::CerberusHeader>,
     >
     where
-        Cmd: protocol::Command<'a, CommandType = protocol::CommandType>,
+        Cmd: protocol::Command<'a, CommandType = cerberus::CommandType>,
     {
         tcp::send_cerberus::<Cmd>(self.port, req, arena)
+    }
+
+    /// Sends `req` to this virtal RoT, using SPDM-over-TCP.
+    ///
+    /// Blocks until a response comes back.
+    pub fn send_spdm<'a, Cmd>(
+        &self,
+        req: Cmd::Req,
+        arena: &'a dyn Arena,
+    ) -> Result<
+        Result<Cmd::Resp, protocol::Error<'a, Cmd>>,
+        server::Error<net::SpdmHeader>,
+    >
+    where
+        Cmd: protocol::Command<'a, CommandType = spdm::CommandType>,
+    {
+        tcp::send_spdm::<Cmd>(self.port, req, arena)
     }
 }
 
@@ -278,26 +309,54 @@ pub fn serve(opts: Options) -> ! {
         timeouts,
     });
 
-    let mut host = match TcpHostPort::bind() {
-        Ok(host) => host,
-        Err(e) => {
-            log::error!("could not connect to host: {:?}", e);
-            std::process::exit(1);
+    match opts.protocol {
+        Protocol::Cerberus => {
+            let mut host = match TcpHostPort::<net::CerberusHeader>::bind() {
+                Ok(host) => host,
+                Err(e) => {
+                    log::error!("could not connect to host: {:?}", e);
+                    std::process::exit(1);
+                }
+            };
+            let port = host.port();
+            log::info!("bound to port {}", port);
+
+            // Notify parent that we're listening.
+            println!("listening@{}", port);
+
+            let mut arena = BumpArena::new(vec![0; 1024]);
+
+            log::info!("entering server loop");
+            loop {
+                if let Err(e) = server.process_request(&mut host, &arena) {
+                    log::error!("failed to process request: {:?}", e);
+                }
+                arena.reset();
+            }
         }
-    };
-    let port = host.port();
-    log::info!("bound to port {}", port);
+        Protocol::Spdm => {
+            let mut host = match TcpHostPort::<net::SpdmHeader>::bind() {
+                Ok(host) => host,
+                Err(e) => {
+                    log::error!("could not connect to host: {:?}", e);
+                    std::process::exit(1);
+                }
+            };
+            let port = host.port();
+            log::info!("bound to port {}", port);
 
-    // Notify parent that we're listening.
-    println!("listening@{}", port);
+            // Notify parent that we're listening.
+            println!("listening@{}", port);
 
-    let mut arena = BumpArena::new(vec![0; 1024]);
+            let mut arena = BumpArena::new(vec![0; 1024]);
 
-    log::info!("entering server loop");
-    loop {
-        if let Err(e) = server.process_request(&mut host, &arena) {
-            log::error!("failed to process request: {:?}", e);
+            log::info!("entering server loop");
+            loop {
+                if let Err(e) = server.process_spdm_request(&mut host, &arena) {
+                    log::error!("failed to process request: {:?}", e);
+                }
+                arena.reset();
+            }
         }
-        arena.reset();
     }
 }
