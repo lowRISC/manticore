@@ -116,3 +116,15 @@ pub trait Message<'wire>: wire::FromWire<'wire> + wire::ToWire {
     /// The unique [`CommandType`] for this `Request`.
     const TYPE: Self::CommandType;
 }
+
+/// Helper for fuzzing bitflags.
+#[cfg(feature = "arbitrary-derive")]
+fn arbitrary_bitflags<B>(
+    u: &mut libfuzzer_sys::arbitrary::Unstructured,
+) -> libfuzzer_sys::arbitrary::Result<enumflags2::BitFlags<B>>
+where
+    B: enumflags2::BitFlag,
+    B::Numeric: libfuzzer_sys::arbitrary::Arbitrary,
+{
+    Ok(enumflags2::BitFlags::from_bits_truncate(u.arbitrary()?))
+}
