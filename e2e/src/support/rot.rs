@@ -199,7 +199,7 @@ impl Virtual {
     /// Sends `req` to this virtal RoT, using Cerberus-over-TCP.
     ///
     /// Blocks until a response comes back.
-    pub fn send_local<'a, Cmd>(
+    pub fn send_cerberus<'a, Cmd>(
         &self,
         req: Cmd::Req,
         arena: &'a dyn Arena,
@@ -210,7 +210,7 @@ impl Virtual {
     where
         Cmd: protocol::Command<'a, CommandType = protocol::CommandType>,
     {
-        tcp::send_local::<Cmd>(self.port, req, arena)
+        tcp::send_cerberus::<Cmd>(self.port, req, arena)
     }
 }
 
