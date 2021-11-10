@@ -221,7 +221,7 @@ pub fn serve(opts: Options) -> ! {
         max_message_size: opts.max_message_size,
         max_packet_size: opts.max_packet_size,
         mode: capabilities::RotMode::Platform,
-        roles: capabilities::BusRole::HOST,
+        roles: capabilities::BusRole::Host.into(),
     };
 
     let timeouts = capabilities::Timeouts {
