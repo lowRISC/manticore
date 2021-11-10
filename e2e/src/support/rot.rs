@@ -28,9 +28,9 @@ use manticore::server;
 use manticore::server::pa_rot::PaRot;
 use manticore::session::ring::Session;
 
-use crate::fakes;
-use crate::tcp;
-use crate::tcp::TcpHostPort;
+use crate::support::fakes;
+use crate::support::tcp;
+use crate::support::tcp::TcpHostPort;
 
 /// Options for the PA-RoT.
 #[derive(Debug, serde::Deserialize, serde::Serialize)]

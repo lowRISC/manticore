@@ -21,9 +21,7 @@
 
 use structopt::StructOpt;
 
-pub mod fakes;
-pub mod pa_rot;
-pub mod tcp;
+pub mod support;
 
 #[cfg(test)]
 mod tests {
@@ -80,7 +78,8 @@ fn main() {
 
     let opts = Options::from_args();
     if let Some(pa_opts) = &opts.start_pa_rot_with_options {
-        let opts = serde_json::from_str::<pa_rot::Options>(pa_opts).unwrap();
-        pa_rot::serve(opts);
+        use support::rot::*;
+        let opts = serde_json::from_str::<Options>(pa_opts).unwrap();
+        serve(opts);
     }
 }

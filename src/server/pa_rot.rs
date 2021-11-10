@@ -414,8 +414,14 @@ impl<'a> PaRot<'a> {
                 Ok(Resp::<spdm::GetCaps> {
                     crypto_timeout: ctx.server.opts.timeouts.crypto,
                     caps: spdm::get_caps::Caps::manticore(),
-                    max_packet_size: ctx.server.opts.networking.max_packet_size as u32,
-                    max_message_size: ctx.server.opts.networking.max_message_size as u32,
+                    max_packet_size: ctx.server.opts.networking.max_packet_size
+                        as u32,
+                    max_message_size: ctx
+                        .server
+                        .opts
+                        .networking
+                        .max_message_size
+                        as u32,
                 })
             })
             .run(self, host_port, arena);

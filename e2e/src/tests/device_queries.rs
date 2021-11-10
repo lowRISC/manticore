@@ -6,13 +6,13 @@
 
 use manticore::mem::BumpArena;
 
-use crate::pa_rot;
+use crate::support::rot;
 
 #[test]
 fn firmware_version() {
     use manticore::protocol::firmware_version::*;
 
-    let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
+    let virt = rot::Virtual::spawn(&rot::Options {
         firmware_version: b"my cool e2e test".to_vec(),
         ..Default::default()
     });
@@ -31,7 +31,7 @@ fn firmware_version() {
 fn vendor_firmware_version() {
     use manticore::protocol::firmware_version::*;
 
-    let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
+    let virt = rot::Virtual::spawn(&rot::Options {
         vendor_firmware_versions: vec![
             (1, b"my version".to_vec()),
             (3, b"my other version".to_vec()),
@@ -53,7 +53,7 @@ fn vendor_firmware_version() {
 fn vendor_firmware_version_out_of_range() {
     use manticore::protocol::firmware_version::*;
 
-    let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
+    let virt = rot::Virtual::spawn(&rot::Options {
         vendor_firmware_versions: vec![
             (1, b"my version".to_vec()),
             (3, b"my other version".to_vec()),
@@ -74,7 +74,7 @@ fn vendor_firmware_version_out_of_range() {
 fn device_id() {
     use manticore::protocol::device_id::*;
 
-    let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
+    let virt = rot::Virtual::spawn(&rot::Options {
         device_id: DeviceIdentifier {
             vendor_id: 0xc020,
             device_id: 0x0001,
