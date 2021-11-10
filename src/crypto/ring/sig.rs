@@ -8,6 +8,8 @@
 
 use core::convert::TryInto as _;
 
+use enumflags2::BitFlags;
+
 use crate::crypto::ring::ecdsa;
 use crate::crypto::ring::rsa;
 use crate::crypto::sig;
@@ -40,8 +42,8 @@ impl sig::Ciphers for Ciphers {
             has_ecc: true,
             has_rsa: true,
 
-            ecc_strength: EccKeyStrength::BITS_256,
-            rsa_strength: RsaKeyStrength::all(),
+            ecc_strength: EccKeyStrength::Bits256.into(),
+            rsa_strength: BitFlags::<RsaKeyStrength>::all(),
             ..*caps
         };
     }
