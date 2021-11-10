@@ -21,7 +21,7 @@ use manticore::session::Session as _;
 use testutil::data::keys;
 use testutil::data::x509;
 
-use crate::pa_rot;
+use crate::support::rot;
 
 #[test]
 fn challenge() {
@@ -31,14 +31,14 @@ fn challenge() {
     use manticore::protocol::key_exchange::*;
 
     let mut h = ring::hash::Engine::new();
-    let virt = pa_rot::Virtual::spawn(&pa_rot::Options {
+    let virt = rot::Virtual::spawn(&rot::Options {
         cert_chain: vec![
             x509::CHAIN1.to_vec(),
             x509::CHAIN2.to_vec(),
             x509::CHAIN3.to_vec(),
         ],
         cert_format: CertFormat::RiotX509,
-        alias_keypair: Some(pa_rot::KeyPairFormat::RsaPkcs8(
+        alias_keypair: Some(rot::KeyPairFormat::RsaPkcs8(
             keys::KEY3_RSA_KEYPAIR.to_vec(),
         )),
         ..Default::default()
