@@ -13,6 +13,7 @@ macro_rules! protocol_struct {
 
         const TYPE: $CommandType:ty = $TYPE:ident;
 
+        $(#![fuzz_derives_if = $($req_fuzz_condition:tt)*])?
         $(#[$req_meta:meta])*
         $(#[@static($sreq_meta:meta)])*
         $req_kw:ident Request $(<$req_lt:lifetime>)? {
@@ -24,6 +25,7 @@ macro_rules! protocol_struct {
         fn Request::to_wire(&$self_req:tt, $w_req:tt) $req_to:block
 
         $(
+            $(#![fuzz_derives_if = $($rsp_fuzz_condition:tt)*])?
             $(#[$rsp_meta:meta])*
             $(#[@static($srsp_meta:meta)])*
             $rsp_kw:ident Response $(<$rsp_lt:lifetime>)? {
@@ -77,7 +79,7 @@ macro_rules! protocol_struct {
                     #[@static(
                         derive(Clone, PartialEq, Eq, Debug),
                         cfg_attr(feature = "serde", derive(serde::Deserialize)),
-                        cfg_attr(feature = "arbitrary-derive", derive(Arbitrary)),
+                        cfg_attr(all($($($req_fuzz_condition)*,)? feature = "arbitrary-derive"), derive(Arbitrary)),
                     )]
                     $(#[@static($sreq_meta)])*
                     pub $req_kw [<$Command Request>] $(<$req_lt>)? {
@@ -92,7 +94,7 @@ macro_rules! protocol_struct {
                     #[doc = "Prefer to refer to this type as `Req<" $Command ">`."]
                     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
                     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-                    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+                    #[cfg_attr(all($($($req_fuzz_condition)*,)? feature = "arbitrary-derive"), derive(Arbitrary))]
                     $(#[$req_meta])*
                     $(#[@static($sreq_meta)])*
                     pub $req_kw [<$Command Request>] {
@@ -134,7 +136,7 @@ macro_rules! protocol_struct {
                         #[@static(
                             derive(Clone, PartialEq, Eq, Debug),
                             cfg_attr(feature = "serde", derive(serde::Deserialize)),
-                            cfg_attr(feature = "arbitrary-derive", derive(Arbitrary)),
+                            cfg_attr(all($($($rsp_fuzz_condition)*,)? feature = "arbitrary-derive"), derive(Arbitrary)),
                         )]
                         $(#[@static($srsp_meta)])*
                         pub $rsp_kw [<$Command Response>] $(<$rsp_lt>)? {
@@ -149,7 +151,7 @@ macro_rules! protocol_struct {
                         #[doc = "Prefer to refer to this type as `Resp<" $Command ">`."]
                         #[derive(Clone, Copy, PartialEq, Eq, Debug)]
                         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-                        #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
+                        #[cfg_attr(all($($($rsp_fuzz_condition)*,)? feature = "arbitrary-derive"), derive(Arbitrary))]
                         $(#[$rsp_meta])*
                         $(#[@static($srsp_meta)])*
                         pub $rsp_kw [<$Command Response>] {
