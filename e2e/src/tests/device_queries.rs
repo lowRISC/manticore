@@ -18,7 +18,7 @@ fn firmware_version() {
     });
 
     let arena = BumpArena::new([0; 64]);
-    let resp = virt.send_local::<FirmwareVersion>(
+    let resp = virt.send_cerberus::<FirmwareVersion>(
         FirmwareVersionRequest { index: 0 },
         &arena,
     );
@@ -40,7 +40,7 @@ fn vendor_firmware_version() {
     });
 
     let arena = BumpArena::new([0; 64]);
-    let resp = virt.send_local::<FirmwareVersion>(
+    let resp = virt.send_cerberus::<FirmwareVersion>(
         FirmwareVersionRequest { index: 1 },
         &arena,
     );
@@ -62,7 +62,7 @@ fn vendor_firmware_version_out_of_range() {
     });
 
     let arena = BumpArena::new([0; 64]);
-    let resp = virt.send_local::<FirmwareVersion>(
+    let resp = virt.send_cerberus::<FirmwareVersion>(
         FirmwareVersionRequest { index: 2 },
         &arena,
     );
@@ -85,7 +85,7 @@ fn device_id() {
     });
 
     let arena = BumpArena::new([0; 64]);
-    let resp = virt.send_local::<DeviceId>(DeviceIdRequest {}, &arena);
+    let resp = virt.send_cerberus::<DeviceId>(DeviceIdRequest {}, &arena);
     assert_eq!(
         resp.unwrap().unwrap().id,
         DeviceIdentifier {
