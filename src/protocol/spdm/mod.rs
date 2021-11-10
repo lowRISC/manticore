@@ -94,6 +94,11 @@ impl Version {
     pub const fn minor(self) -> u8 {
         self.version & 0xf
     }
+
+    /// Returns this version's encoded byte.
+    pub const fn byte(self) -> u8 {
+        self.version
+    }
 }
 
 impl From<u8> for Version {

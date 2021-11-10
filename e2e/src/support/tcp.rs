@@ -6,7 +6,7 @@
 //!
 //! This module defines an ad-hoc binding of Cerberus over TCP (termed
 //! "Cerberus over TCP"). This binding of Manticore implements the abstract
-//! Cerberus header as a four-bytes, described as a packed C struct:
+//! Cerberus header as three bytes, described as a packed C struct:
 //! ```text
 //! struct TcpCerberus {
 //!   command_type: u8,
@@ -14,8 +14,17 @@
 //! }
 //! ```
 //!
-//! In a transport-agnostic-Cerberus world, the payload length bytes will
-//! hopefully be removed.
+//! This module also provides a binding of SPDM, which uses a four-byte header:
+//! ```text
+//! struct TcpSpdm {
+//!   total_len: u16,
+//!   version: u8,
+//!   command: u8,
+//! }
+//! ```
+//! Here, `total_len` includes the four bytes of the header, and the two bytes
+//! that follow are the leading version and command bytes of a generic SPDM
+//! message.
 
 use std::any::type_name;
 use std::io::Read as _;
@@ -31,6 +40,7 @@ use manticore::net::host::HostRequest;
 use manticore::net::host::HostResponse;
 use manticore::protocol;
 use manticore::protocol::cerberus;
+use manticore::protocol::spdm;
 use manticore::protocol::wire::FromWire;
 use manticore::protocol::wire::ToWire;
 use manticore::protocol::wire::WireEnum;
@@ -73,6 +83,47 @@ pub fn send_cerberus<
         log::info!("deserializing {}", type_name::<Cmd::Resp>());
         Ok(Ok(FromWire::from_wire(&mut r, arena)?))
     } else if header.command == cerberus::CommandType::Error {
+        log::info!("deserializing {}", type_name::<protocol::Error<'a, Cmd>>());
+        Ok(Err(FromWire::from_wire(&mut r, arena)?))
+    } else {
+        Err(net::Error::BadHeader.into())
+    }
+}
+
+/// Sends `req` to a virtual RoT listening on `localhost:{port}`, using
+/// Spdm-over-TCP.
+///
+/// Blocks until a response comes back.
+pub fn send_spdm<'a, Cmd: Command<'a, CommandType = spdm::CommandType>>(
+    port: u16,
+    req: Cmd::Req,
+    arena: &'a dyn Arena,
+) -> Result<
+    Result<Cmd::Resp, protocol::Error<'a, Cmd>>,
+    server::Error<net::SpdmHeader>,
+> {
+    log::info!("connecting to 127.0.0.1:{}", port);
+    let mut conn = TcpStream::connect(("127.0.0.1", port)).map_err(|e| {
+        log::error!("{}", e);
+        net::Error::Io(io::Error::Internal)
+    })?;
+    let mut writer = Writer::new(net::SpdmHeader {
+        command: <Cmd::Req as Message>::TYPE,
+        is_request: false,
+        version: spdm::Version::MANTICORE,
+    });
+    log::info!("serializing {}", type_name::<Cmd::Req>());
+    req.to_wire(&mut writer)?;
+    writer.finish(&mut conn)?;
+
+    log::info!("waiting for response");
+    let (header, len) = net::SpdmHeader::from_tcp(&mut conn)?;
+    let mut r = TcpReader { tcp: conn, len };
+
+    if header.command == <Cmd::Resp as Message>::TYPE {
+        log::info!("deserializing {}", type_name::<Cmd::Resp>());
+        Ok(Ok(FromWire::from_wire(&mut r, arena)?))
+    } else if header.command == spdm::CommandType::Error {
         log::info!("deserializing {}", type_name::<protocol::Error<'a, Cmd>>());
         Ok(Err(FromWire::from_wire(&mut r, arena)?))
     } else {
@@ -148,6 +199,57 @@ impl Header for net::CerberusHeader {
     ) -> Result<(), net::Error> {
         let [len_lo, len_hi] = (msg.len() as u16).to_le_bytes();
         w.write_all(&[self.command.to_wire_value(), len_lo, len_hi])
+            .map_err(|e| {
+                log::error!("{}", e);
+                io::Error::BufferExhausted
+            })?;
+        w.write_all(msg).map_err(|e| {
+            log::error!("{}", e);
+            io::Error::BufferExhausted
+        })?;
+        Ok(())
+    }
+}
+
+impl Header for net::SpdmHeader {
+    fn from_tcp(
+        mut r: impl std::io::Read,
+    ) -> Result<(Self, usize), net::Error> {
+        let mut header_bytes = [0u8; 4];
+        r.read_exact(&mut header_bytes).map_err(|e| {
+            log::error!("{}", e);
+            net::Error::Io(io::Error::Internal)
+        })?;
+        let [len_lo, len_hi, version, cmd_byte] = header_bytes;
+        let len = u16::from_le_bytes([len_lo, len_hi]);
+        let len = len.checked_sub(4).ok_or_else(|| {
+            log::error!("len too short: {}", len);
+            net::Error::BadHeader
+        })?;
+
+        let header = Self {
+            command: spdm::CommandType::from_wire_value(cmd_byte & 0x7f)
+                .ok_or_else(|| {
+                    log::error!("bad command byte: {:#04x}", cmd_byte);
+                    net::Error::BadHeader
+                })?,
+            is_request: cmd_byte & 0x80 != 0,
+            version: version.into(),
+        };
+        Ok((header, len as usize))
+    }
+
+    fn to_tcp(
+        self,
+        msg: &[u8],
+        mut w: impl std::io::Write,
+    ) -> Result<(), net::Error> {
+        let [len_lo, len_hi] = (msg.len() as u16 + 4).to_le_bytes();
+        let cmd_byte =
+            ((self.is_request as u8) << 7) | self.command.to_wire_value();
+        let version = self.version.byte();
+
+        w.write_all(&[len_lo, len_hi, version, cmd_byte])
             .map_err(|e| {
                 log::error!("{}", e);
                 io::Error::BufferExhausted

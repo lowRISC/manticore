@@ -115,7 +115,10 @@ fn challenge() {
         slot: 0,
         nonce: &[99; 32],
     };
-    let resp = virt.send_cerberus::<Challenge>(req, &arena).unwrap().unwrap();
+    let resp = virt
+        .send_cerberus::<Challenge>(req, &arena)
+        .unwrap()
+        .unwrap();
     log::info!("got nonce: {:?}", resp.tbs.nonce);
 
     // Compute the expected signee: our challenge, plus the response's
