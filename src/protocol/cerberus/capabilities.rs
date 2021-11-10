@@ -10,7 +10,8 @@
 
 use core::time::Duration;
 
-use bitflags::bitflags;
+use enumflags2::bitflags;
+use enumflags2::BitFlags;
 
 use crate::io::bit_buf::BitBuf;
 use crate::io::ReadInt as _;
@@ -23,8 +24,6 @@ use crate::protocol::wire::ToWire;
 use crate::protocol::wire::WireEnum;
 use crate::protocol::CommandType;
 
-#[cfg(feature = "arbitrary-derive")]
-use libfuzzer_sys::arbitrary::{self, Arbitrary};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -90,8 +89,8 @@ protocol_struct! {
 
 wire_enum! {
     /// A "mode" for a Cerberus RoT: "active" or "platform".
-    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
     pub enum RotMode: u8 {
         /// Represents an "AC-RoT" or "Active Root of Trust", an RoT chip which
         /// protects some kind of peripheral hardware.
@@ -103,75 +102,73 @@ wire_enum! {
     }
 }
 
-bitflags! {
-    /// The role of this device on a shared bus.
-    ///
-    /// (Cerberus refers to these capabilities as master/slave.)
-    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct BusRole: u8 {
-        /// This device can act as a "host".
-        const HOST = 0b01;
-        /// This device can act as a "target".
-        const TARGET = 0b10;
-    }
+/// The role of this device on a shared bus.
+#[bitflags]
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum BusRole {
+    /// This device can act as a "host".
+    Host = 0b01,
+    /// This device can act as a "target".
+    Target = 0b10,
 }
 
-bitflags! {
-    /// Represents a "security capability".
-    ///
-    /// I.e, this enum describes different security primitives the device might
-    /// support.
-    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct Security: u8 {
-        /// This device has hash and key derivation capabilities.
-        const HASH_AND_KDF = 0b001;
-        /// This device has authentication capabilities, using some kind of
-        /// PKI mechanism.
-        const AUTHENTICATION = 0b010;
-        /// This device can send and recieve confidential messages over a
-        /// secured channel, using AES.
-        const CONFIDENTIALITY = 0b100;
-    }
+/// Represents a "security capability".
+///
+/// I.e, this enum describes different security primitives the device might
+/// support.
+#[bitflags]
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Security {
+    /// This device has hash and key derivation capabilities.
+    HashAndKdf = 0b001,
+    /// This device has authentication capabilities, using some kind of
+    /// PKI mechanism.
+    Authentication = 0b010,
+    /// This device can send and recieve confidential messages over a
+    /// secured channel, using AES.
+    Confidentiality = 0b100,
 }
 
-bitflags! {
-    /// Represents a supported elliptic curve cryptography key strength.
-    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct EccKeyStrength: u8 {
-        /// A key strength of 160 bits.
-        const BITS_160 = 0b001;
-        /// A key strength of 256 bits.
-        const BITS_256 = 0b010;
-    }
+/// Represents a supported elliptic curve cryptography key strength.
+#[bitflags]
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum EccKeyStrength {
+    /// A key strength of 160 bits.
+    Bits160 = 0b001,
+    /// A key strength of 256 bits.
+    Bits256 = 0b010,
 }
 
-bitflags! {
-    /// Represents a supported RSA key strength.
-    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct RsaKeyStrength: u8 {
-        /// A key strength of 2048 bits.
-        const BITS_2048 = 0b001;
-        /// A key strength of 3072 bits.
-        const BITS_3072 = 0b010;
-        /// A key strength of 4096 bits.
-        const BITS_4096 = 0b100;
-    }
+/// Represents a supported RSA key strength.
+#[bitflags]
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum RsaKeyStrength {
+    /// A key strength of 2048 bits.
+    Bits2048 = 0b001,
+    /// A key strength of 3072 bits.
+    Bits3072 = 0b010,
+    /// A key strength of 4096 bits.
+    Bits4096 = 0b100,
 }
 
-bitflags! {
-    /// Represents a supported AES key strength.
-    #[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct AesKeyStrength: u8 {
-        /// A key strength of 128 bits.
-        const BITS_128 = 0b001;
-        /// A key strength of 256 bits.
-        const BITS_256 = 0b010;
-    }
+/// Represents a supported AES key strength.
+#[bitflags]
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum AesKeyStrength {
+    /// A key strength of 128 bits.
+    Bits128 = 0b001,
+    /// A key strength of 256 bits.
+    Bits256 = 0b010,
 }
 
 /// Network-related capabilities for a device.
@@ -179,7 +176,6 @@ bitflags! {
 /// A value of this type needs to be provided to `manticore` by an integration,
 /// so that it can faithfully report it during capabilities negotiation.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Networking {
     /// The maximum message size this device can buffer, in bytes.
@@ -202,12 +198,12 @@ pub struct Networking {
     /// The type of RoT this device is.
     pub mode: RotMode,
     /// Valid "bus roles" of this device: is a host, a target, or both?
-    pub roles: BusRole,
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::bitflags"))]
+    pub roles: BitFlags<BusRole>,
 }
 
 /// Cryptographic device capabilities.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Crypto {
     /// Whether this device supports ECDSA.
@@ -220,11 +216,14 @@ pub struct Crypto {
     pub has_aes: bool,
 
     /// ECC key strengths supported by this device.
-    pub ecc_strength: EccKeyStrength,
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::bitflags"))]
+    pub ecc_strength: BitFlags<EccKeyStrength>,
     /// RSA key strengths supported by this device.
-    pub rsa_strength: RsaKeyStrength,
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::bitflags"))]
+    pub rsa_strength: BitFlags<RsaKeyStrength>,
     /// AES key strengths supported by this device.
-    pub aes_strength: AesKeyStrength,
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::bitflags"))]
+    pub aes_strength: BitFlags<AesKeyStrength>,
 }
 
 /// A description of device capabilities.
@@ -235,7 +234,6 @@ pub struct Crypto {
 /// Some fields in this struct may apear unused or redundant. This struct is
 /// meant to be a strict reflection of the wire format specified by Cerberus.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "arbitrary-derive", derive(Arbitrary))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Capabilities {
     /// Integration-provided information on the device's networking
@@ -243,7 +241,8 @@ pub struct Capabilities {
     pub networking: Networking,
 
     /// Security primitives supported by this device.
-    pub security: Security,
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::bitflags"))]
+    pub security: BitFlags<Security>,
     /// Whether this primitive "supports PFMs".
     ///
     /// The meaning of this field is unspecified by Cerberus.
@@ -291,8 +290,8 @@ impl<'wire> FromWire<'wire> for Capabilities {
 
         let mode = RotMode::from_wire_value(mode_bits)
             .ok_or(wire::Error::OutOfRange)?;
-        let roles =
-            BusRole::from_bits(bus_bits).ok_or(wire::Error::OutOfRange)?;
+        let roles = BitFlags::<BusRole>::from_bits(bus_bits)
+            .map_err(|_| wire::Error::OutOfRange)?;
         let networking = Networking {
             max_message_size,
             max_packet_size,
@@ -300,8 +299,8 @@ impl<'wire> FromWire<'wire> for Capabilities {
             roles,
         };
 
-        let security = Security::from_bits(security_bits)
-            .ok_or(wire::Error::OutOfRange)?;
+        let security = BitFlags::<Security>::from_bits(security_bits)
+            .map_err(|_| wire::Error::OutOfRange)?;
 
         // The sixth byte consists of five reserved bits, and the PFM, policy,
         // and firmware protection bits.
@@ -319,10 +318,10 @@ impl<'wire> FromWire<'wire> for Capabilities {
         let ecc_bits = byte_seven.read_bits(ECC_SIZE)?;
         let rsa_bits = byte_seven.read_bits(RSA_SIZE)?;
 
-        let rsa_strength = RsaKeyStrength::from_bits(rsa_bits)
-            .ok_or(wire::Error::OutOfRange)?;
-        let ecc_strength = EccKeyStrength::from_bits(ecc_bits)
-            .ok_or(wire::Error::OutOfRange)?;
+        let rsa_strength = BitFlags::<RsaKeyStrength>::from_bits(rsa_bits)
+            .map_err(|_| wire::Error::OutOfRange)?;
+        let ecc_strength = BitFlags::<EccKeyStrength>::from_bits(ecc_bits)
+            .map_err(|_| wire::Error::OutOfRange)?;
 
         // The eighth byte consists of the aes strength, four reserved bits,
         // and the ecc bit.
@@ -331,8 +330,8 @@ impl<'wire> FromWire<'wire> for Capabilities {
         let _ = byte_eight.read_bits(4)?;
         let aes_bits = byte_eight.read_bits(AES_SIZE)?;
 
-        let aes_strength = AesKeyStrength::from_bits(aes_bits)
-            .ok_or(wire::Error::OutOfRange)?;
+        let aes_strength = BitFlags::<AesKeyStrength>::from_bits(aes_bits)
+            .map_err(|_| wire::Error::OutOfRange)?;
 
         Ok(Capabilities {
             networking,
@@ -395,6 +394,39 @@ impl ToWire for Capabilities {
     }
 }
 
+#[cfg(feature = "arbitrary-derive")]
+use {
+    crate::protocol::arbitrary_bitflags,
+    libfuzzer_sys::arbitrary::{self, Arbitrary, Unstructured},
+};
+
+#[cfg(feature = "arbitrary-derive")]
+impl Arbitrary for Capabilities {
+    fn arbitrary(u: &mut Unstructured) -> arbitrary::Result<Self> {
+        Ok(Self {
+            networking: Networking {
+                max_message_size: u.arbitrary()?,
+                max_packet_size: u.arbitrary()?,
+                mode: u.arbitrary()?,
+                roles: arbitrary_bitflags(u)?,
+            },
+            security: arbitrary_bitflags(u)?,
+            has_pfm_support: u.arbitrary()?,
+            has_policy_support: u.arbitrary()?,
+            has_firmware_protection: u.arbitrary()?,
+            crypto: Crypto {
+                has_ecdsa: u.arbitrary()?,
+                has_ecc: u.arbitrary()?,
+                has_rsa: u.arbitrary()?,
+                has_aes: u.arbitrary()?,
+                ecc_strength: arbitrary_bitflags(u)?,
+                rsa_strength: arbitrary_bitflags(u)?,
+                aes_strength: arbitrary_bitflags(u)?,
+            },
+        })
+    }
+}
+
 /// Timeout "capabilities", that is, how long a client should expect a device
 /// to take to respond to a request before it decides that the device is
 /// unreachable.
@@ -438,9 +470,9 @@ mod test {
                         "max_message_size": 256,
                         "max_packet_size": 128,
                         "mode": "Platform",
-                        "roles": { "bits": 3 }
+                        "roles": ["Host", "Target"]
                     },
-                    "security": { "bits": 3 },
+                    "security": ["HashAndKdf", "Authentication"],
                     "has_pfm_support": true,
                     "has_policy_support": false,
                     "has_firmware_protection": false,
@@ -449,9 +481,9 @@ mod test {
                         "has_ecc": false,
                         "has_rsa": true,
                         "has_aes": false,
-                        "ecc_strength": { "bits": 0 },
-                        "rsa_strength": { "bits": 1 },
-                        "aes_strength": { "bits": 3 }
+                        "ecc_strength": [],
+                        "rsa_strength": ["Bits2048"],
+                        "aes_strength": ["Bits128", "Bits256"]
                     }
                 }
             }"#,
@@ -461,9 +493,9 @@ mod test {
                         max_message_size: 0x100,
                         max_packet_size: 0x80,
                         mode: RotMode::Platform,
-                        roles: BusRole::HOST | BusRole::TARGET,
+                        roles: BusRole::Host | BusRole::Target,
                     },
-                    security: Security::HASH_AND_KDF | Security::AUTHENTICATION,
+                    security: Security::HashAndKdf | Security::Authentication,
                     has_pfm_support: true,
                     has_policy_support: false,
                     has_firmware_protection: false,
@@ -472,9 +504,9 @@ mod test {
                         has_ecc: false,
                         has_rsa: true,
                         has_aes: false,
-                        ecc_strength: EccKeyStrength::empty(),
-                        rsa_strength: RsaKeyStrength::BITS_2048,
-                        aes_strength: AesKeyStrength::BITS_128 | AesKeyStrength::BITS_256,
+                        ecc_strength: BitFlags::<EccKeyStrength>::empty(),
+                        rsa_strength: RsaKeyStrength::Bits2048.into(),
+                        aes_strength: AesKeyStrength::Bits128 | AesKeyStrength::Bits256,
                     },
                 },
             },
@@ -496,9 +528,9 @@ mod test {
                         "max_message_size": 256,
                         "max_packet_size": 128,
                         "mode": "Platform",
-                        "roles": { "bits": 3 }
+                        "roles": ["Host", "Target"]
                     },
-                    "security": { "bits": 3 },
+                    "security": ["HashAndKdf", "Authentication"],
                     "has_pfm_support": true,
                     "has_policy_support": false,
                     "has_firmware_protection": false,
@@ -507,9 +539,9 @@ mod test {
                         "has_ecc": false,
                         "has_rsa": true,
                         "has_aes": false,
-                        "ecc_strength": { "bits": 0 },
-                        "rsa_strength": { "bits": 1 },
-                        "aes_strength": { "bits": 3 }
+                        "ecc_strength": [],
+                        "rsa_strength": ["Bits2048"],
+                        "aes_strength": ["Bits128", "Bits256"]
                     }
                 },
                 "timeouts": {
@@ -523,9 +555,9 @@ mod test {
                         max_message_size: 0x100,
                         max_packet_size: 0x80,
                         mode: RotMode::Platform,
-                        roles: BusRole::HOST | BusRole::TARGET,
+                        roles: BusRole::Host | BusRole::Target,
                     },
-                    security: Security::HASH_AND_KDF | Security::AUTHENTICATION,
+                    security: Security::HashAndKdf | Security::Authentication,
                     has_pfm_support: true,
                     has_policy_support: false,
                     has_firmware_protection: false,
@@ -534,9 +566,9 @@ mod test {
                         has_ecc: false,
                         has_rsa: true,
                         has_aes: false,
-                        ecc_strength: EccKeyStrength::empty(),
-                        rsa_strength: RsaKeyStrength::BITS_2048,
-                        aes_strength: AesKeyStrength::BITS_128 | AesKeyStrength::BITS_256,
+                        ecc_strength: BitFlags::<EccKeyStrength>::empty(),
+                        rsa_strength: RsaKeyStrength::Bits2048.into(),
+                        aes_strength: AesKeyStrength::Bits128 | AesKeyStrength::Bits256,
                     },
                 },
                 timeouts: Timeouts {

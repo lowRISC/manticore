@@ -205,16 +205,17 @@ impl<'a> PaRot<'a> {
         Resp<protocol::DeviceCapabilities>,
         protocol::Error<protocol::DeviceCapabilities>,
     > {
+        use enumflags2::BitFlags;
         use protocol::capabilities::*;
         let mut crypto = req.capabilities.crypto;
 
         self.opts.ciphers.negotiate(&mut crypto);
         crypto.has_aes = false;
-        crypto.aes_strength = AesKeyStrength::empty();
+        crypto.aes_strength = BitFlags::<AesKeyStrength>::empty();
 
         let capabilities = Capabilities {
             networking: self.opts.networking,
-            security: Security::empty(),
+            security: BitFlags::<Security>::empty(),
 
             has_pfm_support: false,
             has_policy_support: false,
