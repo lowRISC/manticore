@@ -38,226 +38,226 @@ path = "targets/x509_unsigned.rs"
 # Anything below this line will be blown away by `generate_proto_fuzz.py`.
 ## BEGIN GENERATED TARGETS
 [[bin]]
-name = "manticore_protocol_challenge_Challenge__req_to_wire"
-path = "gen/manticore_protocol_challenge_Challenge__req_to_wire.rs"
+name = "manticore_protocol_cerberus_Challenge__req_to_wire"
+path = "gen/manticore_protocol_cerberus_Challenge__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_challenge_Challenge__req_from_wire"
-path = "gen/manticore_protocol_challenge_Challenge__req_from_wire.rs"
+name = "manticore_protocol_cerberus_Challenge__req_from_wire"
+path = "gen/manticore_protocol_cerberus_Challenge__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_challenge_Challenge__resp_from_wire"
-path = "gen/manticore_protocol_challenge_Challenge__resp_from_wire.rs"
+name = "manticore_protocol_cerberus_Challenge__resp_from_wire"
+path = "gen/manticore_protocol_cerberus_Challenge__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_challenge_Challenge__resp_to_wire"
-path = "gen/manticore_protocol_challenge_Challenge__resp_to_wire.rs"
+name = "manticore_protocol_cerberus_Challenge__resp_to_wire"
+path = "gen/manticore_protocol_cerberus_Challenge__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_capabilities_DeviceCapabilities__req_to_wire"
-path = "gen/manticore_protocol_capabilities_DeviceCapabilities__req_to_wire.rs"
+name = "manticore_protocol_cerberus_DeviceCapabilities__req_to_wire"
+path = "gen/manticore_protocol_cerberus_DeviceCapabilities__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_capabilities_DeviceCapabilities__req_from_wire"
-path = "gen/manticore_protocol_capabilities_DeviceCapabilities__req_from_wire.rs"
+name = "manticore_protocol_cerberus_DeviceCapabilities__req_from_wire"
+path = "gen/manticore_protocol_cerberus_DeviceCapabilities__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_capabilities_DeviceCapabilities__resp_from_wire"
-path = "gen/manticore_protocol_capabilities_DeviceCapabilities__resp_from_wire.rs"
+name = "manticore_protocol_cerberus_DeviceCapabilities__resp_from_wire"
+path = "gen/manticore_protocol_cerberus_DeviceCapabilities__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_capabilities_DeviceCapabilities__resp_to_wire"
-path = "gen/manticore_protocol_capabilities_DeviceCapabilities__resp_to_wire.rs"
+name = "manticore_protocol_cerberus_DeviceCapabilities__resp_to_wire"
+path = "gen/manticore_protocol_cerberus_DeviceCapabilities__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_device_id_DeviceId__req_to_wire"
-path = "gen/manticore_protocol_device_id_DeviceId__req_to_wire.rs"
+name = "manticore_protocol_cerberus_DeviceId__req_to_wire"
+path = "gen/manticore_protocol_cerberus_DeviceId__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_device_id_DeviceId__req_from_wire"
-path = "gen/manticore_protocol_device_id_DeviceId__req_from_wire.rs"
+name = "manticore_protocol_cerberus_DeviceId__req_from_wire"
+path = "gen/manticore_protocol_cerberus_DeviceId__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_device_id_DeviceId__resp_from_wire"
-path = "gen/manticore_protocol_device_id_DeviceId__resp_from_wire.rs"
+name = "manticore_protocol_cerberus_DeviceId__resp_from_wire"
+path = "gen/manticore_protocol_cerberus_DeviceId__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_device_id_DeviceId__resp_to_wire"
-path = "gen/manticore_protocol_device_id_DeviceId__resp_to_wire.rs"
+name = "manticore_protocol_cerberus_DeviceId__resp_to_wire"
+path = "gen/manticore_protocol_cerberus_DeviceId__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_device_info_DeviceInfo__req_to_wire"
-path = "gen/manticore_protocol_device_info_DeviceInfo__req_to_wire.rs"
+name = "manticore_protocol_cerberus_DeviceInfo__req_to_wire"
+path = "gen/manticore_protocol_cerberus_DeviceInfo__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_device_info_DeviceInfo__req_from_wire"
-path = "gen/manticore_protocol_device_info_DeviceInfo__req_from_wire.rs"
+name = "manticore_protocol_cerberus_DeviceInfo__req_from_wire"
+path = "gen/manticore_protocol_cerberus_DeviceInfo__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_device_info_DeviceInfo__resp_from_wire"
-path = "gen/manticore_protocol_device_info_DeviceInfo__resp_from_wire.rs"
+name = "manticore_protocol_cerberus_DeviceInfo__resp_from_wire"
+path = "gen/manticore_protocol_cerberus_DeviceInfo__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_device_info_DeviceInfo__resp_to_wire"
-path = "gen/manticore_protocol_device_info_DeviceInfo__resp_to_wire.rs"
+name = "manticore_protocol_cerberus_DeviceInfo__resp_to_wire"
+path = "gen/manticore_protocol_cerberus_DeviceInfo__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_device_uptime_DeviceUptime__req_to_wire"
-path = "gen/manticore_protocol_device_uptime_DeviceUptime__req_to_wire.rs"
+name = "manticore_protocol_cerberus_DeviceUptime__req_to_wire"
+path = "gen/manticore_protocol_cerberus_DeviceUptime__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_device_uptime_DeviceUptime__req_from_wire"
-path = "gen/manticore_protocol_device_uptime_DeviceUptime__req_from_wire.rs"
+name = "manticore_protocol_cerberus_DeviceUptime__req_from_wire"
+path = "gen/manticore_protocol_cerberus_DeviceUptime__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_device_uptime_DeviceUptime__resp_from_wire"
-path = "gen/manticore_protocol_device_uptime_DeviceUptime__resp_from_wire.rs"
+name = "manticore_protocol_cerberus_DeviceUptime__resp_from_wire"
+path = "gen/manticore_protocol_cerberus_DeviceUptime__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_device_uptime_DeviceUptime__resp_to_wire"
-path = "gen/manticore_protocol_device_uptime_DeviceUptime__resp_to_wire.rs"
+name = "manticore_protocol_cerberus_DeviceUptime__resp_to_wire"
+path = "gen/manticore_protocol_cerberus_DeviceUptime__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_get_digests_GetDigests__req_to_wire"
-path = "gen/manticore_protocol_get_digests_GetDigests__req_to_wire.rs"
+name = "manticore_protocol_cerberus_GetDigests__req_to_wire"
+path = "gen/manticore_protocol_cerberus_GetDigests__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_get_digests_GetDigests__req_from_wire"
-path = "gen/manticore_protocol_get_digests_GetDigests__req_from_wire.rs"
+name = "manticore_protocol_cerberus_GetDigests__req_from_wire"
+path = "gen/manticore_protocol_cerberus_GetDigests__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_get_digests_GetDigests__resp_from_wire"
-path = "gen/manticore_protocol_get_digests_GetDigests__resp_from_wire.rs"
+name = "manticore_protocol_cerberus_GetDigests__resp_from_wire"
+path = "gen/manticore_protocol_cerberus_GetDigests__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_get_digests_GetDigests__resp_to_wire"
-path = "gen/manticore_protocol_get_digests_GetDigests__resp_to_wire.rs"
+name = "manticore_protocol_cerberus_GetDigests__resp_to_wire"
+path = "gen/manticore_protocol_cerberus_GetDigests__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_get_cert_GetCert__req_to_wire"
-path = "gen/manticore_protocol_get_cert_GetCert__req_to_wire.rs"
+name = "manticore_protocol_cerberus_GetCert__req_to_wire"
+path = "gen/manticore_protocol_cerberus_GetCert__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_get_cert_GetCert__req_from_wire"
-path = "gen/manticore_protocol_get_cert_GetCert__req_from_wire.rs"
+name = "manticore_protocol_cerberus_GetCert__req_from_wire"
+path = "gen/manticore_protocol_cerberus_GetCert__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_get_cert_GetCert__resp_from_wire"
-path = "gen/manticore_protocol_get_cert_GetCert__resp_from_wire.rs"
+name = "manticore_protocol_cerberus_GetCert__resp_from_wire"
+path = "gen/manticore_protocol_cerberus_GetCert__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_get_cert_GetCert__resp_to_wire"
-path = "gen/manticore_protocol_get_cert_GetCert__resp_to_wire.rs"
+name = "manticore_protocol_cerberus_GetCert__resp_to_wire"
+path = "gen/manticore_protocol_cerberus_GetCert__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_get_host_state_GetHostState__req_to_wire"
-path = "gen/manticore_protocol_get_host_state_GetHostState__req_to_wire.rs"
+name = "manticore_protocol_cerberus_GetHostState__req_to_wire"
+path = "gen/manticore_protocol_cerberus_GetHostState__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_get_host_state_GetHostState__req_from_wire"
-path = "gen/manticore_protocol_get_host_state_GetHostState__req_from_wire.rs"
+name = "manticore_protocol_cerberus_GetHostState__req_from_wire"
+path = "gen/manticore_protocol_cerberus_GetHostState__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_get_host_state_GetHostState__resp_from_wire"
-path = "gen/manticore_protocol_get_host_state_GetHostState__resp_from_wire.rs"
+name = "manticore_protocol_cerberus_GetHostState__resp_from_wire"
+path = "gen/manticore_protocol_cerberus_GetHostState__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_get_host_state_GetHostState__resp_to_wire"
-path = "gen/manticore_protocol_get_host_state_GetHostState__resp_to_wire.rs"
+name = "manticore_protocol_cerberus_GetHostState__resp_to_wire"
+path = "gen/manticore_protocol_cerberus_GetHostState__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_firmware_version_FirmwareVersion__req_to_wire"
-path = "gen/manticore_protocol_firmware_version_FirmwareVersion__req_to_wire.rs"
+name = "manticore_protocol_cerberus_FirmwareVersion__req_to_wire"
+path = "gen/manticore_protocol_cerberus_FirmwareVersion__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_firmware_version_FirmwareVersion__req_from_wire"
-path = "gen/manticore_protocol_firmware_version_FirmwareVersion__req_from_wire.rs"
+name = "manticore_protocol_cerberus_FirmwareVersion__req_from_wire"
+path = "gen/manticore_protocol_cerberus_FirmwareVersion__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_firmware_version_FirmwareVersion__resp_from_wire"
-path = "gen/manticore_protocol_firmware_version_FirmwareVersion__resp_from_wire.rs"
+name = "manticore_protocol_cerberus_FirmwareVersion__resp_from_wire"
+path = "gen/manticore_protocol_cerberus_FirmwareVersion__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_firmware_version_FirmwareVersion__resp_to_wire"
-path = "gen/manticore_protocol_firmware_version_FirmwareVersion__resp_to_wire.rs"
+name = "manticore_protocol_cerberus_FirmwareVersion__resp_to_wire"
+path = "gen/manticore_protocol_cerberus_FirmwareVersion__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_key_exchange_KeyExchange__req_to_wire"
-path = "gen/manticore_protocol_key_exchange_KeyExchange__req_to_wire.rs"
+name = "manticore_protocol_cerberus_KeyExchange__req_to_wire"
+path = "gen/manticore_protocol_cerberus_KeyExchange__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_key_exchange_KeyExchange__req_from_wire"
-path = "gen/manticore_protocol_key_exchange_KeyExchange__req_from_wire.rs"
+name = "manticore_protocol_cerberus_KeyExchange__req_from_wire"
+path = "gen/manticore_protocol_cerberus_KeyExchange__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_key_exchange_KeyExchange__resp_from_wire"
-path = "gen/manticore_protocol_key_exchange_KeyExchange__resp_from_wire.rs"
+name = "manticore_protocol_cerberus_KeyExchange__resp_from_wire"
+path = "gen/manticore_protocol_cerberus_KeyExchange__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_key_exchange_KeyExchange__resp_to_wire"
-path = "gen/manticore_protocol_key_exchange_KeyExchange__resp_to_wire.rs"
+name = "manticore_protocol_cerberus_KeyExchange__resp_to_wire"
+path = "gen/manticore_protocol_cerberus_KeyExchange__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_request_counter_RequestCounter__req_to_wire"
-path = "gen/manticore_protocol_request_counter_RequestCounter__req_to_wire.rs"
+name = "manticore_protocol_cerberus_RequestCounter__req_to_wire"
+path = "gen/manticore_protocol_cerberus_RequestCounter__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_request_counter_RequestCounter__req_from_wire"
-path = "gen/manticore_protocol_request_counter_RequestCounter__req_from_wire.rs"
+name = "manticore_protocol_cerberus_RequestCounter__req_from_wire"
+path = "gen/manticore_protocol_cerberus_RequestCounter__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_request_counter_RequestCounter__resp_from_wire"
-path = "gen/manticore_protocol_request_counter_RequestCounter__resp_from_wire.rs"
+name = "manticore_protocol_cerberus_RequestCounter__resp_from_wire"
+path = "gen/manticore_protocol_cerberus_RequestCounter__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_request_counter_RequestCounter__resp_to_wire"
-path = "gen/manticore_protocol_request_counter_RequestCounter__resp_to_wire.rs"
+name = "manticore_protocol_cerberus_RequestCounter__resp_to_wire"
+path = "gen/manticore_protocol_cerberus_RequestCounter__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_reset_counter_ResetCounter__req_to_wire"
-path = "gen/manticore_protocol_reset_counter_ResetCounter__req_to_wire.rs"
+name = "manticore_protocol_cerberus_ResetCounter__req_to_wire"
+path = "gen/manticore_protocol_cerberus_ResetCounter__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_reset_counter_ResetCounter__req_from_wire"
-path = "gen/manticore_protocol_reset_counter_ResetCounter__req_from_wire.rs"
+name = "manticore_protocol_cerberus_ResetCounter__req_from_wire"
+path = "gen/manticore_protocol_cerberus_ResetCounter__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_reset_counter_ResetCounter__resp_from_wire"
-path = "gen/manticore_protocol_reset_counter_ResetCounter__resp_from_wire.rs"
+name = "manticore_protocol_cerberus_ResetCounter__resp_from_wire"
+path = "gen/manticore_protocol_cerberus_ResetCounter__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_reset_counter_ResetCounter__resp_to_wire"
-path = "gen/manticore_protocol_reset_counter_ResetCounter__resp_to_wire.rs"
+name = "manticore_protocol_cerberus_ResetCounter__resp_to_wire"
+path = "gen/manticore_protocol_cerberus_ResetCounter__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_spdm_get_version_GetVersion__req_to_wire"
-path = "gen/manticore_protocol_spdm_get_version_GetVersion__req_to_wire.rs"
+name = "manticore_protocol_spdm_GetVersion__req_to_wire"
+path = "gen/manticore_protocol_spdm_GetVersion__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_spdm_get_version_GetVersion__req_from_wire"
-path = "gen/manticore_protocol_spdm_get_version_GetVersion__req_from_wire.rs"
+name = "manticore_protocol_spdm_GetVersion__req_from_wire"
+path = "gen/manticore_protocol_spdm_GetVersion__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_spdm_get_version_GetVersion__resp_from_wire"
-path = "gen/manticore_protocol_spdm_get_version_GetVersion__resp_from_wire.rs"
+name = "manticore_protocol_spdm_GetVersion__resp_from_wire"
+path = "gen/manticore_protocol_spdm_GetVersion__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_spdm_get_version_GetVersion__resp_to_wire"
-path = "gen/manticore_protocol_spdm_get_version_GetVersion__resp_to_wire.rs"
+name = "manticore_protocol_spdm_GetVersion__resp_to_wire"
+path = "gen/manticore_protocol_spdm_GetVersion__resp_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_spdm_get_caps_GetCaps__req_to_wire"
-path = "gen/manticore_protocol_spdm_get_caps_GetCaps__req_to_wire.rs"
+name = "manticore_protocol_spdm_GetCaps__req_to_wire"
+path = "gen/manticore_protocol_spdm_GetCaps__req_to_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_spdm_get_caps_GetCaps__req_from_wire"
-path = "gen/manticore_protocol_spdm_get_caps_GetCaps__req_from_wire.rs"
+name = "manticore_protocol_spdm_GetCaps__req_from_wire"
+path = "gen/manticore_protocol_spdm_GetCaps__req_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_spdm_get_caps_GetCaps__resp_from_wire"
-path = "gen/manticore_protocol_spdm_get_caps_GetCaps__resp_from_wire.rs"
+name = "manticore_protocol_spdm_GetCaps__resp_from_wire"
+path = "gen/manticore_protocol_spdm_GetCaps__resp_from_wire.rs"
 
 [[bin]]
-name = "manticore_protocol_spdm_get_caps_GetCaps__resp_to_wire"
-path = "gen/manticore_protocol_spdm_get_caps_GetCaps__resp_to_wire.rs"
+name = "manticore_protocol_spdm_GetCaps__resp_to_wire"
+path = "gen/manticore_protocol_spdm_GetCaps__resp_to_wire.rs"
 

@@ -3,19 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Keep sorted.
-manticore::protocol::challenge::Challenge
-manticore::protocol::capabilities::DeviceCapabilities
-manticore::protocol::device_id::DeviceId
-manticore::protocol::device_info::DeviceInfo
-manticore::protocol::device_uptime::DeviceUptime
-manticore::protocol::get_digests::GetDigests
-manticore::protocol::get_cert::GetCert
-manticore::protocol::get_host_state::GetHostState
-manticore::protocol::firmware_version::FirmwareVersion
-manticore::protocol::key_exchange::KeyExchange
-manticore::protocol::request_counter::RequestCounter
-manticore::protocol::reset_counter::ResetCounter
+manticore::protocol::cerberus::Challenge
+manticore::protocol::cerberus::DeviceCapabilities
+manticore::protocol::cerberus::DeviceId
+manticore::protocol::cerberus::DeviceInfo
+manticore::protocol::cerberus::DeviceUptime
+manticore::protocol::cerberus::GetDigests
+manticore::protocol::cerberus::GetCert
+manticore::protocol::cerberus::GetHostState
+manticore::protocol::cerberus::FirmwareVersion
+manticore::protocol::cerberus::KeyExchange
+manticore::protocol::cerberus::RequestCounter
+manticore::protocol::cerberus::ResetCounter
 
-manticore::protocol::spdm::get_version::GetVersion
-manticore::protocol::spdm::get_caps::GetCaps
+manticore::protocol::spdm::GetVersion
+manticore::protocol::spdm::GetCaps
 
