@@ -18,9 +18,8 @@ use crate::mem::ArenaExt as _;
 use crate::net;
 use crate::net::CerberusHeader;
 use crate::net::SpdmHeader;
-use crate::protocol;
-use crate::protocol::spdm;
 use crate::protocol::cerberus;
+use crate::protocol::spdm;
 use crate::protocol::Req;
 use crate::protocol::Resp;
 use crate::server::Error;
@@ -145,7 +144,7 @@ impl<'a> PaRot<'a> {
                 if ctx.req.reset_type != ResetType::Local
                     || ctx.req.port_id != 0
                 {
-                    return Err(protocol::error::Error::OutOfRange);
+                    return Err(cerberus::Error::OutOfRange);
                 }
 
                 Ok(Resp::<cerberus::ResetCounter> {
@@ -155,7 +154,7 @@ impl<'a> PaRot<'a> {
             .handle::<cerberus::DeviceUptime, _>(|ctx| {
                 // NOTE: Currently, we only handle port 0, the "self" port.
                 if ctx.req.port_id != 0 {
-                    return Err(protocol::error::Error::OutOfRange);
+                    return Err(cerberus::Error::OutOfRange);
                 }
 
                 Ok(Resp::<cerberus::DeviceUptime> {
@@ -180,10 +179,7 @@ impl<'a> PaRot<'a> {
     fn handle_fw_version(
         &mut self,
         req: &Req<cerberus::FirmwareVersion>,
-    ) -> Result<
-        Resp<cerberus::FirmwareVersion>,
-        protocol::Error<cerberus::FirmwareVersion>,
-    > {
+    ) -> Result<Resp<cerberus::FirmwareVersion>, cerberus::Error> {
         if req.index == 0 {
             return Ok(Resp::<cerberus::FirmwareVersion> {
                 version: self.opts.identity.firmware_version(),
@@ -194,19 +190,16 @@ impl<'a> PaRot<'a> {
             .opts
             .identity
             .vendor_firmware_version(req.index)
-            .ok_or(protocol::error::Error::OutOfRange)?;
+            .ok_or(cerberus::Error::OutOfRange)?;
         Ok(Resp::<cerberus::FirmwareVersion> { version })
     }
 
     fn handle_capabilities(
         &mut self,
         req: &Req<cerberus::DeviceCapabilities>,
-    ) -> Result<
-        Resp<cerberus::DeviceCapabilities>,
-        protocol::Error<cerberus::DeviceCapabilities>,
-    > {
-        use enumflags2::BitFlags;
+    ) -> Result<Resp<cerberus::DeviceCapabilities>, cerberus::Error> {
         use cerberus::capabilities::*;
+        use enumflags2::BitFlags;
         let mut crypto = req.capabilities.crypto;
 
         self.opts.ciphers.negotiate(&mut crypto);
@@ -234,15 +227,12 @@ impl<'a> PaRot<'a> {
         &mut self,
         arena: &'req dyn Arena,
         req: &Req<cerberus::GetDigests>,
-    ) -> Result<
-        Resp<'req, cerberus::GetDigests>,
-        protocol::Error<cerberus::GetDigests>,
-    > {
+    ) -> Result<Resp<'req, cerberus::GetDigests>, cerberus::Error> {
         let digests_len = self
             .opts
             .trust_chain
             .chain_len(req.slot)
-            .ok_or(protocol::error::ChallengeError::UnknownChain)?
+            .ok_or(cerberus::Error::UnknownChain)?
             .get();
         let digests = arena
             .alloc_slice::<[u8; hash::Algo::Sha256.bytes()]>(digests_len)?;
@@ -251,7 +241,7 @@ impl<'a> PaRot<'a> {
                 .opts
                 .trust_chain
                 .cert(req.slot, i)
-                .ok_or(protocol::error::ChallengeError::UnknownChain)?;
+                .ok_or(cerberus::Error::UnknownChain)?;
             self.opts.hasher.contiguous_hash(
                 hash::Algo::Sha256,
                 cert.raw(),
@@ -266,13 +256,12 @@ impl<'a> PaRot<'a> {
     fn handle_cert(
         &mut self,
         req: &Req<cerberus::GetCert>,
-    ) -> Result<Resp<cerberus::GetCert>, protocol::Error<cerberus::GetCert>>
-    {
+    ) -> Result<Resp<cerberus::GetCert>, cerberus::Error> {
         let cert = self
             .opts
             .trust_chain
             .cert(req.slot, req.cert_number as usize)
-            .ok_or(protocol::error::ChallengeError::UnknownChain)?;
+            .ok_or(cerberus::Error::UnknownChain)?;
 
         let start = cert.raw().len().min(req.offset as usize);
         let end = cert
@@ -291,20 +280,16 @@ impl<'a> PaRot<'a> {
         arena: &'req dyn Arena,
         req: &Req<cerberus::Challenge>,
         req_buf: &[u8],
-    ) -> Result<
-        Resp<'req, cerberus::Challenge>,
-        protocol::Error<cerberus::Challenge>,
-    > {
-        use cerberus::challenge::ChallengeResponseTbs;
+    ) -> Result<Resp<'req, cerberus::Challenge>, cerberus::Error> {
         let signer = self
             .opts
             .trust_chain
             .signer(req.slot)
-            .ok_or(protocol::error::ChallengeError::UnknownChain)?;
+            .ok_or(cerberus::Error::UnknownChain)?;
         let nonce = arena.alloc::<[u8; 32]>()?;
         self.opts.csrng.fill(nonce)?;
 
-        let tbs = ChallengeResponseTbs {
+        let tbs = cerberus::challenge::ChallengeResponseTbs {
             slot: req.slot,
             slot_mask: 0, // Currently unspecified?
             protocol_range: (0, 0),
@@ -319,7 +304,9 @@ impl<'a> PaRot<'a> {
         })?;
         let signature = &signature[..sig_len];
 
-        if let Some(cerberus::get_digests::KeyExchangeAlgo::Ecdh) = self.key_exchange {
+        if let Some(cerberus::get_digests::KeyExchangeAlgo::Ecdh) =
+            self.key_exchange
+        {
             self.opts.session.create_session(req.nonce, tbs.nonce)?;
             self.current_cert_slot = Some(tbs.slot);
         }
@@ -331,10 +318,7 @@ impl<'a> PaRot<'a> {
         &mut self,
         arena: &'req dyn Arena,
         req: &Req<cerberus::KeyExchange>,
-    ) -> Result<
-        Resp<'req, cerberus::KeyExchange>,
-        protocol::Error<cerberus::KeyExchange>,
-    > {
+    ) -> Result<Resp<'req, cerberus::KeyExchange>, cerberus::Error> {
         use cerberus::key_exchange::*;
         match req {
             Req::<KeyExchange>::SessionKey {
@@ -343,12 +327,12 @@ impl<'a> PaRot<'a> {
             } => {
                 let slot = self
                     .current_cert_slot
-                    .ok_or(protocol::error::Error::OutOfRange)?;
+                    .ok_or(cerberus::Error::OutOfRange)?;
                 let signer = self
                     .opts
                     .trust_chain
                     .signer(slot)
-                    .ok_or(protocol::error::ChallengeError::UnknownChain)?;
+                    .ok_or(cerberus::Error::UnknownChain)?;
 
                 let pk_resp =
                     arena.alloc_slice(self.opts.session.ephemeral_bytes())?;
@@ -363,20 +347,20 @@ impl<'a> PaRot<'a> {
                     .opts
                     .trust_chain
                     .chain_len(slot)
-                    .ok_or(protocol::error::Error::OutOfRange)?
+                    .ok_or(cerberus::Error::OutOfRange)?
                     .get();
                 let alias_cert = self
                     .opts
                     .trust_chain
                     .cert(slot, chain_len - 1)
-                    .ok_or(protocol::error::Error::OutOfRange)?;
+                    .ok_or(cerberus::Error::OutOfRange)?;
 
                 let alias_cert_hmac = hmac_algorithm.alloc(arena)?;
                 let (_, hmac_key) = self
                     .opts
                     .session
                     .hmac_key()
-                    .ok_or(protocol::error::Error::Internal)?;
+                    .ok_or(cerberus::Error::Internal)?;
                 self.opts.hasher.contiguous_hmac(
                     *hmac_algorithm,
                     hmac_key,
@@ -390,7 +374,7 @@ impl<'a> PaRot<'a> {
                     alias_cert_hmac,
                 })
             }
-            _ => Err(protocol::error::Error::Internal),
+            _ => Err(cerberus::Error::Internal),
         }
     }
 

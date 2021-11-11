@@ -47,7 +47,6 @@ macro_rules! protocol_struct {
             use $crate::protocol::wire::FromWire;
             use $crate::protocol::wire::ToWire;
             use $crate::protocol::Command;
-            use $crate::protocol::error::NoSpecificError;
             use $crate::protocol::Message;
 
             #[cfg(feature = "arbitrary-derive")]
@@ -64,7 +63,7 @@ macro_rules! protocol_struct {
                 type Error = protocol_struct!(@internal if_nonempty ($($Error)?) {
                     $($Error)?
                 } else {
-                    NoSpecificError
+                    $crate::protocol::cerberus::Error
                 });
             }
 

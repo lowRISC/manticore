@@ -52,11 +52,6 @@ pub mod template;
 #[macro_use]
 pub mod wire;
 
-#[macro_use]
-pub mod error;
-#[cfg(doc)]
-use error::{Ack, NoSpecificError};
-
 pub mod cerberus;
 pub mod spdm;
 
@@ -81,14 +76,13 @@ pub trait Command<'wire> {
 
     /// The unique request type for this `Command`.
     type Req: Message<'wire, CommandType = Self::CommandType>;
+
     /// The response type for this `Command`, which will either be unique or
-    /// [`Ack`].
+    /// [`cerberus::Ack`].
     type Resp: Message<'wire, CommandType = Self::CommandType>;
 
-    /// The message-specific errors for this `Command`.
-    ///
-    /// In general, this will just be [`NoSpecificError`].
-    type Error: error::SpecificError;
+    /// The error type for this command.
+    type Error: Message<'wire /*CommandType = Self::CommandType*/>;
 }
 
 /// Extracts the request type with lifetime `'a` from `C: for<'a> Command<'a>`.
@@ -104,7 +98,7 @@ pub type Resp<'a, C> = <C as Command<'a>>::Resp;
 /// Extracts the error type with lifetime `'a` from `C: for<'a> Command<'a>`.
 ///
 /// See [`Command`].
-pub type Error<'a, C> = error::Error<<C as Command<'a>>::Error>;
+pub type Error<'a, C> = <C as Command<'a>>::Error;
 
 /// A Manticore message type, which makes up part of a `Command`.
 pub trait Message<'wire>: wire::FromWire<'wire> + wire::ToWire {

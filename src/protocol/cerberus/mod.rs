@@ -40,8 +40,8 @@ pub use reset_counter::ResetCounter;
 pub mod request_counter;
 pub use request_counter::RequestCounter;
 
-#[cfg(doc)]
-use crate::protocol::error::{Ack, RawError};
+mod error;
+pub use error::*;
 
 wire_enum! {
     /// A Cerberus command type.

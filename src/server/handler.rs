@@ -432,8 +432,8 @@ mod test {
     use super::*;
     use crate::io::Cursor;
     use crate::mem::BumpArena;
-    use crate::protocol::cerberus::CommandType;
     use crate::protocol::cerberus;
+    use crate::protocol::cerberus::CommandType;
 
     const VERSION1: &[u8; 32] = &[2; 32];
     const VERSION2: &[u8; 32] = &[5; 32];
@@ -486,8 +486,7 @@ mod test {
         let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
-        let req =
-            Req::<cerberus::FirmwareVersion> { index: 0 };
+        let req = Req::<cerberus::FirmwareVersion> { index: 0 };
         let resp = simulate_request::<cerberus::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
@@ -511,17 +510,14 @@ mod test {
                 assert_eq!(ctx.server, "server state");
                 assert_eq!(ctx.req.index, 42);
 
-                Ok(Resp::<cerberus::FirmwareVersion> {
-                    version: VERSION1,
-                })
+                Ok(Resp::<cerberus::FirmwareVersion> { version: VERSION1 })
             });
 
         let mut scratch = [0; 1024];
         let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
-        let req =
-            Req::<cerberus::FirmwareVersion> { index: 42 };
+        let req = Req::<cerberus::FirmwareVersion> { index: 42 };
         let resp = simulate_request::<cerberus::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
@@ -543,9 +539,7 @@ mod test {
                 assert_eq!(ctx.server, "server state");
                 assert_eq!(ctx.req.index, 42);
 
-                Ok(Resp::<cerberus::FirmwareVersion> {
-                    version: VERSION1,
-                })
+                Ok(Resp::<cerberus::FirmwareVersion> { version: VERSION1 })
             });
 
         let mut scratch = [0; 1024];
@@ -577,9 +571,7 @@ mod test {
                 assert_eq!(ctx.server, "server state");
                 assert_eq!(ctx.req.index, 42);
 
-                Ok(Resp::<cerberus::FirmwareVersion> {
-                    version: VERSION1,
-                })
+                Ok(Resp::<cerberus::FirmwareVersion> { version: VERSION1 })
             })
             .handle::<cerberus::DeviceId, _>(|_| {
                 panic!("called the wrong handler")
@@ -589,8 +581,7 @@ mod test {
         let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
-        let req =
-            Req::<cerberus::FirmwareVersion> { index: 42 };
+        let req = Req::<cerberus::FirmwareVersion> { index: 42 };
         let resp = simulate_request::<cerberus::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
@@ -615,17 +606,14 @@ mod test {
                 assert_eq!(ctx.server, "server state");
                 assert_eq!(ctx.req.index, 42);
 
-                Ok(Resp::<cerberus::FirmwareVersion> {
-                    version: VERSION1,
-                })
+                Ok(Resp::<cerberus::FirmwareVersion> { version: VERSION1 })
             });
 
         let mut scratch = [0; 1024];
         let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
-        let req =
-            Req::<cerberus::FirmwareVersion> { index: 42 };
+        let req = Req::<cerberus::FirmwareVersion> { index: 42 };
         let resp = simulate_request::<cerberus::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
@@ -646,9 +634,7 @@ mod test {
             .handle::<cerberus::FirmwareVersion, _>(|_| {
                 handler1_called = true;
 
-                Ok(Resp::<cerberus::FirmwareVersion> {
-                    version: VERSION1,
-                })
+                Ok(Resp::<cerberus::FirmwareVersion> { version: VERSION1 })
             })
             .handle::<cerberus::DeviceId, _>(|_| {
                 panic!("called the wrong handler")
@@ -656,17 +642,14 @@ mod test {
             .handle::<cerberus::FirmwareVersion, _>(|_| {
                 handler2_called = true;
 
-                Ok(Resp::<cerberus::FirmwareVersion> {
-                    version: VERSION2,
-                })
+                Ok(Resp::<cerberus::FirmwareVersion> { version: VERSION2 })
             });
 
         let mut scratch = [0; 1024];
         let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
-        let req =
-            Req::<cerberus::FirmwareVersion> { index: 42 };
+        let req = Req::<cerberus::FirmwareVersion> { index: 42 };
         let resp = simulate_request::<cerberus::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,

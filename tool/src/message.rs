@@ -14,14 +14,14 @@ use manticore::io::write::StdWrite;
 use manticore::mem::BumpArena;
 use manticore::protocol::borrowed::AsStatic;
 use manticore::protocol::borrowed::Borrowed;
+use manticore::protocol::cerberus;
+use manticore::protocol::cerberus::CommandType;
 use manticore::protocol::wire::FromWire;
 use manticore::protocol::wire::ToWire;
 use manticore::protocol::Command;
-use manticore::protocol::cerberus::CommandType;
 use manticore::protocol::Message as _;
 use manticore::protocol::Req;
 use manticore::protocol::Resp;
-use manticore::protocol::cerberus;
 
 macro_rules! proto_match {
     (($cmd:expr, $is_req:expr) in |$mty:ident: type| $expr:expr) => {

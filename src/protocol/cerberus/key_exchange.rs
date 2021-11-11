@@ -11,15 +11,12 @@ use core::convert::TryInto as _;
 use crate::crypto::hash;
 use crate::io::read::ReadZeroExt as _;
 use crate::io::ReadInt as _;
-use crate::protocol::error::ChallengeError;
 use crate::protocol::cerberus::CommandType;
 
 protocol_struct! {
     /// A command for managing a secure session.
     type KeyExchange;
-    type Error = ChallengeError;
     const TYPE: CommandType = KeyExchange;
-
 
     #[cfg_attr(feature = "serde", serde(tag = "type"))]
     #[@static(cfg_attr(feature = "serde", serde(tag = "type")))]
