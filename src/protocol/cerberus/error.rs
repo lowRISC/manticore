@@ -13,10 +13,10 @@ use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::mem::OutOfMemory;
+use crate::protocol::cerberus::CommandType;
 use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
-use crate::protocol::cerberus::CommandType;
 use crate::protocol::Message;
 use crate::session;
 
@@ -109,24 +109,12 @@ impl TryFrom<RawError> for Ack {
 
 /// A Cerberus error.
 ///
-/// These errors can either be "generic", meaning they are not specific to a
-/// particular message type; specific to a particular message type, or unknown.
-///
-/// For the time being, Manticore uses the following wire format for its errors:
-/// - Errors that Cerberus specified are encoded as-is.
-/// - Manticore-defined generic errors are encoded as an `Unspecified` error
-///   where the first byte of the payload specifies which error it is.
-/// - Manticore-defined, message-specific errors are encoded as an `Unspecified`
-///   error with the first byte of the payload `0xff` and the second by specifying
-///   the error.
-/// - All other `Unspecified` errors are encoded as-is.
-///
-/// This type will typically be accessed via the [`protocol::Error`] alias.
-///
-/// [`protocol::Error`]: super::Error
+/// Currently, Cerberus only provides a handful of errors; for the sake of
+/// specificity, we include some vendor-specific errors until we can get
+/// them into Cerberus proper.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Error<E> {
+pub enum Error {
     /// Indicates that the device is "busy", usually meaning that other
     /// commands are being serviced.
     Busy,
@@ -156,8 +144,10 @@ pub enum Error<E> {
     /// This is a Manticore-specific error.
     Internal,
 
-    /// An error specific to a particular message type, if there are any.
-    Specific(E),
+    /// The requested certificate chain does not exist.
+    ///
+    /// This is a Manticore-specific error.
+    UnknownChain,
 
     /// Indicates an unspecified, vendor-defined error, which may include
     /// extra unformatted data.
@@ -167,14 +157,17 @@ pub enum Error<E> {
     Unknown(RawError),
 }
 
-impl<'wire, E: SpecificError> FromWire<'wire> for Error<E> {
+impl Message<'_> for Error {
+    type CommandType = CommandType;
+    const TYPE: CommandType = CommandType::Error;
+}
+
+impl<'wire> FromWire<'wire> for Error {
     fn from_wire<R: ReadZero<'wire> + ?Sized>(
         r: &mut R,
         a: &'wire dyn Arena,
     ) -> Result<Self, wire::Error> {
-        let error = RawError::from_wire(r, a)?;
-
-        match error {
+        match RawError::from_wire(r, a)? {
             RawError {
                 code: 3,
                 data: [0, 0, 0, 0],
@@ -187,19 +180,16 @@ impl<'wire, E: SpecificError> FromWire<'wire> for Error<E> {
                 2 => Ok(Self::Malformed),
                 3 => Ok(Self::OutOfRange),
                 4 => Ok(Self::Internal),
+                5 => Ok(Self::UnknownChain),
                 _ => Err(wire::Error::OutOfRange),
             },
-            RawError {
-                code: 4,
-                data: [0xff, code, 0, 0],
-            } => Ok(Self::Specific(E::from_raw(code)?)),
             RawError { code: 4, data } => Ok(Self::Unspecified(data)),
-            _ => Ok(Self::Unknown(error)),
+            error => Ok(Self::Unknown(error)),
         }
     }
 }
 
-impl<E: SpecificError> ToWire for Error<E> {
+impl ToWire for Error {
     fn to_wire<W: Write>(&self, w: W) -> Result<(), wire::Error> {
         let raw = match self {
             Self::Busy => RawError {
@@ -222,9 +212,9 @@ impl<E: SpecificError> ToWire for Error<E> {
                 code: 4,
                 data: [4, 0, 0, 0],
             },
-            Self::Specific(e) => RawError {
+            Self::UnknownChain => RawError {
                 code: 4,
-                data: [0xff, e.to_raw()?, 0, 0],
+                data: [5, 0, 0, 0],
             },
             Self::Unspecified(data) => RawError {
                 code: 4,
@@ -237,106 +227,32 @@ impl<E: SpecificError> ToWire for Error<E> {
     }
 }
 
-impl<E> From<OutOfMemory> for Error<E> {
+impl From<OutOfMemory> for Error {
     fn from(_: OutOfMemory) -> Self {
         Self::ResourceLimit
     }
 }
 
-impl<E> From<crypto::csrng::Error> for Error<E> {
+impl From<crypto::csrng::Error> for Error {
     fn from(_: crypto::csrng::Error) -> Self {
         Self::Internal
     }
 }
 
-impl<E> From<crypto::hash::Error> for Error<E> {
+impl From<crypto::hash::Error> for Error {
     fn from(_: crypto::hash::Error) -> Self {
         Self::Internal
     }
 }
 
-impl<E> From<crypto::sig::Error> for Error<E> {
+impl From<crypto::sig::Error> for Error {
     fn from(_: crypto::sig::Error) -> Self {
         Self::Internal
     }
 }
 
-impl<E> From<session::Error> for Error<E> {
+impl From<session::Error> for Error {
     fn from(_: session::Error) -> Self {
         Self::Internal
-    }
-}
-
-impl<E: SpecificError> From<E> for Error<E> {
-    fn from(e: E) -> Self {
-        Self::Specific(e)
-    }
-}
-
-/// A type that describes a message-specific error.
-///
-/// This trait is an implementation detail.
-#[doc(hidden)]
-pub trait SpecificError: Sized {
-    /// Converts an error into this error type, if it represents one.
-    fn from_raw(code: u8) -> Result<Self, wire::Error>;
-
-    /// Copies this error into an error code.
-    fn to_raw(&self) -> Result<u8, wire::Error>;
-}
-
-/// An empty [`SpecificError`], for use with messages without interesting error
-/// messages.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum NoSpecificError {}
-impl SpecificError for NoSpecificError {
-    fn from_raw(_: u8) -> Result<Self, wire::Error> {
-        Err(wire::Error::OutOfRange)
-    }
-
-    fn to_raw(&self) -> Result<u8, wire::Error> {
-        match *self {}
-    }
-}
-
-/// Helper for creating specific errors. Compare `wire_enum!`.
-macro_rules! specific_error {
-    (
-        $(#[$emeta:meta])*
-        $vis:vis enum $name:ident {$(
-            $(#[$vmeta:meta])*
-            $var:ident = $code:literal
-        ),* $(,)*}
-    ) => {
-        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        $(#[$emeta])*
-        $vis enum $name {$(
-            $(#[$vmeta])*
-            $var,
-        )*}
-
-        impl $crate::protocol::error::SpecificError for $name {
-            fn from_raw(code: u8) -> Result<Self, $crate::protocol::wire::Error> {
-                match code {
-                    $($code => Ok(Self::$var),)*
-                    _ => Err($crate::protocol::wire::Error::OutOfRange),
-                }
-            }
-            fn to_raw(&self) -> Result<u8, $crate::protocol::wire::Error> {
-                match self {$(
-                    Self::$var => Ok($code),
-                )*}
-            }
-        }
-    };
-}
-
-specific_error! {
-    /// Errors specific to the [`protocol::Challenge`] and related messages.
-    pub enum ChallengeError {
-        /// The requested certificate chain does not exist.
-        UnknownChain = 0x00,
     }
 }

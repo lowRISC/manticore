@@ -15,12 +15,12 @@ use manticore::crypto::sig::Ciphers as _;
 use manticore::io::Cursor;
 use manticore::mem::Arena as _;
 use manticore::mem::BumpArena;
-use manticore::protocol::wire::ToWire;
-use manticore::session;
-use manticore::session::Session as _;
 use manticore::protocol::cerberus::*;
+use manticore::protocol::wire::ToWire;
 use manticore::protocol::Req;
 use manticore::protocol::Resp;
+use manticore::session;
+use manticore::session::Session as _;
 use testutil::data::keys;
 use testutil::data::x509;
 

@@ -14,13 +14,11 @@ use zerocopy::AsBytes as _;
 use crate::crypto::hash;
 use crate::io::ReadInt as _;
 use crate::mem::ArenaExt as _;
-use crate::protocol::error::ChallengeError;
 use crate::protocol::cerberus::CommandType;
 
 protocol_struct! {
     /// A command for requesting certificate hashes.
     type GetDigests;
-    type Error = ChallengeError;
     const TYPE: CommandType = GetDigests;
 
     struct Request {
