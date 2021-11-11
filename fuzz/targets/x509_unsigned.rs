@@ -12,7 +12,7 @@ use libfuzzer_sys::fuzz_target;
 use manticore::cert::Cert;
 use manticore::cert::CertFormat;
 use manticore::crypto::sig;
-use manticore::protocol::capabilities;
+use manticore::protocol::cerberus::capabilities;
 
 /// A `Ciphers` that blindly accepts all signatures.
 struct NoVerify;

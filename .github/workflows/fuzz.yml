@@ -46,9 +46,9 @@ jobs:
   # Everything below this line is generated and will be blown away by
   # fuzz/generate_fuzz_targets.py
   ## BEGIN GENERATED JOBS
-  'manticore_protocol_challenge_Challenge__req_to_wire':
+  'manticore_protocol_cerberus_Challenge__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::challenge::Challenge` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::Challenge` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -58,12 +58,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_challenge_Challenge__req_to_wire \
+          manticore_protocol_cerberus_Challenge__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_challenge_Challenge__req_from_wire':
+  'manticore_protocol_cerberus_Challenge__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::challenge::Challenge` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::Challenge` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -73,12 +73,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_challenge_Challenge__req_from_wire \
+          manticore_protocol_cerberus_Challenge__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_challenge_Challenge__resp_from_wire':
+  'manticore_protocol_cerberus_Challenge__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::challenge::Challenge` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::Challenge` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -88,12 +88,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_challenge_Challenge__resp_from_wire \
+          manticore_protocol_cerberus_Challenge__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_challenge_Challenge__resp_to_wire':
+  'manticore_protocol_cerberus_Challenge__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::challenge::Challenge` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::Challenge` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -103,12 +103,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_challenge_Challenge__resp_to_wire \
+          manticore_protocol_cerberus_Challenge__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_capabilities_DeviceCapabilities__req_to_wire':
+  'manticore_protocol_cerberus_DeviceCapabilities__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::capabilities::DeviceCapabilities` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceCapabilities` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -118,12 +118,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_capabilities_DeviceCapabilities__req_to_wire \
+          manticore_protocol_cerberus_DeviceCapabilities__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_capabilities_DeviceCapabilities__req_from_wire':
+  'manticore_protocol_cerberus_DeviceCapabilities__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::capabilities::DeviceCapabilities` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceCapabilities` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -133,12 +133,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_capabilities_DeviceCapabilities__req_from_wire \
+          manticore_protocol_cerberus_DeviceCapabilities__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_capabilities_DeviceCapabilities__resp_from_wire':
+  'manticore_protocol_cerberus_DeviceCapabilities__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::capabilities::DeviceCapabilities` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceCapabilities` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -148,12 +148,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_capabilities_DeviceCapabilities__resp_from_wire \
+          manticore_protocol_cerberus_DeviceCapabilities__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_capabilities_DeviceCapabilities__resp_to_wire':
+  'manticore_protocol_cerberus_DeviceCapabilities__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::capabilities::DeviceCapabilities` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceCapabilities` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -163,12 +163,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_capabilities_DeviceCapabilities__resp_to_wire \
+          manticore_protocol_cerberus_DeviceCapabilities__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_device_id_DeviceId__req_to_wire':
+  'manticore_protocol_cerberus_DeviceId__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::device_id::DeviceId` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceId` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -178,12 +178,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_device_id_DeviceId__req_to_wire \
+          manticore_protocol_cerberus_DeviceId__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_device_id_DeviceId__req_from_wire':
+  'manticore_protocol_cerberus_DeviceId__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::device_id::DeviceId` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceId` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -193,12 +193,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_device_id_DeviceId__req_from_wire \
+          manticore_protocol_cerberus_DeviceId__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_device_id_DeviceId__resp_from_wire':
+  'manticore_protocol_cerberus_DeviceId__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::device_id::DeviceId` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceId` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -208,12 +208,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_device_id_DeviceId__resp_from_wire \
+          manticore_protocol_cerberus_DeviceId__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_device_id_DeviceId__resp_to_wire':
+  'manticore_protocol_cerberus_DeviceId__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::device_id::DeviceId` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceId` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -223,12 +223,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_device_id_DeviceId__resp_to_wire \
+          manticore_protocol_cerberus_DeviceId__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_device_info_DeviceInfo__req_to_wire':
+  'manticore_protocol_cerberus_DeviceInfo__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::device_info::DeviceInfo` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceInfo` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -238,12 +238,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_device_info_DeviceInfo__req_to_wire \
+          manticore_protocol_cerberus_DeviceInfo__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_device_info_DeviceInfo__req_from_wire':
+  'manticore_protocol_cerberus_DeviceInfo__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::device_info::DeviceInfo` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceInfo` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -253,12 +253,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_device_info_DeviceInfo__req_from_wire \
+          manticore_protocol_cerberus_DeviceInfo__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_device_info_DeviceInfo__resp_from_wire':
+  'manticore_protocol_cerberus_DeviceInfo__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::device_info::DeviceInfo` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceInfo` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -268,12 +268,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_device_info_DeviceInfo__resp_from_wire \
+          manticore_protocol_cerberus_DeviceInfo__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_device_info_DeviceInfo__resp_to_wire':
+  'manticore_protocol_cerberus_DeviceInfo__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::device_info::DeviceInfo` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceInfo` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -283,12 +283,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_device_info_DeviceInfo__resp_to_wire \
+          manticore_protocol_cerberus_DeviceInfo__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_device_uptime_DeviceUptime__req_to_wire':
+  'manticore_protocol_cerberus_DeviceUptime__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::device_uptime::DeviceUptime` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceUptime` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -298,12 +298,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_device_uptime_DeviceUptime__req_to_wire \
+          manticore_protocol_cerberus_DeviceUptime__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_device_uptime_DeviceUptime__req_from_wire':
+  'manticore_protocol_cerberus_DeviceUptime__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::device_uptime::DeviceUptime` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceUptime` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -313,12 +313,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_device_uptime_DeviceUptime__req_from_wire \
+          manticore_protocol_cerberus_DeviceUptime__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_device_uptime_DeviceUptime__resp_from_wire':
+  'manticore_protocol_cerberus_DeviceUptime__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::device_uptime::DeviceUptime` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceUptime` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -328,12 +328,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_device_uptime_DeviceUptime__resp_from_wire \
+          manticore_protocol_cerberus_DeviceUptime__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_device_uptime_DeviceUptime__resp_to_wire':
+  'manticore_protocol_cerberus_DeviceUptime__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::device_uptime::DeviceUptime` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::DeviceUptime` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -343,12 +343,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_device_uptime_DeviceUptime__resp_to_wire \
+          manticore_protocol_cerberus_DeviceUptime__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_get_digests_GetDigests__req_to_wire':
+  'manticore_protocol_cerberus_GetDigests__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::get_digests::GetDigests` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::GetDigests` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -358,12 +358,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_get_digests_GetDigests__req_to_wire \
+          manticore_protocol_cerberus_GetDigests__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_get_digests_GetDigests__req_from_wire':
+  'manticore_protocol_cerberus_GetDigests__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::get_digests::GetDigests` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::GetDigests` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -373,12 +373,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_get_digests_GetDigests__req_from_wire \
+          manticore_protocol_cerberus_GetDigests__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_get_digests_GetDigests__resp_from_wire':
+  'manticore_protocol_cerberus_GetDigests__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::get_digests::GetDigests` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::GetDigests` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -388,12 +388,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_get_digests_GetDigests__resp_from_wire \
+          manticore_protocol_cerberus_GetDigests__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_get_digests_GetDigests__resp_to_wire':
+  'manticore_protocol_cerberus_GetDigests__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::get_digests::GetDigests` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::GetDigests` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -403,12 +403,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_get_digests_GetDigests__resp_to_wire \
+          manticore_protocol_cerberus_GetDigests__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_get_cert_GetCert__req_to_wire':
+  'manticore_protocol_cerberus_GetCert__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::get_cert::GetCert` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::GetCert` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -418,12 +418,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_get_cert_GetCert__req_to_wire \
+          manticore_protocol_cerberus_GetCert__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_get_cert_GetCert__req_from_wire':
+  'manticore_protocol_cerberus_GetCert__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::get_cert::GetCert` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::GetCert` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -433,12 +433,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_get_cert_GetCert__req_from_wire \
+          manticore_protocol_cerberus_GetCert__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_get_cert_GetCert__resp_from_wire':
+  'manticore_protocol_cerberus_GetCert__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::get_cert::GetCert` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::GetCert` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -448,12 +448,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_get_cert_GetCert__resp_from_wire \
+          manticore_protocol_cerberus_GetCert__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_get_cert_GetCert__resp_to_wire':
+  'manticore_protocol_cerberus_GetCert__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::get_cert::GetCert` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::GetCert` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -463,12 +463,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_get_cert_GetCert__resp_to_wire \
+          manticore_protocol_cerberus_GetCert__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_get_host_state_GetHostState__req_to_wire':
+  'manticore_protocol_cerberus_GetHostState__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::get_host_state::GetHostState` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::GetHostState` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -478,12 +478,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_get_host_state_GetHostState__req_to_wire \
+          manticore_protocol_cerberus_GetHostState__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_get_host_state_GetHostState__req_from_wire':
+  'manticore_protocol_cerberus_GetHostState__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::get_host_state::GetHostState` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::GetHostState` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -493,12 +493,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_get_host_state_GetHostState__req_from_wire \
+          manticore_protocol_cerberus_GetHostState__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_get_host_state_GetHostState__resp_from_wire':
+  'manticore_protocol_cerberus_GetHostState__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::get_host_state::GetHostState` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::GetHostState` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -508,12 +508,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_get_host_state_GetHostState__resp_from_wire \
+          manticore_protocol_cerberus_GetHostState__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_get_host_state_GetHostState__resp_to_wire':
+  'manticore_protocol_cerberus_GetHostState__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::get_host_state::GetHostState` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::GetHostState` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -523,12 +523,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_get_host_state_GetHostState__resp_to_wire \
+          manticore_protocol_cerberus_GetHostState__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_firmware_version_FirmwareVersion__req_to_wire':
+  'manticore_protocol_cerberus_FirmwareVersion__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::firmware_version::FirmwareVersion` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::FirmwareVersion` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -538,12 +538,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_firmware_version_FirmwareVersion__req_to_wire \
+          manticore_protocol_cerberus_FirmwareVersion__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_firmware_version_FirmwareVersion__req_from_wire':
+  'manticore_protocol_cerberus_FirmwareVersion__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::firmware_version::FirmwareVersion` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::FirmwareVersion` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -553,12 +553,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_firmware_version_FirmwareVersion__req_from_wire \
+          manticore_protocol_cerberus_FirmwareVersion__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_firmware_version_FirmwareVersion__resp_from_wire':
+  'manticore_protocol_cerberus_FirmwareVersion__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::firmware_version::FirmwareVersion` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::FirmwareVersion` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -568,12 +568,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_firmware_version_FirmwareVersion__resp_from_wire \
+          manticore_protocol_cerberus_FirmwareVersion__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_firmware_version_FirmwareVersion__resp_to_wire':
+  'manticore_protocol_cerberus_FirmwareVersion__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::firmware_version::FirmwareVersion` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::FirmwareVersion` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -583,12 +583,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_firmware_version_FirmwareVersion__resp_to_wire \
+          manticore_protocol_cerberus_FirmwareVersion__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_key_exchange_KeyExchange__req_to_wire':
+  'manticore_protocol_cerberus_KeyExchange__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::key_exchange::KeyExchange` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::KeyExchange` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -598,12 +598,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_key_exchange_KeyExchange__req_to_wire \
+          manticore_protocol_cerberus_KeyExchange__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_key_exchange_KeyExchange__req_from_wire':
+  'manticore_protocol_cerberus_KeyExchange__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::key_exchange::KeyExchange` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::KeyExchange` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -613,12 +613,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_key_exchange_KeyExchange__req_from_wire \
+          manticore_protocol_cerberus_KeyExchange__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_key_exchange_KeyExchange__resp_from_wire':
+  'manticore_protocol_cerberus_KeyExchange__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::key_exchange::KeyExchange` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::KeyExchange` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -628,12 +628,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_key_exchange_KeyExchange__resp_from_wire \
+          manticore_protocol_cerberus_KeyExchange__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_key_exchange_KeyExchange__resp_to_wire':
+  'manticore_protocol_cerberus_KeyExchange__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::key_exchange::KeyExchange` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::KeyExchange` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -643,12 +643,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_key_exchange_KeyExchange__resp_to_wire \
+          manticore_protocol_cerberus_KeyExchange__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_request_counter_RequestCounter__req_to_wire':
+  'manticore_protocol_cerberus_RequestCounter__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::request_counter::RequestCounter` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::RequestCounter` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -658,12 +658,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_request_counter_RequestCounter__req_to_wire \
+          manticore_protocol_cerberus_RequestCounter__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_request_counter_RequestCounter__req_from_wire':
+  'manticore_protocol_cerberus_RequestCounter__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::request_counter::RequestCounter` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::RequestCounter` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -673,12 +673,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_request_counter_RequestCounter__req_from_wire \
+          manticore_protocol_cerberus_RequestCounter__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_request_counter_RequestCounter__resp_from_wire':
+  'manticore_protocol_cerberus_RequestCounter__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::request_counter::RequestCounter` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::RequestCounter` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -688,12 +688,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_request_counter_RequestCounter__resp_from_wire \
+          manticore_protocol_cerberus_RequestCounter__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_request_counter_RequestCounter__resp_to_wire':
+  'manticore_protocol_cerberus_RequestCounter__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::request_counter::RequestCounter` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::RequestCounter` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -703,12 +703,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_request_counter_RequestCounter__resp_to_wire \
+          manticore_protocol_cerberus_RequestCounter__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_reset_counter_ResetCounter__req_to_wire':
+  'manticore_protocol_cerberus_ResetCounter__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::reset_counter::ResetCounter` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::ResetCounter` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -718,12 +718,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_reset_counter_ResetCounter__req_to_wire \
+          manticore_protocol_cerberus_ResetCounter__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_reset_counter_ResetCounter__req_from_wire':
+  'manticore_protocol_cerberus_ResetCounter__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::reset_counter::ResetCounter` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::ResetCounter` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -733,12 +733,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_reset_counter_ResetCounter__req_from_wire \
+          manticore_protocol_cerberus_ResetCounter__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_reset_counter_ResetCounter__resp_from_wire':
+  'manticore_protocol_cerberus_ResetCounter__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::reset_counter::ResetCounter` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::ResetCounter` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -748,12 +748,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_reset_counter_ResetCounter__resp_from_wire \
+          manticore_protocol_cerberus_ResetCounter__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_reset_counter_ResetCounter__resp_to_wire':
+  'manticore_protocol_cerberus_ResetCounter__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::reset_counter::ResetCounter` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::cerberus::ResetCounter` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -763,12 +763,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_reset_counter_ResetCounter__resp_to_wire \
+          manticore_protocol_cerberus_ResetCounter__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_spdm_get_version_GetVersion__req_to_wire':
+  'manticore_protocol_spdm_GetVersion__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::spdm::get_version::GetVersion` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::spdm::GetVersion` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -778,12 +778,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_spdm_get_version_GetVersion__req_to_wire \
+          manticore_protocol_spdm_GetVersion__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_spdm_get_version_GetVersion__req_from_wire':
+  'manticore_protocol_spdm_GetVersion__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::spdm::get_version::GetVersion` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::spdm::GetVersion` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -793,12 +793,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_spdm_get_version_GetVersion__req_from_wire \
+          manticore_protocol_spdm_GetVersion__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_spdm_get_version_GetVersion__resp_from_wire':
+  'manticore_protocol_spdm_GetVersion__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::spdm::get_version::GetVersion` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::spdm::GetVersion` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -808,12 +808,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_spdm_get_version_GetVersion__resp_from_wire \
+          manticore_protocol_spdm_GetVersion__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_spdm_get_version_GetVersion__resp_to_wire':
+  'manticore_protocol_spdm_GetVersion__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::spdm::get_version::GetVersion` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::spdm::GetVersion` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -823,12 +823,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_spdm_get_version_GetVersion__resp_to_wire \
+          manticore_protocol_spdm_GetVersion__resp_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_spdm_get_caps_GetCaps__req_to_wire':
+  'manticore_protocol_spdm_GetCaps__req_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::spdm::get_caps::GetCaps` with `req_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::spdm::GetCaps` with `req_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -838,12 +838,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_spdm_get_caps_GetCaps__req_to_wire \
+          manticore_protocol_spdm_GetCaps__req_to_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_spdm_get_caps_GetCaps__req_from_wire':
+  'manticore_protocol_spdm_GetCaps__req_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::spdm::get_caps::GetCaps` with `req_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::spdm::GetCaps` with `req_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -853,12 +853,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_spdm_get_caps_GetCaps__req_from_wire \
+          manticore_protocol_spdm_GetCaps__req_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_spdm_get_caps_GetCaps__resp_from_wire':
+  'manticore_protocol_spdm_GetCaps__resp_from_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::spdm::get_caps::GetCaps` with `resp_from_wire.rs`'
+    name: 'Fuzz `manticore::protocol::spdm::GetCaps` with `resp_from_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -868,12 +868,12 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_spdm_get_caps_GetCaps__resp_from_wire \
+          manticore_protocol_spdm_GetCaps__resp_from_wire \
           -- -max_total_time=180
 
-  'manticore_protocol_spdm_get_caps_GetCaps__resp_to_wire':
+  'manticore_protocol_spdm_GetCaps__resp_to_wire':
     runs-on: ubuntu-latest
-    name: 'Fuzz `manticore::protocol::spdm::get_caps::GetCaps` with `resp_to_wire.rs`'
+    name: 'Fuzz `manticore::protocol::spdm::GetCaps` with `resp_to_wire.rs`'
     steps:
     - uses: actions/checkout@v2
     - name: Install `cargo fuzz`
@@ -883,6 +883,6 @@ jobs:
         cd fuzz
         cargo fuzz run \
           --release --sanitizer address \
-          manticore_protocol_spdm_get_caps_GetCaps__resp_to_wire \
+          manticore_protocol_spdm_GetCaps__resp_to_wire \
           -- -max_total_time=180
 
