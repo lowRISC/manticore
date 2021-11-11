@@ -12,32 +12,32 @@ use serde::de::Deserialize;
 
 use manticore::io::write::StdWrite;
 use manticore::mem::BumpArena;
-use manticore::protocol;
 use manticore::protocol::borrowed::AsStatic;
 use manticore::protocol::borrowed::Borrowed;
 use manticore::protocol::wire::FromWire;
 use manticore::protocol::wire::ToWire;
 use manticore::protocol::Command;
-use manticore::protocol::CommandType;
+use manticore::protocol::cerberus::CommandType;
 use manticore::protocol::Message as _;
 use manticore::protocol::Req;
 use manticore::protocol::Resp;
+use manticore::protocol::cerberus;
 
 macro_rules! proto_match {
     (($cmd:expr, $is_req:expr) in |$mty:ident: type| $expr:expr) => {
         proto_match!(($cmd, $is_req, $mty, $expr) in {
-            protocol::DeviceId,
-            protocol::DeviceInfo,
-            protocol::DeviceUptime,
-            protocol::DeviceCapabilities,
-            protocol::FirmwareVersion,
-            protocol::GetDigests,
-            protocol::GetCert,
-            protocol::GetHostState,
-            protocol::Challenge,
-            protocol::KeyExchange,
-            protocol::ResetCounter,
-            protocol::RequestCounter,
+            cerberus::DeviceId,
+            cerberus::DeviceInfo,
+            cerberus::DeviceUptime,
+            cerberus::DeviceCapabilities,
+            cerberus::FirmwareVersion,
+            cerberus::GetDigests,
+            cerberus::GetCert,
+            cerberus::GetHostState,
+            cerberus::Challenge,
+            cerberus::KeyExchange,
+            cerberus::ResetCounter,
+            cerberus::RequestCounter,
         })
     };
     (($cmd:expr, $is_req:expr, $mty:ident, $expr:expr) in {$($t:ty,)*}) => {

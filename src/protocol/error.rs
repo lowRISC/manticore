@@ -16,7 +16,7 @@ use crate::mem::OutOfMemory;
 use crate::protocol::wire;
 use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
-use crate::protocol::CommandType;
+use crate::protocol::cerberus::CommandType;
 use crate::protocol::Message;
 use crate::session;
 

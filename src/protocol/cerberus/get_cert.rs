@@ -9,7 +9,7 @@
 use crate::io::ReadInt as _;
 use crate::mem::ArenaExt as _;
 use crate::protocol::error::ChallengeError;
-use crate::protocol::CommandType;
+use crate::protocol::cerberus::CommandType;
 
 protocol_struct! {
     /// A command for requesting a chunk of a certificate.

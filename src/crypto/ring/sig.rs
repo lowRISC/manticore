@@ -16,7 +16,7 @@ use crate::crypto::sig;
 use crate::crypto::sig::Algo;
 use crate::crypto::sig::Curve;
 use crate::crypto::sig::PublicKeyParams;
-use crate::protocol::capabilities;
+use crate::protocol::cerberus::capabilities;
 
 #[cfg(doc)]
 use crate::crypto;

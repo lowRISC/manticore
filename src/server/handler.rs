@@ -432,7 +432,8 @@ mod test {
     use super::*;
     use crate::io::Cursor;
     use crate::mem::BumpArena;
-    use crate::protocol::CommandType;
+    use crate::protocol::cerberus::CommandType;
+    use crate::protocol::cerberus;
 
     const VERSION1: &[u8; 32] = &[2; 32];
     const VERSION2: &[u8; 32] = &[5; 32];
@@ -486,8 +487,8 @@ mod test {
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
         let req =
-            protocol::firmware_version::FirmwareVersionRequest { index: 0 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+            Req::<cerberus::FirmwareVersion> { index: 0 };
+        let resp = simulate_request::<cerberus::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
             &mut arena,
@@ -505,12 +506,12 @@ mod test {
     fn single_handler() {
         let mut handler_called = false;
         let handler = Handler::<&str>::new()
-            .handle::<protocol::FirmwareVersion, _>(|ctx| {
+            .handle::<cerberus::FirmwareVersion, _>(|ctx| {
                 handler_called = true;
                 assert_eq!(ctx.server, "server state");
                 assert_eq!(ctx.req.index, 42);
 
-                Ok(protocol::firmware_version::FirmwareVersionResponse {
+                Ok(Resp::<cerberus::FirmwareVersion> {
                     version: VERSION1,
                 })
             });
@@ -520,8 +521,8 @@ mod test {
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
         let req =
-            protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+            Req::<cerberus::FirmwareVersion> { index: 42 };
+        let resp = simulate_request::<cerberus::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
             &mut arena,
@@ -537,12 +538,12 @@ mod test {
     fn single_handler_wrong() {
         let mut handler_called = false;
         let handler = Handler::<&str>::new()
-            .handle::<protocol::FirmwareVersion, _>(|ctx| {
+            .handle::<cerberus::FirmwareVersion, _>(|ctx| {
                 handler_called = true;
                 assert_eq!(ctx.server, "server state");
                 assert_eq!(ctx.req.index, 42);
 
-                Ok(protocol::firmware_version::FirmwareVersionResponse {
+                Ok(Resp::<cerberus::FirmwareVersion> {
                     version: VERSION1,
                 })
             });
@@ -551,8 +552,8 @@ mod test {
         let mut port = None;
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
-        let req = protocol::device_id::DeviceIdRequest {};
-        let resp = simulate_request::<protocol::DeviceId, _, _>(
+        let req = Req::<cerberus::DeviceId> {};
+        let resp = simulate_request::<cerberus::DeviceId, _, _>(
             &mut scratch,
             &mut port,
             &mut arena,
@@ -571,16 +572,16 @@ mod test {
     fn double_handler() {
         let mut handler_called = false;
         let handler = Handler::<&str>::new()
-            .handle::<protocol::FirmwareVersion, _>(|ctx| {
+            .handle::<cerberus::FirmwareVersion, _>(|ctx| {
                 handler_called = true;
                 assert_eq!(ctx.server, "server state");
                 assert_eq!(ctx.req.index, 42);
 
-                Ok(protocol::firmware_version::FirmwareVersionResponse {
+                Ok(Resp::<cerberus::FirmwareVersion> {
                     version: VERSION1,
                 })
             })
-            .handle::<protocol::DeviceId, _>(|_| {
+            .handle::<cerberus::DeviceId, _>(|_| {
                 panic!("called the wrong handler")
             });
 
@@ -589,8 +590,8 @@ mod test {
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
         let req =
-            protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+            Req::<cerberus::FirmwareVersion> { index: 42 };
+        let resp = simulate_request::<cerberus::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
             &mut arena,
@@ -606,15 +607,15 @@ mod test {
     fn double_swapped() {
         let mut handler_called = false;
         let handler = Handler::<&str>::new()
-            .handle::<protocol::DeviceId, _>(|_| {
+            .handle::<cerberus::DeviceId, _>(|_| {
                 panic!("called the wrong handler")
             })
-            .handle::<protocol::FirmwareVersion, _>(|ctx| {
+            .handle::<cerberus::FirmwareVersion, _>(|ctx| {
                 handler_called = true;
                 assert_eq!(ctx.server, "server state");
                 assert_eq!(ctx.req.index, 42);
 
-                Ok(protocol::firmware_version::FirmwareVersionResponse {
+                Ok(Resp::<cerberus::FirmwareVersion> {
                     version: VERSION1,
                 })
             });
@@ -624,8 +625,8 @@ mod test {
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
         let req =
-            protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+            Req::<cerberus::FirmwareVersion> { index: 42 };
+        let resp = simulate_request::<cerberus::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
             &mut arena,
@@ -642,20 +643,20 @@ mod test {
         let mut handler1_called = false;
         let mut handler2_called = false;
         let handler = Handler::<&str>::new()
-            .handle::<protocol::FirmwareVersion, _>(|_| {
+            .handle::<cerberus::FirmwareVersion, _>(|_| {
                 handler1_called = true;
 
-                Ok(protocol::firmware_version::FirmwareVersionResponse {
+                Ok(Resp::<cerberus::FirmwareVersion> {
                     version: VERSION1,
                 })
             })
-            .handle::<protocol::DeviceId, _>(|_| {
+            .handle::<cerberus::DeviceId, _>(|_| {
                 panic!("called the wrong handler")
             })
-            .handle::<protocol::FirmwareVersion, _>(|_| {
+            .handle::<cerberus::FirmwareVersion, _>(|_| {
                 handler2_called = true;
 
-                Ok(protocol::firmware_version::FirmwareVersionResponse {
+                Ok(Resp::<cerberus::FirmwareVersion> {
                     version: VERSION2,
                 })
             });
@@ -665,8 +666,8 @@ mod test {
         let mut arena = [0; 64];
         let mut arena = BumpArena::new(&mut arena);
         let req =
-            protocol::firmware_version::FirmwareVersionRequest { index: 42 };
-        let resp = simulate_request::<protocol::FirmwareVersion, _, _>(
+            Req::<cerberus::FirmwareVersion> { index: 42 };
+        let resp = simulate_request::<cerberus::FirmwareVersion, _, _>(
             &mut scratch,
             &mut port,
             &mut arena,

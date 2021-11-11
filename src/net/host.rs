@@ -148,12 +148,8 @@ pub trait HostResponse<'req> {
 /// ```
 /// # use manticore::io::*;
 /// # use manticore::mem::*;
-/// # use manticore::net;
-/// # use manticore::net::*;
-/// # use manticore::net::host::*;
-/// # use manticore::protocol::*;
-/// # use manticore::protocol::firmware_version::*;
-/// # use manticore::protocol::wire::*;
+/// # use manticore::net::{self, *, host::*};
+/// # use manticore::protocol::{*, wire::*, cerberus::*};
 /// // Build the InMemHost.
 /// let mut buf = [0; 64];
 /// let mut host = InMemHost::new(&mut buf);
@@ -175,7 +171,7 @@ pub trait HostResponse<'req> {
 /// assert_eq!(header.command, CommandType::FirmwareVersion);
 ///
 /// // Parse and process the message.
-/// let req = FirmwareVersionRequest::from_wire(
+/// let req = Req::<cerberus::FirmwareVersion>::from_wire(
 ///     host_req.payload()?, &arena).unwrap();
 /// assert_eq!(req.index, 0);
 ///
@@ -185,7 +181,7 @@ pub trait HostResponse<'req> {
 /// })?;
 ///
 /// // Build and write a reply.
-/// let resp = FirmwareVersionResponse {
+/// let resp = Resp::<cerberus::FirmwareVersion> {
 ///     version: &[0xba; 32],
 /// };
 /// resp.to_wire(host_resp.sink()?).unwrap();
@@ -197,7 +193,9 @@ pub trait HostResponse<'req> {
 ///
 /// // Now, parse the response.
 /// arena.reset();
-/// let resp = FirmwareVersionResponse::from_wire(&mut resp_bytes, &arena).unwrap();
+/// let resp = Resp::<cerberus::FirmwareVersion>::from_wire(
+///     &mut resp_bytes, &arena
+/// ).unwrap();
 /// assert_eq!(resp.version, &[0xba; 32]);
 /// # Ok::<(), manticore::net::Error>(())
 /// ```

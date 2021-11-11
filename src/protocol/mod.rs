@@ -58,8 +58,6 @@ pub mod error;
 use error::{Ack, NoSpecificError};
 
 pub mod cerberus;
-pub use cerberus::*;
-
 pub mod spdm;
 
 /// A Manticore command.

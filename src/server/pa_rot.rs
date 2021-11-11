@@ -19,10 +19,8 @@ use crate::net;
 use crate::net::CerberusHeader;
 use crate::net::SpdmHeader;
 use crate::protocol;
-use crate::protocol::capabilities;
-use crate::protocol::device_id;
-use crate::protocol::get_digests::KeyExchangeAlgo;
 use crate::protocol::spdm;
+use crate::protocol::cerberus;
 use crate::protocol::Req;
 use crate::protocol::Resp;
 use crate::server::Error;
@@ -57,12 +55,12 @@ pub struct Options<'a> {
     pub pmr0: &'a [u8],
 
     /// This device's silicon identifier.
-    pub device_id: device_id::DeviceIdentifier,
+    pub device_id: cerberus::device_id::DeviceIdentifier,
     /// Integration-provided description of the device's networking
     /// capabilities.
-    pub networking: capabilities::Networking,
+    pub networking: cerberus::capabilities::Networking,
     /// Integration-provided "acceptable timeout" lengths.
-    pub timeouts: capabilities::Timeouts,
+    pub timeouts: cerberus::capabilities::Timeouts,
 }
 
 /// A PA-RoT, or "Platform Root of Trust", server.
@@ -79,7 +77,7 @@ pub struct PaRot<'a> {
     /// following `Challenge` will be used to initiate a key exchange.
     /// This prevents the `Challenge` from clobbering session state if
     /// key exchange won't happen.
-    key_exchange: Option<KeyExchangeAlgo>,
+    key_exchange: Option<cerberus::get_digests::KeyExchangeAlgo>,
 
     /// The most recent certificate slot used for an ECDH-seeding
     /// `Challenge`. This records which certificate's key needs to sign
@@ -111,37 +109,37 @@ impl<'a> PaRot<'a> {
         // Style note: when defining a new handler, if it is more than a
         // handful of lines long, define it out-of-line instead.
         let result = Handler::<&mut Self, CerberusHeader>::new()
-            .handle::<protocol::FirmwareVersion, _>(|ctx| {
+            .handle::<cerberus::FirmwareVersion, _>(|ctx| {
                 ctx.server.handle_fw_version(&ctx.req)
             })
-            .handle::<protocol::DeviceCapabilities, _>(|ctx| {
+            .handle::<cerberus::DeviceCapabilities, _>(|ctx| {
                 ctx.server.handle_capabilities(&ctx.req)
             })
-            .handle::<protocol::DeviceId, _>(|ctx| {
-                Ok(Resp::<protocol::DeviceId> {
+            .handle::<cerberus::DeviceId, _>(|ctx| {
+                Ok(Resp::<cerberus::DeviceId> {
                     id: ctx.server.opts.device_id,
                 })
             })
-            .handle::<protocol::DeviceInfo, _>(|ctx| {
-                Ok(Resp::<protocol::DeviceInfo> {
+            .handle::<cerberus::DeviceInfo, _>(|ctx| {
+                Ok(Resp::<cerberus::DeviceInfo> {
                     info: ctx.server.opts.identity.unique_device_identity(),
                 })
             })
-            .handle::<protocol::GetDigests, _>(|ctx| {
+            .handle::<cerberus::GetDigests, _>(|ctx| {
                 ctx.server.handle_digests(ctx.arena, &ctx.req)
             })
-            .handle::<protocol::GetCert, _>(|ctx| {
+            .handle::<cerberus::GetCert, _>(|ctx| {
                 ctx.server.handle_cert(&ctx.req)
             })
-            .handle_buffered::<protocol::Challenge, _>(|ctx| {
+            .handle_buffered::<cerberus::Challenge, _>(|ctx| {
                 ctx.server
                     .handle_challenge(ctx.arena, &ctx.req, ctx.req_buf)
             })
-            .handle::<protocol::KeyExchange, _>(|ctx| {
+            .handle::<cerberus::KeyExchange, _>(|ctx| {
                 ctx.server.handle_key_xchg(ctx.arena, &ctx.req)
             })
-            .handle::<protocol::ResetCounter, _>(|ctx| {
-                use protocol::reset_counter::ResetType;
+            .handle::<cerberus::ResetCounter, _>(|ctx| {
+                use cerberus::reset_counter::ResetType;
                 // NOTE: Currently, we only handle "local resets" for port 0,
                 // the "self" port.
                 if ctx.req.reset_type != ResetType::Local
@@ -150,22 +148,22 @@ impl<'a> PaRot<'a> {
                     return Err(protocol::error::Error::OutOfRange);
                 }
 
-                Ok(Resp::<protocol::ResetCounter> {
+                Ok(Resp::<cerberus::ResetCounter> {
                     count: ctx.server.opts.reset.resets_since_power_on() as u16,
                 })
             })
-            .handle::<protocol::DeviceUptime, _>(|ctx| {
+            .handle::<cerberus::DeviceUptime, _>(|ctx| {
                 // NOTE: Currently, we only handle port 0, the "self" port.
                 if ctx.req.port_id != 0 {
                     return Err(protocol::error::Error::OutOfRange);
                 }
 
-                Ok(Resp::<protocol::DeviceUptime> {
+                Ok(Resp::<cerberus::DeviceUptime> {
                     uptime: ctx.server.opts.reset.uptime(),
                 })
             })
-            .handle::<protocol::RequestCounter, _>(|ctx| {
-                Ok(Resp::<protocol::RequestCounter> {
+            .handle::<cerberus::RequestCounter, _>(|ctx| {
+                Ok(Resp::<cerberus::RequestCounter> {
                     ok_count: ctx.server.ok_count,
                     err_count: ctx.server.err_count,
                 })
@@ -181,13 +179,13 @@ impl<'a> PaRot<'a> {
 
     fn handle_fw_version(
         &mut self,
-        req: &Req<protocol::FirmwareVersion>,
+        req: &Req<cerberus::FirmwareVersion>,
     ) -> Result<
-        Resp<protocol::FirmwareVersion>,
-        protocol::Error<protocol::FirmwareVersion>,
+        Resp<cerberus::FirmwareVersion>,
+        protocol::Error<cerberus::FirmwareVersion>,
     > {
         if req.index == 0 {
-            return Ok(Resp::<protocol::FirmwareVersion> {
+            return Ok(Resp::<cerberus::FirmwareVersion> {
                 version: self.opts.identity.firmware_version(),
             });
         }
@@ -197,18 +195,18 @@ impl<'a> PaRot<'a> {
             .identity
             .vendor_firmware_version(req.index)
             .ok_or(protocol::error::Error::OutOfRange)?;
-        Ok(Resp::<protocol::FirmwareVersion> { version })
+        Ok(Resp::<cerberus::FirmwareVersion> { version })
     }
 
     fn handle_capabilities(
         &mut self,
-        req: &Req<protocol::DeviceCapabilities>,
+        req: &Req<cerberus::DeviceCapabilities>,
     ) -> Result<
-        Resp<protocol::DeviceCapabilities>,
-        protocol::Error<protocol::DeviceCapabilities>,
+        Resp<cerberus::DeviceCapabilities>,
+        protocol::Error<cerberus::DeviceCapabilities>,
     > {
         use enumflags2::BitFlags;
-        use protocol::capabilities::*;
+        use cerberus::capabilities::*;
         let mut crypto = req.capabilities.crypto;
 
         self.opts.ciphers.negotiate(&mut crypto);
@@ -226,7 +224,7 @@ impl<'a> PaRot<'a> {
             crypto,
         };
 
-        Ok(Resp::<protocol::DeviceCapabilities> {
+        Ok(Resp::<cerberus::DeviceCapabilities> {
             capabilities,
             timeouts: self.opts.timeouts,
         })
@@ -235,10 +233,10 @@ impl<'a> PaRot<'a> {
     fn handle_digests<'req>(
         &mut self,
         arena: &'req dyn Arena,
-        req: &Req<protocol::GetDigests>,
+        req: &Req<cerberus::GetDigests>,
     ) -> Result<
-        Resp<'req, protocol::GetDigests>,
-        protocol::Error<protocol::GetDigests>,
+        Resp<'req, cerberus::GetDigests>,
+        protocol::Error<cerberus::GetDigests>,
     > {
         let digests_len = self
             .opts
@@ -262,13 +260,13 @@ impl<'a> PaRot<'a> {
         }
 
         self.key_exchange = Some(req.key_exchange);
-        Ok(Resp::<protocol::GetDigests> { digests })
+        Ok(Resp::<cerberus::GetDigests> { digests })
     }
 
     fn handle_cert(
         &mut self,
-        req: &Req<protocol::GetCert>,
-    ) -> Result<Resp<protocol::GetCert>, protocol::Error<protocol::GetCert>>
+        req: &Req<cerberus::GetCert>,
+    ) -> Result<Resp<cerberus::GetCert>, protocol::Error<cerberus::GetCert>>
     {
         let cert = self
             .opts
@@ -281,7 +279,7 @@ impl<'a> PaRot<'a> {
             .raw()
             .len()
             .min((req.len as usize).saturating_add(start));
-        Ok(Resp::<protocol::GetCert> {
+        Ok(Resp::<cerberus::GetCert> {
             slot: req.slot,
             cert_number: req.cert_number,
             data: &cert.raw()[start..end],
@@ -291,13 +289,13 @@ impl<'a> PaRot<'a> {
     fn handle_challenge<'req>(
         &'req mut self,
         arena: &'req dyn Arena,
-        req: &Req<protocol::Challenge>,
+        req: &Req<cerberus::Challenge>,
         req_buf: &[u8],
     ) -> Result<
-        Resp<'req, protocol::Challenge>,
-        protocol::Error<protocol::Challenge>,
+        Resp<'req, cerberus::Challenge>,
+        protocol::Error<cerberus::Challenge>,
     > {
-        use protocol::challenge::ChallengeResponseTbs;
+        use cerberus::challenge::ChallengeResponseTbs;
         let signer = self
             .opts
             .trust_chain
@@ -321,23 +319,23 @@ impl<'a> PaRot<'a> {
         })?;
         let signature = &signature[..sig_len];
 
-        if let Some(KeyExchangeAlgo::Ecdh) = self.key_exchange {
+        if let Some(cerberus::get_digests::KeyExchangeAlgo::Ecdh) = self.key_exchange {
             self.opts.session.create_session(req.nonce, tbs.nonce)?;
             self.current_cert_slot = Some(tbs.slot);
         }
 
-        Ok(Resp::<protocol::Challenge> { tbs, signature })
+        Ok(Resp::<cerberus::Challenge> { tbs, signature })
     }
 
     fn handle_key_xchg<'req>(
         &mut self,
         arena: &'req dyn Arena,
-        req: &Req<protocol::KeyExchange>,
+        req: &Req<cerberus::KeyExchange>,
     ) -> Result<
-        Resp<'req, protocol::KeyExchange>,
-        protocol::Error<protocol::KeyExchange>,
+        Resp<'req, cerberus::KeyExchange>,
+        protocol::Error<cerberus::KeyExchange>,
     > {
-        use protocol::key_exchange::*;
+        use cerberus::key_exchange::*;
         match req {
             Req::<KeyExchange>::SessionKey {
                 hmac_algorithm,
