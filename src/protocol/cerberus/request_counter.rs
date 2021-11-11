@@ -10,7 +10,7 @@
 //! Note that the command exposed by this module is a `manticore` extension.
 
 use crate::io::ReadInt as _;
-use crate::protocol::CommandType;
+use crate::protocol::cerberus::CommandType;
 
 protocol_struct! {
     /// A command for querying the request counters.

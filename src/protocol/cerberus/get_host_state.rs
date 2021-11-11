@@ -8,7 +8,7 @@
 //! the reset state of the host processor protected by Cerberus.
 
 use crate::io::ReadInt as _;
-use crate::protocol::CommandType;
+use crate::protocol::cerberus::CommandType;
 
 protocol_struct! {
     /// A command for requesting the host reset state.

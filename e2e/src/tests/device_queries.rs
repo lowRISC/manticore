@@ -5,13 +5,13 @@
 //! Tests for device-interrogation messages.
 
 use manticore::mem::BumpArena;
+use manticore::protocol::cerberus::*;
+use manticore::protocol::Req;
 
 use crate::support::rot;
 
 #[test]
 fn firmware_version() {
-    use manticore::protocol::firmware_version::*;
-
     let virt = rot::Virtual::spawn(&rot::Options {
         firmware_version: b"my cool e2e test".to_vec(),
         ..Default::default()
@@ -19,7 +19,7 @@ fn firmware_version() {
 
     let arena = BumpArena::new([0; 64]);
     let resp = virt.send_cerberus::<FirmwareVersion>(
-        FirmwareVersionRequest { index: 0 },
+        Req::<FirmwareVersion> { index: 0 },
         &arena,
     );
 
@@ -29,8 +29,6 @@ fn firmware_version() {
 
 #[test]
 fn vendor_firmware_version() {
-    use manticore::protocol::firmware_version::*;
-
     let virt = rot::Virtual::spawn(&rot::Options {
         vendor_firmware_versions: vec![
             (1, b"my version".to_vec()),
@@ -41,7 +39,7 @@ fn vendor_firmware_version() {
 
     let arena = BumpArena::new([0; 64]);
     let resp = virt.send_cerberus::<FirmwareVersion>(
-        FirmwareVersionRequest { index: 1 },
+        Req::<FirmwareVersion> { index: 1 },
         &arena,
     );
 
@@ -51,8 +49,6 @@ fn vendor_firmware_version() {
 
 #[test]
 fn vendor_firmware_version_out_of_range() {
-    use manticore::protocol::firmware_version::*;
-
     let virt = rot::Virtual::spawn(&rot::Options {
         vendor_firmware_versions: vec![
             (1, b"my version".to_vec()),
@@ -63,7 +59,7 @@ fn vendor_firmware_version_out_of_range() {
 
     let arena = BumpArena::new([0; 64]);
     let resp = virt.send_cerberus::<FirmwareVersion>(
-        FirmwareVersionRequest { index: 2 },
+        Req::<FirmwareVersion> { index: 2 },
         &arena,
     );
 
@@ -72,10 +68,8 @@ fn vendor_firmware_version_out_of_range() {
 
 #[test]
 fn device_id() {
-    use manticore::protocol::device_id::*;
-
     let virt = rot::Virtual::spawn(&rot::Options {
-        device_id: DeviceIdentifier {
+        device_id: device_id::DeviceIdentifier {
             vendor_id: 0xc020,
             device_id: 0x0001,
             subsys_vendor_id: 0xffff,
@@ -85,10 +79,10 @@ fn device_id() {
     });
 
     let arena = BumpArena::new([0; 64]);
-    let resp = virt.send_cerberus::<DeviceId>(DeviceIdRequest {}, &arena);
+    let resp = virt.send_cerberus::<DeviceId>(Req::<DeviceId> {}, &arena);
     assert_eq!(
         resp.unwrap().unwrap().id,
-        DeviceIdentifier {
+        device_id::DeviceIdentifier {
             vendor_id: 0xc020,
             device_id: 0x0001,
             subsys_vendor_id: 0xffff,

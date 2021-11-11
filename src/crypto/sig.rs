@@ -4,7 +4,7 @@
 
 //! Algorithm-generic signature traits.
 
-use crate::protocol::capabilities;
+use crate::protocol::cerberus::capabilities;
 
 /// An error returned by a signature operation.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

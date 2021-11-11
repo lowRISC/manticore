@@ -12,7 +12,7 @@ use crate::crypto::hash;
 use crate::io::read::ReadZeroExt as _;
 use crate::io::ReadInt as _;
 use crate::protocol::error::ChallengeError;
-use crate::protocol::CommandType;
+use crate::protocol::cerberus::CommandType;
 
 protocol_struct! {
     /// A command for managing a secure session.

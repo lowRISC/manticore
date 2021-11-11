@@ -9,7 +9,7 @@
 //! powered on.
 
 use crate::io::ReadInt as _;
-use crate::protocol::CommandType;
+use crate::protocol::cerberus::CommandType;
 
 protocol_struct! {
     /// A command for requesting the number of resets since power-on.

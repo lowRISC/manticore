@@ -18,6 +18,9 @@ use manticore::mem::BumpArena;
 use manticore::protocol::wire::ToWire;
 use manticore::session;
 use manticore::session::Session as _;
+use manticore::protocol::cerberus::*;
+use manticore::protocol::Req;
+use manticore::protocol::Resp;
 use testutil::data::keys;
 use testutil::data::x509;
 
@@ -25,11 +28,6 @@ use crate::support::rot;
 
 #[test]
 fn challenge() {
-    use manticore::protocol::challenge::*;
-    use manticore::protocol::get_cert::*;
-    use manticore::protocol::get_digests::*;
-    use manticore::protocol::key_exchange::*;
-
     let mut h = ring::hash::Engine::new();
     let virt = rot::Virtual::spawn(&rot::Options {
         cert_chain: vec![
@@ -47,9 +45,9 @@ fn challenge() {
     let mut arena = BumpArena::new(vec![0; 1024]);
     let resp = virt
         .send_cerberus::<GetDigests>(
-            GetDigestsRequest {
+            Req::<GetDigests> {
                 slot: 0,
-                key_exchange: KeyExchangeAlgo::Ecdh,
+                key_exchange: get_digests::KeyExchangeAlgo::Ecdh,
             },
             &arena,
         )
@@ -72,7 +70,7 @@ fn challenge() {
         loop {
             let resp = virt
                 .send_cerberus::<GetCert>(
-                    GetCertRequest {
+                    Req::<GetCert> {
                         slot: 0,
                         cert_number: i as u8,
                         offset: cert.len() as u16,
@@ -111,7 +109,7 @@ fn challenge() {
     .unwrap();
 
     // Issue a challenge.
-    let req = ChallengeRequest {
+    let req = Req::<Challenge> {
         slot: 0,
         nonce: &[99; 32],
     };
@@ -144,7 +142,7 @@ fn challenge() {
     let pk_len = session.begin_ecdh(&mut pk_req).unwrap();
     let pk_req = &pk_req[..pk_len];
 
-    let req = KeyExchangeRequest::SessionKey {
+    let req = Req::<KeyExchange>::SessionKey {
         hmac_algorithm: hash::Algo::Sha256,
         pk_req,
     };
@@ -153,7 +151,7 @@ fn challenge() {
         .unwrap()
         .unwrap();
     let (pk_resp, pk_sig, alias_hmac) = match resp {
-        KeyExchangeResponse::SessionKey {
+        Resp::<KeyExchange>::SessionKey {
             pk_resp,
             signature,
             alias_cert_hmac,

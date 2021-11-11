@@ -8,7 +8,7 @@
 //! Cerberus and vendor-specified information about the device.
 
 use crate::mem::ArenaExt as _;
-use crate::protocol::CommandType;
+use crate::protocol::cerberus::CommandType;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
