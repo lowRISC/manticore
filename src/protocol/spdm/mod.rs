@@ -15,6 +15,9 @@ pub use get_version::GetVersion;
 pub mod get_caps;
 pub use get_caps::GetCaps;
 
+mod error;
+pub use error::*;
+
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 
