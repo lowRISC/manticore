@@ -19,6 +19,7 @@ use crate::protocol::spdm::ExtendedVersion;
 protocol_struct! {
     /// A command for requestion a protocol version.
     type GetVersion;
+    type Error<'wire> = spdm::Error<'wire>;
     const TYPE: CommandType = GetVersion;
 
     struct Request {}

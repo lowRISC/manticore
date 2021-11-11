@@ -82,7 +82,7 @@ pub trait Command<'wire> {
     type Resp: Message<'wire, CommandType = Self::CommandType>;
 
     /// The error type for this command.
-    type Error: Message<'wire /*CommandType = Self::CommandType*/>;
+    type Error: Message<'wire, CommandType = Self::CommandType>;
 }
 
 /// Extracts the request type with lifetime `'a` from `C: for<'a> Command<'a>`.
