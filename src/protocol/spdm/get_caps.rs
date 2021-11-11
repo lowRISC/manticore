@@ -19,6 +19,7 @@ use crate::protocol::spdm::CommandType;
 protocol_struct! {
     /// A command for negotiating protocol capabilities.
     type GetCaps;
+    type Error<'wire> = spdm::Error<'wire>;
     const TYPE: CommandType = GetCaps;
 
     // NOTE: Because BitFlags does not implement Arbitrary, we're forced to

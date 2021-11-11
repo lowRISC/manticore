@@ -9,7 +9,7 @@ macro_rules! protocol_struct {
     (
         $(#[$cmd_meta:meta])*
         type $Command:ident;
-        $(type Error = $Error:ty;)?
+        $(type Error $(<$e_lt:lifetime>)? = $Error:ty;)?
 
         const TYPE: $CommandType:ty = $TYPE:ident;
 
@@ -56,16 +56,23 @@ macro_rules! protocol_struct {
             #[doc = "Corresponds to [`" $CommandType "::" $TYPE "`]."]
             pub enum $Command {}
 
+
             impl<'wire> Command<'wire> for $Command {
                 type CommandType = $CommandType;
                 type Req = Req<'wire>;
                 type Resp = Resp<'wire>;
-                type Error = protocol_struct!(@internal if_nonempty ($($Error)?) {
-                    $($Error)?
-                } else {
-                    $crate::protocol::cerberus::Error
-                });
+                type Error = Error<'wire>;
             }
+
+            protocol_struct!(@internal if_nonempty ($($Error)?) {
+                protocol_struct!(@internal if_nonempty ($($($e_lt)?)?) {
+                    type Error<$($($e_lt)?)?> = $($Error)?;
+                } else {
+                    type Error<'ignored> = $($Error)?;
+                });
+            } else {
+                type Error<'ignored> = $crate::protocol::cerberus::Error;
+            });
 
             protocol_struct!(@internal if_nonempty ($($req_lt)?) {
                 derive_borrowed! {
