@@ -90,25 +90,44 @@ impl fmt::Display for Type<'_> {
     }
 }
 
+pub struct TableWithOptions<'md> {
+    pub table: &'md Table<'md>,
+    pub max_width: Option<usize>,
+}
+
 impl fmt::Display for Table<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(
+            &TableWithOptions {
+                table: self,
+                max_width: None,
+            },
+            f,
+        )
+    }
+}
+
+impl fmt::Display for TableWithOptions<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let table = self.table;
+
         // First, write out the opening heading.
-        match &self.kind {
+        match &table.kind {
             TableKind::Message { .. } => {
-                writeln!(f, "`message {}`", self.name)?
+                writeln!(f, "`message {}`", table.name)?
             }
-            TableKind::Enum { .. } => writeln!(f, "`enum {}`", self.name)?,
+            TableKind::Enum { .. } => writeln!(f, "`enum {}`", table.name)?,
             TableKind::ValueMap { from, .. } => {
-                writeln!(f, "`enum {}({})`", self.name, from)?
+                writeln!(f, "`enum {}({})`", table.name, from)?
             }
             TableKind::TypeMap { from, .. } => {
-                writeln!(f, "`enum {}({})`", self.name, from)?
+                writeln!(f, "`enum {}({})`", table.name, from)?
             }
         }
 
         // To make sure everything is nicely aligned, we need to pre-format all
         // rows more-or-less.
-        let rows: Vec<_> = match &self.kind {
+        let rows: Vec<_> = match &table.kind {
             TableKind::Message { rows, .. } => rows
                 .iter()
                 .map(|row| {
@@ -151,7 +170,7 @@ impl fmt::Display for Table<'_> {
                 .collect(),
         };
 
-        let first_col_heading = match &self.kind {
+        let first_col_heading = match &table.kind {
             TableKind::Message { .. } | TableKind::TypeMap { .. } => "Type",
             _ => "Value",
         };
@@ -170,12 +189,25 @@ impl fmt::Display for Table<'_> {
             .max()
             .unwrap_or(0)
             .max("Name".len());
-        let width3 = rows
+        let mut width3 = rows
             .iter()
             .map(|(_, _, x)| x.map(|d| d.len()).unwrap_or(0))
             .max()
             .unwrap_or(0)
             .max("Description".len());
+
+        // If a max width is set, `width3` must be such that
+        //
+        // width1 + width2 + width3 + 10 <= max_width
+        //
+        // The 10 accounts for the four vertical bars (when descriptions are
+        // present, which is the only case where `width3` matters) and the
+        // two spaces around each cell. 4 + 2 * 3 = 10.
+        if let Some(max_width) = self.max_width {
+            let other_chars = width1 + width2 + 10;
+            let max_width3 = max_width.saturating_sub(other_chars);
+            width3 = width3.min(max_width3);
+        }
 
         // Next, we write the column headings.
         write!(
@@ -215,18 +247,42 @@ impl fmt::Display for Table<'_> {
 
         // Finally, write out the rows.
         for (first, name, desc) in rows {
-            write!(
-                f,
+            use fmt::Write as _;
+
+            // We pre-allocate in order to learn the length.
+            // This allocation can technically be avoided but it's not
+            // worth it to do so.
+            let mut line = format!(
                 "| {:width1$} | {:width2$} |",
                 first,
                 name,
                 width1 = width1,
                 width2 = width2
-            )?;
+            );
             if let Some(desc) = desc {
-                write!(f, " {:width3$} |", desc, width3 = width3)?;
+                // The style rule is that if a description would go past the
+                // 80 column line, it may do so, but the rest of the table
+                // shouldn't; width3 has been computed to have this behavior.
+                //
+                // However, if a line would go past the 80 column line due to
+                // the space between the end of the description and the pipe,
+                // that space should be omitted, instead.
+                write!(line, " {:width3$}", desc, width3 = width3)?;
+                if let Some(max_width) = self.max_width {
+                    // If the length of the previous line is exactly one less
+                    // (e.g. 79), we can only fit one more character before
+                    // going over.
+                    //
+                    // If we would go over no matter what, we add the space
+                    // anyways.
+                    if line.len() == max_width - 1 {
+                        line.push('|');
+                    } else {
+                        line.push_str(" |");
+                    }
+                }
             }
-            writeln!(f)?;
+            writeln!(f, "{}", line)?;
         }
 
         Ok(())
