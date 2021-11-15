@@ -290,7 +290,7 @@ impl<'md> Type<'md> {
                     } else if let Some(paren) = ctx.take_str("(") {
                         let field = ctx.expect(Ident::parse, "identifier")?;
                         ctx.take_str(")")
-                            .ok_or(paren.error(ErrorKind::Unmatched))?;
+                            .ok_or_else(|| paren.error(ErrorKind::Unmatched))?;
                         Ok(Type {
                             kind: TypeKind::Mapping {
                                 mapping: path,
@@ -315,11 +315,7 @@ impl<'md> Type<'md> {
                 }
             }
 
-            loop {
-                let brack = match ctx.take_str("[") {
-                    Some(brack) => brack,
-                    None => break,
-                };
+            while let Some(brack) = ctx.take_str("[") {
                 if let Ok(Some(ident)) = Ident::parse(ctx) {
                     if let Some(extent_bits) = ident.as_bits_type() {
                         ty = Some(Type {
@@ -352,10 +348,8 @@ impl<'md> Type<'md> {
                     )));
                 }
 
-                ctx.take_str("]").ok_or(Error {
-                    kind: ErrorKind::Unmatched,
-                    span: brack,
-                })?;
+                ctx.take_str("]")
+                    .ok_or_else(|| brack.error(ErrorKind::Unmatched))?;
             }
 
             if ctx.take_str("...").is_some() {
@@ -370,7 +364,8 @@ impl<'md> Type<'md> {
             if ctx.take_str("align").is_some() {
                 let paren = ctx.expect_str("(", "`(`")?;
                 let lit = ctx.expect(Lit::parse, "literal")?;
-                ctx.take_str(")").ok_or(paren.error(ErrorKind::Unmatched))?;
+                ctx.take_str(")")
+                    .ok_or_else(|| paren.error(ErrorKind::Unmatched))?;
 
                 ty = Some(Self {
                     kind: TypeKind::Aligned {

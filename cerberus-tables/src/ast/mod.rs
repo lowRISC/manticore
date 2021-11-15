@@ -129,7 +129,7 @@ impl<'md> Ident<'md> {
     }
 
     fn as_bits_type(self) -> Option<u64> {
-        if !self.name().starts_with("b")
+        if !self.name().starts_with('b')
             || !self.name().chars().all(|c| c.is_ascii_digit())
         {
             return None;
