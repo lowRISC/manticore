@@ -14,23 +14,23 @@ mod ast;
 
 #[derive(Debug, StructOpt)]
 struct Options {
-    /// The output format; one of raw-ast, tables, in-place, or rust.
+    /// One of raw-ast, tables, in-place, or rust.
     #[structopt(long, short)]
-    output: Output,
+    mode: Mode,
 
     /// A Markdown file to parse tables from.
     input: PathBuf,
 }
 
 #[derive(Debug)]
-enum Output {
+enum Mode {
     RawAst,
     Tables,
     InPlace,
     Rust,
 }
 
-impl FromStr for Output {
+impl FromStr for Mode {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -58,5 +58,18 @@ fn main() {
             println!("{:4}> {}", num, line);
         }
     }
-    println!("{:#?}", ast);
+
+    match opts.mode {
+        Mode::RawAst => {
+            for table in ast {
+                println!("{:#?}", table);
+            }
+        },
+        Mode::Tables => {
+            for table in ast {
+                println!("{}", table);
+            }
+        },
+        _ => unimplemented!(),
+    }
 }

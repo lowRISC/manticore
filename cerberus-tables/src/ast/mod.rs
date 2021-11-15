@@ -6,9 +6,9 @@
 //!
 //! See [`MarkdownFile::parse_tables()`].
 
-use std::fmt;
 use std::path::PathBuf;
 
+mod fmt;
 mod parser;
 
 /// A Markdown file taken as parsing input.
@@ -47,8 +47,8 @@ impl MarkdownFile {
     }
 }
 
-impl fmt::Debug for MarkdownFile {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Debug for MarkdownFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "MarkdownFile({})", self.file_name.display())
     }
 }
@@ -92,8 +92,8 @@ impl<'md> Span<'md> {
     }
 }
 
-impl fmt::Debug for Span<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Debug for Span<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "Span({}:{}:{}, {}..{})",
@@ -131,8 +131,8 @@ impl<'md> Ident<'md> {
     }
 }
 
-impl fmt::Debug for Ident<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Debug for Ident<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
             "{:?} @ {}..{}",
