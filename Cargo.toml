@@ -14,7 +14,7 @@ repository = "https://github.com/lowRISC/manticore"
 description = "A WIP implementation of the Cerberus attestation protocol"
 
 [workspace]
-members = [".", "e2e", "tool", "testutil"]
+members = [".", "cerberus-tables", "e2e", "tool", "testutil"]
 
 [dependencies]
 arrayvec = { version = "0.7", default_features = false }
