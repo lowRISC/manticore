@@ -196,17 +196,17 @@ impl fmt::Display for Table<'_> {
         // The +2s below is to compensate for the two spaces around the
         // pipes not being included in the widths.
         write!(f, "|")?;
-        for _ in 0..width1+2 {
+        for _ in 0..width1 + 2 {
             write!(f, "-")?;
         }
         write!(f, "|")?;
-        for _ in 0..width2+2 {
+        for _ in 0..width2 + 2 {
             write!(f, "-")?;
         }
         write!(f, "|")?;
 
         if has_descs {
-            for _ in 0..width3+2 {
+            for _ in 0..width3 + 2 {
                 write!(f, "-")?;
             }
             write!(f, "|")?;
