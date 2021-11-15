@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt;
+
 use crate::ast::*;
 
 /// Parse state for the table parser.
@@ -637,4 +639,3 @@ impl<'md> Table<'md> {
         })
     }
 }
-
