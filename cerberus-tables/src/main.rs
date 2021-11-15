@@ -14,7 +14,7 @@ mod ast;
 
 #[derive(Debug, StructOpt)]
 struct Options {
-    /// One of raw-ast, tables, in-place, or rust.
+    /// One of raw-ast, tables, tables-and-prose, or rust.
     #[structopt(long, short)]
     mode: Mode,
 
@@ -26,7 +26,7 @@ struct Options {
 enum Mode {
     RawAst,
     Tables,
-    InPlace,
+    TablesAndProse,
     Rust,
 }
 
@@ -36,7 +36,7 @@ impl FromStr for Mode {
         match s {
             "raw-ast" => Ok(Self::RawAst),
             "tables" => Ok(Self::Tables),
-            "in-place" => Ok(Self::InPlace),
+            "tables-and-prose" => Ok(Self::TablesAndProse),
             "rust" => Ok(Self::Rust),
             _ => Err(format!("unknown format: {}", s)),
         }
@@ -52,11 +52,14 @@ fn main() {
     };
 
     let (ast, errors) = src.parse_tables();
-    for error in errors {
+    for error in &errors {
         println!("{:?}", error);
         for (num, line) in error.span.lines() {
             println!("{:4}> {}", num, line);
         }
+    }
+    if !errors.is_empty() {
+        std::process::exit(2);
     }
 
     match opts.mode {
@@ -64,12 +67,22 @@ fn main() {
             for table in ast {
                 println!("{:#?}", table);
             }
-        },
+        }
         Mode::Tables => {
             for table in ast {
                 println!("{}", table);
             }
-        },
+        }
+        Mode::TablesAndProse => {
+            let mut prev = 0;
+            for table in ast {
+                let (start, end) = table.span.byte_range();
+                let prose = &src.text[prev..start];
+                print!("{}{}", prose, table);
+                prev = end;
+            }
+            print!("{}", &src.text[prev..]);
+        }
         _ => unimplemented!(),
     }
 }

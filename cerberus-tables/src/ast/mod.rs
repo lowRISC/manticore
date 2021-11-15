@@ -71,6 +71,11 @@ impl<'md> Span<'md> {
         &self.src().text[self.range.0.byte..self.range.1.byte]
     }
 
+    /// Returns the byte range of this span.
+    pub fn byte_range(self) -> (usize, usize) {
+        (self.range.0.byte, self.range.1.byte)
+    }
+
     /// Returns an iterator over the lines spanned by this span.
     pub fn lines(self) -> impl Iterator<Item = (usize, &'md str)> {
         let start_line = self.range.0.line - 1;
