@@ -18,6 +18,11 @@ struct Options {
     #[structopt(long, short)]
     mode: Mode,
 
+    /// The maximum width, in characters, that table output
+    /// may have.
+    #[structopt(long, short = "w")]
+    max_width: Option<usize>,
+
     /// A Markdown file to parse tables from.
     input: PathBuf,
 }
@@ -70,15 +75,27 @@ fn main() {
         }
         Mode::Tables => {
             for table in ast {
-                println!("{}", table);
+                println!(
+                    "{}",
+                    ast::TableWithOptions {
+                        table: &table,
+                        max_width: opts.max_width,
+                    }
+                );
             }
         }
         Mode::TablesAndProse => {
             let mut prev = 0;
             for table in ast {
                 let (start, end) = table.span.byte_range();
-                let prose = &src.text[prev..start];
-                print!("{}{}", prose, table);
+                print!("{}", &src.text[prev..start]);
+                print!(
+                    "{}",
+                    ast::TableWithOptions {
+                        table: &table,
+                        max_width: opts.max_width,
+                    }
+                );
                 prev = end;
             }
             print!("{}", &src.text[prev..]);

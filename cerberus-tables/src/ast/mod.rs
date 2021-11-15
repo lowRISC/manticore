@@ -11,6 +11,8 @@ use std::path::PathBuf;
 mod fmt;
 mod parser;
 
+pub use fmt::TableWithOptions;
+
 /// A Markdown file taken as parsing input.
 #[derive(Clone)]
 pub struct MarkdownFile {
