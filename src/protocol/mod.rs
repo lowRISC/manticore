@@ -58,9 +58,9 @@ pub mod spdm;
 /// A Manticore command.
 ///
 /// A Manticore command is identified by two types, each of which has a
-/// corresponding [`CommandType`]:
+/// corresponding `CommandType`:
 /// - A unique request type.
-/// - A response type, which may be [`Ack`].
+/// - A response type, which may not be unique.
 ///
 /// This trait is not implemented by any of the request or response types, but
 /// is intead implemented by uninhabited types that represent pairs of requests
@@ -78,7 +78,7 @@ pub trait Command<'wire> {
     type Req: Message<'wire, CommandType = Self::CommandType>;
 
     /// The response type for this `Command`, which will either be unique or
-    /// [`cerberus::Ack`].
+    /// something like [`cerberus::Ack`].
     type Resp: Message<'wire, CommandType = Self::CommandType>;
 
     /// The error type for this command.
@@ -105,7 +105,7 @@ pub trait Message<'wire>: wire::FromWire<'wire> + wire::ToWire {
     /// The enum of command types this `Message` draws its type from.
     type CommandType: Copy + Debug + Eq;
 
-    /// The unique [`CommandType`] for this `Request`.
+    /// The unique [`Self::CommandType`] for this `Request`.
     const TYPE: Self::CommandType;
 }
 

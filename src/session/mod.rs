@@ -27,7 +27,7 @@
 use crate::crypto::hash;
 
 #[cfg(doc)]
-use crate::protocol;
+use crate::protocol::cerberus;
 
 #[cfg(all(feature = "ring", feature = "std"))]
 pub mod ring;
@@ -79,11 +79,11 @@ pub type Key = [u8; 256 / 8];
 /// only fail if the entire ECDH exchange fails.
 ///
 /// Users will move through the states like so:
-/// 1.  When a device receives a [`protocol::challenge`] request that wants to
+/// 1.  When a device receives a [`cerberus::challenge`] request that wants to
 ///     establish a session later, its `Session` enters the "ready" state; once
 ///     the response arrives, the host enters the "ready" state too.
 /// 2.  The host enters the "agreement" state and sends a
-///     [`protocol::key_exchange`] request to the device with the fresh public
+///     [`cerberus::key_exchange`] request to the device with the fresh public
 ///     key.
 /// 3.  The device also enters the "agreement" state, and then immediately
 ///     transitions to "active" using the host's public key. It then sends its
@@ -93,7 +93,7 @@ pub type Key = [u8; 256 / 8];
 ///     "active" state using the device's public key, and verifies the HMAC in
 ///     the response.
 /// 5.  The device returns to the "inactive" state when receiving a
-///     session-destroying [`protocol::key_exchange`] request. Upon success,
+///     session-destroying [`cerberus::key_exchange`] request. Upon success,
 ///     the host also enters the "inactive" state.
 ///
 /// See the [module documentation][self] for information on the key derivation
@@ -101,7 +101,7 @@ pub type Key = [u8; 256 / 8];
 pub trait Session {
     /// Begins a new session.
     ///
-    /// Sessions begin when a successful [`protocol::challenge`] command is
+    /// Sessions begin when a successful [`cerberus::challenge`] command is
     /// completed. The challenge produces two nonces as a byproduct, which are
     /// used as the basis for the session.
     ///
@@ -133,7 +133,7 @@ pub trait Session {
     /// throughout the session.
     ///
     /// `their_key` should contain the public key from the response to an
-    /// appropriate [`protocol::key_exchange`] request.
+    /// appropriate [`cerberus::key_exchange`] request.
     ///
     /// `their_key` must be an ECC key using the DER encoding.
     fn finish_ecdh(
