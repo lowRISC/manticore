@@ -55,8 +55,8 @@ def reset_generated_config(path, delim):
 
 def main(argv):
   eprint(f'Regenerating {FUZZ_GEN}')
-  shutil.rmtree(str(FUZZ_GEN))
-  FUZZ_GEN.mkdir()
+  if not FUZZ_GEN.exists():
+    FUZZ_GEN.mkdir()
 
   cargo_toml = reset_generated_config(FUZZ_CARGO, CARGO_END)
   cargo_tpl = CARGO_TPL.read_text()
@@ -64,6 +64,7 @@ def main(argv):
   fuzz_yml = reset_generated_config(FUZZ_YML, YML_END)
   yml_tpl = YML_TPL.read_text()
 
+  generated_files = set()
   count = 0
   for ty in FUZZ_CONFIG.read_text().split('\n'):
     if not ty or ty.startswith('#'):
@@ -78,15 +79,25 @@ def main(argv):
       under_ty = ty.replace('::', '_')
       path = FUZZ_GEN / f'{under_ty}__{test_type}'
       body = tpl.read_text().format(ty=ty)
+      generated_files.add(path)
 
       relative = path.relative_to(FUZZ_DIR)
       target = f'{under_ty}__{test_type.stem}'
       cargo_toml += cargo_tpl.format(target=target, relative=relative)
       fuzz_yml += yml_tpl.format(target=target, ty=ty, test_type=test_type)
-
-      eprint(f'  * {test_type}.tpl -> {relative}')
-      path.write_text(body)
-      count += 1
+ 
+      if not path.exists() or path.read_text() != body:
+        eprint(f'  * {test_type}.tpl -> {relative}')
+        path.write_text(body)
+        count += 1
+      else:
+        eprint(f'  * (skipped) {test_type}.tpl -> {relative}')
+  
+  eprint(f'Deleting unrecognized files in {FUZZ_GEN}...')
+  for file in FUZZ_GEN.iterdir():
+    if file not in generated_files:
+      eprint(f'  * {file}')
+      file.unlink()
 
   eprint(f'Updating {FUZZ_CARGO}...')
   FUZZ_CARGO.write_text(cargo_toml)
