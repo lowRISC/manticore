@@ -280,6 +280,8 @@ impl fmt::Display for TableWithOptions<'_> {
                     } else {
                         line.push_str(" |");
                     }
+                } else {
+                    line.push_str(" |");
                 }
             }
             writeln!(f, "{}", line)?;

@@ -249,7 +249,6 @@ impl<'md> Lit<'md> {
                 Base::Dec => span.text(),
                 _ => &span.text()[2..],
             };
-            dbg!(digits);
             let (bit_width, radix) = match base {
                 Base::Dec => (None, 10),
                 Base::Bin => (Some(digits.len()), 2),
