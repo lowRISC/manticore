@@ -5,6 +5,8 @@
 //! A parser for Cerberus protocol tables.
 
 use std::fs;
+use std::io;
+use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -22,6 +24,11 @@ struct Options {
     /// may have.
     #[structopt(long, short = "w")]
     max_width: Option<usize>,
+
+    /// Outputs in-place; only applies to the `tables` and `tables-and-prose`
+    /// modes.
+    #[structopt(long, short)]
+    in_place: bool,
 
     /// A Markdown file to parse tables from.
     input: PathBuf,
@@ -48,19 +55,19 @@ impl FromStr for Mode {
     }
 }
 
-fn main() {
+fn main() -> Result<(), io::Error> {
     let opts = Options::from_args();
-    let text = fs::read_to_string(&opts.input).unwrap();
+    let text = fs::read_to_string(&opts.input)?;
     let src = ast::MarkdownFile {
-        file_name: opts.input,
+        file_name: opts.input.clone(),
         text,
     };
 
     let (ast, errors) = src.parse_tables();
     for error in &errors {
-        println!("{:?}", error);
+        eprintln!("{:?}", error);
         for (num, line) in error.span.lines() {
-            println!("{:4}> {}", num, line);
+            eprintln!("{:4}> {}", num, line);
         }
     }
     if !errors.is_empty() {
@@ -70,36 +77,52 @@ fn main() {
     match opts.mode {
         Mode::RawAst => {
             for table in ast {
-                println!("{:#?}", table);
+                eprintln!("{:#?}", table);
             }
         }
         Mode::Tables => {
+            let mut out: Box<dyn Write> = if opts.in_place {
+                Box::new(fs::File::create(&opts.input)?)
+            } else {
+                Box::new(io::stdout())
+            };
+
             for table in ast {
-                println!(
+                writeln!(
+                    out,
                     "{}",
                     ast::TableWithOptions {
                         table: &table,
                         max_width: opts.max_width,
                     }
-                );
+                )?;
             }
         }
         Mode::TablesAndProse => {
+            let mut out: Box<dyn Write> = if opts.in_place {
+                Box::new(fs::File::create(&opts.input)?)
+            } else {
+                Box::new(io::stdout())
+            };
+
             let mut prev = 0;
             for table in ast {
                 let (start, end) = table.span.byte_range();
-                print!("{}", &src.text[prev..start]);
-                print!(
+                write!(out, "{}", &src.text[prev..start])?;
+                write!(
+                    out,
                     "{}",
                     ast::TableWithOptions {
                         table: &table,
                         max_width: opts.max_width,
                     }
-                );
+                )?;
                 prev = end;
             }
-            print!("{}", &src.text[prev..]);
+            write!(out, "{}", &src.text[prev..])?;
         }
         _ => unimplemented!(),
     }
+
+    Ok(())
 }
