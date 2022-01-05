@@ -118,7 +118,7 @@ impl std::fmt::Debug for Span<'_> {
 pub struct Ident<'md>(Span<'md>);
 
 impl<'md> Ident<'md> {
-    /// Returns the wrapped [`MarkdownFile`].
+    /// Returns the wrapped [`Span`].
     pub fn span(self) -> Span<'md> {
         self.0
     }
@@ -348,3 +348,6 @@ pub enum ErrorKind {
     /// string argument.
     Unexpected(String),
 }
+
+#[cfg(test)]
+mod tests {}
