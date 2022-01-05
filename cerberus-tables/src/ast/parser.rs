@@ -61,7 +61,7 @@ impl<'md> Context<'md> {
         }
     }
 
-    /// Executes `f` inside of a scope, such that `span()` always referrs
+    /// Executes `f` inside of a scope, such that `span()` always refers
     /// to the start of the scope.
     ///
     /// If `f` returns an error, the cursor is backtracked to where it was
