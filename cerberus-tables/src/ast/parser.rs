@@ -40,16 +40,23 @@ impl Cursor {
     }
 }
 
+impl Default for Cursor {
+    // Creates a new cursor.
+    fn default() -> Self {
+        Cursor {
+            byte: 0,
+            line: 1,
+            col: 1,
+        }
+    }
+}
+
 impl<'md> Context<'md> {
     /// Creates a new parser state.
     pub fn new(src: &'md MarkdownFile) -> Self {
         Self {
             src,
-            cursor: Cursor {
-                byte: 0,
-                line: 1,
-                col: 1,
-            },
+            cursor: Cursor::default(),
             cursor_stack: Vec::new(),
         }
     }
@@ -631,5 +638,81 @@ impl<'md> Table<'md> {
                 ))),
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct CursorTestData {
+        character: char,
+        expected_byte: usize,
+        expected_line: usize,
+        expected_col: usize,
+    }
+
+    macro_rules! cursor_advance_test {
+        ($test_name:ident, $test_data:expr) => {
+            #[test]
+            fn $test_name() {
+                let test_data = $test_data;
+                let mut c = Cursor::default();
+                c.advance(test_data.character);
+                assert_eq!(c.byte, test_data.expected_byte);
+                assert_eq!(c.line, test_data.expected_line);
+                assert_eq!(c.col, test_data.expected_col);
+            }
+        };
+    }
+
+    cursor_advance_test!(
+        cursor_advance_single_character,
+        CursorTestData {
+            character: 'c',
+            expected_byte: 1,
+            expected_line: 1,
+            expected_col: 2
+        }
+    );
+    cursor_advance_test!(
+        cursor_advance_null_character,
+        CursorTestData {
+            character: '\0',
+            expected_byte: 1,
+            expected_line: 1,
+            expected_col: 2
+        }
+    );
+    cursor_advance_test!(
+        cursor_advance_multibyte,
+        CursorTestData {
+            character: 'ß',
+            expected_byte: 2,
+            expected_line: 1,
+            expected_col: 2
+        }
+    );
+    cursor_advance_test!(
+        cursor_advance_newline,
+        CursorTestData {
+            character: '\n',
+            expected_byte: 1,
+            expected_line: 2,
+            expected_col: 1
+        }
+    );
+
+    #[test]
+    fn cursor_advance_multiple_characters() {
+        let mut c = Cursor::default();
+        c.advance('h');
+        c.advance('i');
+        c.advance('\n');
+        c.advance('ü');
+        c.advance('\n');
+        assert_eq!(c.byte, 6);
+        assert_eq!(c.line, 3);
+        assert_eq!(c.col, 1);
     }
 }
