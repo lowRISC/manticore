@@ -55,11 +55,23 @@ impl std::fmt::Debug for MarkdownFile {
     }
 }
 
+impl std::fmt::Display for MarkdownFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "MarkdownFile({})", self.file_name.display())
+    }
+}
+
 /// A span of code inside of a [`MarkdownFile`].
 #[derive(Copy, Clone)]
 pub struct Span<'md> {
     src: &'md MarkdownFile,
     range: (parser::Cursor, parser::Cursor),
+}
+
+impl std::fmt::Display for Span<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Span[{}: {}, {}]", self.src, self.range.0, self.range.1)
+    }
 }
 
 impl<'md> Span<'md> {
@@ -123,7 +135,7 @@ impl<'md> Ident<'md> {
         self.0
     }
 
-    /// Returns the textual content of this span.
+    /// Returns the textual content of the wrapped Span.
     pub fn name(self) -> &'md str {
         self.0.text()
     }
@@ -271,7 +283,7 @@ pub enum TypeKind<'md> {
 
 /// A row of a [`Table`] with values of type `Type`.
 #[derive(Clone, Debug)]
-pub struct TableRow<'md, Type> {
+pub struct TableRow<'md, Type: std::fmt::Debug> {
     /// The value in the first column.
     pub value: Type,
     /// The name in the second column.
@@ -334,6 +346,12 @@ pub struct Error<'md> {
     pub kind: ErrorKind,
 }
 
+impl std::fmt::Display for Error<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Error(\n\t{}:\n\t{}\n)", self.span, self.kind)
+    }
+}
+
 /// An [`Error`] kind.
 #[derive(Clone, Debug)]
 pub enum ErrorKind {
@@ -349,5 +367,123 @@ pub enum ErrorKind {
     Unexpected(String),
 }
 
+impl std::fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::parser;
+    use super::*;
+
+    fn format_errors(errors: Vec<Error>) -> String {
+        let mut msg = String::new();
+        for error in errors {
+            msg += format!("{}", error).as_str();
+        }
+        msg
+    }
+
+    fn assert_row_content(
+        row: &TableRow<Type>,
+        expected_path: &str,
+        expected_name: &str,
+        expected_desc: &str,
+        expected_cursors: (parser::Cursor, parser::Cursor),
+    ) {
+        match &row.value.kind {
+            TypeKind::Path(path) => {
+                assert_eq!(path.span.text(), expected_path);
+            }
+            _ => {
+                assert_eq!(
+                    true, false,
+                    "Incorrect type kind: {:?}",
+                    row.value.kind
+                );
+            }
+        }
+        assert_eq!(row.name.name(), expected_name);
+        assert_eq!(row.desc.unwrap().text(), expected_desc);
+        assert_eq!(row.span.range.0, expected_cursors.0);
+        assert_eq!(row.span.range.1, expected_cursors.1);
+    }
+
+    #[test]
+    fn markdownfile_parse_tables() {
+        let md = MarkdownFile {
+            file_name: "test.md".into(),
+            text: "\
+`message Challenge.Response`
+| Type     | Name          | Description                                       |
+|----------|---------------|---------------------------------------------------|
+| `b8`     | `slot`        | Slot number of the Certificate Chain.             |
+| `b256`   | `nonce`       | Random 256-bit nonce.                             |
+"
+            .into(),
+        };
+        let (tables, errors) = md.parse_tables();
+        assert_eq!(
+            errors.is_empty(),
+            true,
+            "Errors while parsing:\n{}",
+            format_errors(errors)
+        );
+        assert_eq!(tables.len(), 1);
+
+        let table = &tables[0];
+        assert_eq!(table.name.span.text(), "Challenge.Response");
+
+        match &table.kind {
+            TableKind::Message { rows } => {
+                assert_eq!(rows.len(), 2);
+                assert_row_content(
+                    &rows[0],
+                    "b8",
+                    "slot",
+                    "Slot number of the Certificate Chain.             ",
+                    (
+                        parser::Cursor {
+                            byte: 191,
+                            line: 4,
+                            col: 1,
+                        },
+                        parser::Cursor {
+                            byte: 272,
+                            line: 5,
+                            col: 1,
+                        },
+                    ),
+                );
+
+                assert_row_content(
+                    &rows[1],
+                    "b256",
+                    "nonce",
+                    "Random 256-bit nonce.                             ",
+                    (
+                        parser::Cursor {
+                            byte: 272,
+                            line: 5,
+                            col: 1,
+                        },
+                        parser::Cursor {
+                            byte: 353,
+                            line: 6,
+                            col: 1,
+                        },
+                    ),
+                );
+            }
+            _ => {
+                assert_eq!(
+                    true, false,
+                    "Incorrect table kind: {:?}",
+                    table.kind
+                );
+            }
+        }
+    }
+}

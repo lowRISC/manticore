@@ -16,7 +16,7 @@ pub struct Context<'md> {
 /// A position in source code.
 ///
 /// `line` and `col` are one-indexed.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Cursor {
     /// The byte offset of this position.
     pub byte: usize,
@@ -48,6 +48,16 @@ impl Default for Cursor {
             line: 1,
             col: 1,
         }
+    }
+}
+
+impl std::fmt::Display for Cursor {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "Cursor(byte: {}, line: {}, col: {})",
+            self.byte, self.line, self.col
+        )
     }
 }
 
@@ -477,7 +487,7 @@ impl<'md> TableHeader<'md> {
     }
 }
 
-impl<'md, Type> TableRow<'md, Type> {
+impl<'md, Type: std::fmt::Debug> TableRow<'md, Type> {
     pub fn parse(
         ctx: &mut Context<'md>,
         parse_desc: bool,
@@ -499,6 +509,7 @@ impl<'md, Type> TableRow<'md, Type> {
                 ctx.expect_str("|", "pipe")?;
 
                 let mut in_backticks = false;
+                // TODO(capoferro): Trim whitespace from desc.
                 let desc = ctx.take_while(|_, c| {
                     if c == '`' {
                         in_backticks = !in_backticks;
@@ -526,7 +537,7 @@ impl<'md, Type> TableRow<'md, Type> {
 
 impl<'md> Table<'md> {
     pub fn parse(ctx: &mut Context<'md>) -> Result<Option<Self>, Error<'md>> {
-        pub fn collect_rows<'md, Type>(
+        pub fn collect_rows<'md, Type: std::fmt::Debug>(
             ctx: &mut Context<'md>,
             parse_desc: bool,
             mut parse: impl FnMut(
