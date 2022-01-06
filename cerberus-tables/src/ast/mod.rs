@@ -135,7 +135,7 @@ impl<'md> Ident<'md> {
         self.0
     }
 
-    /// Returns the textual content of the wrapped Span.
+    /// Returns the textual content of the wrapped [`Span'].
     pub fn name(self) -> &'md str {
         self.0.text()
     }
