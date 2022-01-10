@@ -47,6 +47,8 @@ use manticore::protocol::wire::WireEnum;
 use manticore::protocol::Command;
 use manticore::protocol::Message;
 use manticore::server;
+use manticore::Result;
+use manticore::{check, fail};
 
 /// Sends `req` to a virtual RoT listening on `localhost:{port}`, using
 /// Cerberus-over-TCP.
@@ -84,7 +86,7 @@ pub fn send_cerberus<
         Ok(Ok(FromWire::from_wire(&mut r, arena)?))
     } else if header.command == cerberus::CommandType::Error {
         log::info!("deserializing {}", type_name::<protocol::Error<'a, Cmd>>());
-        Ok(Err(FromWire::from_wire(&mut r, arena)?))
+        Ok(Err(fail!(FromWire::from_wire(&mut r, arena)?)))
     } else {
         Err(net::Error::BadHeader.into())
     }
@@ -125,7 +127,7 @@ pub fn send_spdm<'a, Cmd: Command<'a, CommandType = spdm::CommandType>>(
         Ok(Ok(FromWire::from_wire(&mut r, arena)?))
     } else if header.command == spdm::CommandType::Error {
         log::info!("deserializing {}", type_name::<protocol::Error<'a, Cmd>>());
-        Ok(Err(FromWire::from_wire(&mut r, arena)?))
+        Ok(Err(fail!(FromWire::from_wire(&mut r, arena)?)))
     } else {
         Err(net::Error::BadHeader.into())
     }
@@ -140,7 +142,7 @@ impl io::Read for TcpReader {
     fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), io::Error> {
         let Self { tcp, len } = self;
         if *len < out.len() {
-            return Err(io::Error::BufferExhausted);
+            return Err(fail!(io::Error::BufferExhausted));
         }
         tcp.read_exact(out).map_err(|e| {
             log::error!("{}", e);
@@ -365,22 +367,22 @@ impl<'req, H: Header + 'req> HostRequest<'req, H> for Inner<H> {
     fn header(&self) -> Result<H, net::Error> {
         if self.output_buffer.is_some() {
             log::error!("header() called out-of-order");
-            return Err(net::Error::OutOfOrder);
+            return Err(fail!(net::Error::OutOfOrder));
         }
         self.stream
             .as_ref()
             .map(|(h, _, _)| *h)
-            .ok_or(net::Error::Disconnected)
+            .ok_or_else(|| fail!(net::Error::Disconnected))
     }
 
     fn payload(&mut self) -> Result<&mut dyn io::ReadZero<'req>, net::Error> {
         if self.stream.is_none() {
             log::error!("payload() called out-of-order");
-            return Err(net::Error::Disconnected);
+            return Err(fail!(net::Error::Disconnected));
         }
         if self.output_buffer.is_some() {
             log::error!("payload() called out-of-order");
-            return Err(net::Error::OutOfOrder);
+            return Err(fail!(net::Error::OutOfOrder));
         }
 
         Ok(self)
@@ -392,11 +394,11 @@ impl<'req, H: Header + 'req> HostRequest<'req, H> for Inner<H> {
     ) -> Result<&mut dyn HostResponse<'req>, net::Error> {
         if self.stream.is_none() {
             log::error!("payload() called out-of-order");
-            return Err(net::Error::Disconnected);
+            return Err(fail!(net::Error::Disconnected));
         }
         if self.output_buffer.is_some() {
             log::error!("payload() called out-of-order");
-            return Err(net::Error::OutOfOrder);
+            return Err(fail!(net::Error::OutOfOrder));
         }
 
         self.output_buffer = Some(Writer::new(header));
@@ -408,13 +410,13 @@ impl<'req, H: Header + 'req> HostResponse<'req> for Inner<H> {
     fn sink(&mut self) -> Result<&mut dyn io::Write, net::Error> {
         if self.stream.is_none() {
             log::error!("sink() called out-of-order");
-            return Err(net::Error::Disconnected);
+            return Err(fail!(net::Error::Disconnected));
         }
 
         self.output_buffer
             .as_mut()
             .map(|w| w as &mut dyn io::Write)
-            .ok_or(net::Error::OutOfOrder)
+            .ok_or_else(|| fail!(net::Error::OutOfOrder))
     }
 
     fn finish(&mut self) -> Result<(), net::Error> {
@@ -434,7 +436,7 @@ impl<'req, H: Header + 'req> HostResponse<'req> for Inner<H> {
                 self.output_buffer = None;
                 Ok(())
             }
-            _ => Err(net::Error::Disconnected),
+            _ => Err(fail!(net::Error::Disconnected)),
         }
     }
 }
@@ -443,9 +445,7 @@ impl<H> io::Read for Inner<H> {
     fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), io::Error> {
         let (_, len, stream) =
             self.stream.as_mut().ok_or(io::Error::Internal)?;
-        if *len < out.len() {
-            return Err(io::Error::BufferExhausted);
-        }
+        check!(*len >= out.len(), io::Error::BufferExhausted);
         stream.read_exact(out).map_err(|e| {
             log::error!("{}", e);
             io::Error::Internal

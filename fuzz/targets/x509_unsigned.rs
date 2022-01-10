@@ -13,16 +13,13 @@ use manticore::cert::Cert;
 use manticore::cert::CertFormat;
 use manticore::crypto::sig;
 use manticore::protocol::cerberus::capabilities;
+use manticore::Result;
 
 /// A `Ciphers` that blindly accepts all signatures.
 struct NoVerify;
 
 impl sig::Verify for NoVerify {
-    fn verify(
-        &mut self,
-        _: &[&[u8]],
-        _: &[u8],
-    ) -> Result<(), sig::Error> {
+    fn verify(&mut self, _: &[&[u8]], _: &[u8]) -> Result<(), sig::Error> {
         Ok(())
     }
 }
@@ -39,12 +36,7 @@ impl sig::Ciphers for NoVerify {
 }
 
 fuzz_target!(|data: &[u8]| {
-    let _ = Cert::parse(
-        data,
-        CertFormat::RiotX509,
-        None,
-        &mut NoVerify,
-    );
+    let _ = Cert::parse(data, CertFormat::RiotX509, None, &mut NoVerify);
 
     // NOTE: we might actually succeed at creating a valid cert, so we can't
     // check for is_err() here.

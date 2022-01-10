@@ -10,6 +10,7 @@ use ring::digest;
 use ring::hmac;
 
 use crate::crypto::hash;
+use crate::Result;
 
 #[cfg(doc)]
 use crate::crypto;
@@ -74,7 +75,7 @@ impl hash::Engine for Engine {
 
     fn write_raw(&mut self, data: &[u8]) -> Result<(), hash::Error> {
         match &mut self.inner {
-            Inner::Idle => return Err(hash::Error::Idle),
+            Inner::Idle => return Err(fail!(hash::Error::Idle)),
             Inner::Hash(c) => c.update(data),
             Inner::Hmac(c, _) => c.update(data),
         }
@@ -83,18 +84,20 @@ impl hash::Engine for Engine {
 
     fn finish_raw(&mut self, out: &mut [u8]) -> Result<(), hash::Error> {
         match mem::replace(&mut self.inner, Inner::Idle) {
-            Inner::Idle => return Err(hash::Error::Idle),
+            Inner::Idle => return Err(fail!(hash::Error::Idle)),
             Inner::Hash(c) => {
-                if out.len() != c.algorithm().output_len {
-                    return Err(hash::Error::WrongSize);
-                }
+                check!(
+                    out.len() == c.algorithm().output_len,
+                    hash::Error::WrongSize
+                );
                 let digest = c.finish();
                 out.copy_from_slice(digest.as_ref());
             }
             Inner::Hmac(c, a) => {
-                if out.len() != a.digest_algorithm().output_len {
-                    return Err(hash::Error::WrongSize);
-                }
+                check!(
+                    out.len() == a.digest_algorithm().output_len,
+                    hash::Error::WrongSize
+                );
                 let digest = c.sign();
                 out.copy_from_slice(digest.as_ref());
             }
@@ -104,26 +107,26 @@ impl hash::Engine for Engine {
 
     fn compare_raw(&mut self, expected: &[u8]) -> Result<(), hash::Error> {
         match mem::replace(&mut self.inner, Inner::Idle) {
-            Inner::Idle => return Err(hash::Error::Idle),
+            Inner::Idle => return Err(fail!(hash::Error::Idle)),
             Inner::Hash(c) => {
-                if expected.len() != c.algorithm().output_len {
-                    return Err(hash::Error::WrongSize);
-                }
+                check!(
+                    expected.len() == c.algorithm().output_len,
+                    hash::Error::WrongSize
+                );
                 let digest = c.finish();
-                if digest.as_ref() != expected {
-                    return Err(hash::Error::Unspecified);
-                }
+                check!(digest.as_ref() == expected, hash::Error::Unspecified);
             }
             Inner::Hmac(c, a) => {
-                if expected.len() != a.digest_algorithm().output_len {
-                    return Err(hash::Error::WrongSize);
-                }
+                check!(
+                    expected.len() == a.digest_algorithm().output_len,
+                    hash::Error::WrongSize
+                );
                 let digest = c.sign();
                 ring::constant_time::verify_slices_are_equal(
                     digest.as_ref(),
                     expected,
                 )
-                .map_err(|_| hash::Error::Unspecified)?;
+                .map_err(|_| fail!(hash::Error::Unspecified))?;
             }
         }
         Ok(())

@@ -27,6 +27,7 @@ use crate::io;
 use crate::io::Read as _;
 use crate::mem::Arena;
 use crate::mem::OutOfMemory;
+use crate::Result;
 
 #[cfg(doc)]
 use crate::mem::ArenaExt;
@@ -95,8 +96,9 @@ pub unsafe trait Flash {
     /// the following should be a sufficient starting point:
     /// ```
     /// # use core::alloc::Layout;
-    /// # use manticore::mem::*;
+    /// # use manticore::Result;
     /// # use manticore::hardware::flash::*;
+    /// # use manticore::mem::*;
     /// # struct Foo;
     /// # impl Foo {
     /// # fn read(&self, offset: u32, out: &mut [u8]) -> Result<(), Error> {
@@ -167,12 +169,12 @@ unsafe impl<F: Flash + ?Sized> Flash for &F {
 
     #[inline]
     fn program(&mut self, _: u32, _: &[u8]) -> Result<(), Error> {
-        Err(Error::Locked)
+        Err(fail!(Error::Locked))
     }
 
     #[inline]
     fn flush(&mut self) -> Result<(), Error> {
-        Err(Error::Locked)
+        Err(fail!(Error::Locked))
     }
 }
 
@@ -247,9 +249,7 @@ pub impl<F: Flash + ?Sized> F {
     where
         T: AsBytes + FromBytes + Copy,
     {
-        if region.len < mem::size_of::<T>() as u32 {
-            return Err(Error::OutOfRange);
-        }
+        check!(region.len >= mem::size_of::<T>() as u32, Error::OutOfRange);
 
         let bytes = self.read_direct(region, arena, mem::align_of::<T>())?;
 
@@ -297,7 +297,7 @@ unsafe impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
             .as_ref()
             .len()
             .try_into()
-            .map_err(|_| Error::Unspecified)
+            .map_err(|_| fail!(Error::Unspecified))
     }
 
     #[inline]
@@ -320,9 +320,7 @@ unsafe impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
         let end = start
             .checked_add(region.len as usize)
             .ok_or(Error::OutOfRange)?;
-        if end > self.0.as_ref().len() {
-            return Err(Error::OutOfRange);
-        }
+        check!(end <= self.0.as_ref().len(), Error::OutOfRange);
 
         let slice = &self.0.as_ref()[start..end];
         let layout = Layout::from_size_align(slice.len(), align).unwrap();
@@ -336,7 +334,7 @@ unsafe impl<Bytes: AsRef<[u8]>> Flash for Ram<Bytes> {
     }
 
     fn program(&mut self, _: u32, _: &[u8]) -> Result<(), Error> {
-        Err(Error::Locked)
+        Err(fail!(Error::Locked))
     }
 }
 
@@ -353,7 +351,7 @@ unsafe impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
             .as_ref()
             .len()
             .try_into()
-            .map_err(|_| Error::Unspecified)
+            .map_err(|_| fail!(Error::Unspecified))
     }
 
     #[inline]
@@ -376,9 +374,7 @@ unsafe impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
         let end = start
             .checked_add(region.len as usize)
             .ok_or(Error::OutOfRange)?;
-        if end > self.0.as_ref().len() {
-            return Err(Error::OutOfRange);
-        }
+        check!(end <= self.0.as_ref().len(), Error::OutOfRange);
 
         let slice = &self.0.as_ref()[start..end];
         let layout = Layout::from_size_align(slice.len(), align).unwrap();
@@ -394,9 +390,7 @@ unsafe impl<Bytes: AsRef<[u8]> + AsMut<[u8]>> Flash for RamMut<Bytes> {
     fn program(&mut self, offset: u32, buf: &[u8]) -> Result<(), Error> {
         let start = offset as usize;
         let end = start.checked_add(buf.len()).ok_or(Error::OutOfRange)?;
-        if end > self.0.as_ref().len() {
-            return Err(Error::OutOfRange);
-        }
+        check!(end <= self.0.as_ref().len(), Error::OutOfRange);
 
         self.0.as_mut()[start..end].copy_from_slice(buf);
         Ok(())
@@ -458,13 +452,11 @@ impl<F: Flash> FlashIo<F> {
 
 impl<F: Flash> io::Read for FlashIo<F> {
     fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), io::Error> {
-        if self.remaining_data() == 0 {
-            return Err(io::Error::BufferExhausted);
-        }
+        check!(self.remaining_data() != 0, io::Error::BufferExhausted);
 
         self.flash
             .read(self.cursor, out)
-            .map_err(|_| io::Error::Internal)?;
+            .map_err(|_| fail!(io::Error::Internal))?;
         self.cursor += out.len() as u32;
         Ok(())
     }
@@ -492,13 +484,11 @@ impl<F: Flash> Iterator for FlashIo<F> {
 
 impl<F: Flash> io::Write for FlashIo<F> {
     fn write_bytes(&mut self, buf: &[u8]) -> Result<(), io::Error> {
-        if self.remaining_data() == 0 {
-            return Err(io::Error::BufferExhausted);
-        }
+        check!(self.remaining_data() != 0, io::Error::BufferExhausted);
 
         self.flash
             .program(self.cursor, buf)
-            .map_err(|_| io::Error::Internal)?;
+            .map_err(|_| fail!(io::Error::Internal))?;
         self.cursor += buf.len() as u32;
         Ok(())
     }

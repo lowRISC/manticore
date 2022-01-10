@@ -29,6 +29,7 @@ use manticore::protocol::spdm;
 use manticore::server;
 use manticore::server::pa_rot::PaRot;
 use manticore::session::ring::Session;
+use manticore::Result;
 
 use crate::support::fakes;
 use crate::support::tcp;

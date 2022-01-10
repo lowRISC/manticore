@@ -17,6 +17,7 @@ use zerocopy::FromBytes;
 use zerocopy::LayoutVerified;
 
 use crate::mem::align_to;
+use crate::Result;
 
 #[cfg(doc)]
 use core::mem;
@@ -30,6 +31,8 @@ use core::mem;
 /// when it is known that no memory will ever be allocated on the arena.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OutOfMemory;
+
+debug_from!(OutOfMemory);
 
 unsafe impl Arena for OutOfMemory {
     fn alloc_raw(&self, layout: Layout) -> Result<&mut [u8], OutOfMemory> {
@@ -45,7 +48,7 @@ unsafe impl Arena for OutOfMemory {
                 slice::from_raw_parts_mut(layout.align() as *mut u8, 0)
             })
         } else {
-            Err(*self)
+            Err(fail!(*self))
         }
     }
 
@@ -204,7 +207,7 @@ impl<'arena, A: Arena + ?Sized> ArenaExt<'arena> for &'arena A {
 /// arena.reset();
 /// let buf3 = arena.alloc_slice::<u8>(64)?;
 /// assert_eq!(buf3.len(), 64);
-/// # Ok::<(), OutOfMemory>(())
+/// # Ok::<(), manticore::Error<OutOfMemory>>(())
 /// ```
 ///
 /// Note that `BumpArena`'s interface protects callers from mistakedly
@@ -285,9 +288,7 @@ impl<'arena> BumpArenaRef<'arena> {
         }
         let cursor = self.cursor.get();
         let proposed_cursor = len.checked_add(cursor).ok_or(OutOfMemory)?;
-        if proposed_cursor > self.buf_len {
-            return Err(OutOfMemory);
-        }
+        check!(proposed_cursor <= self.buf_len, OutOfMemory);
 
         self.cursor.set(proposed_cursor);
         // At this point, it is not possible for following calls to access
@@ -318,11 +319,9 @@ impl<'arena> BumpArenaRef<'arena> {
         let current_addr =
             unsafe { self.buf_ptr.add(self.cursor.get()) as usize };
         let aligned = align_to(current_addr, align);
-        if aligned == usize::MAX && align > 1 {
-            // We've hit the top of the address space, so we have no hope of
-            // allocating aligned memory.
-            return Err(OutOfMemory);
-        }
+        // Check if we've hit the top of the address space, in which case we have no hope of
+        // allocating aligned memory.
+        check!(aligned != usize::MAX || align <= 1, OutOfMemory);
         let misalignment = aligned - current_addr;
 
         self.alloc_inner(misalignment)?;

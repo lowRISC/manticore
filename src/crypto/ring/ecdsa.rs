@@ -10,6 +10,7 @@ use ring::signature::EcdsaVerificationAlgorithm as EcdsaAlgo;
 use ring::signature::VerificationAlgorithm as _;
 
 use crate::crypto::sig;
+use crate::Result;
 
 /// A `ring`-based [`sig::Verify`] for DER-encoded ECDSA using the P-256 curve.
 pub struct VerifyP256 {
@@ -62,7 +63,7 @@ impl sig::Verify for VerifyP256 {
                 message.as_slice().into(),
                 signature.into(),
             )
-            .map_err(|_| sig::Error::Unspecified)
+            .map_err(|_| fail!(sig::Error::Unspecified))
     }
 }
 
@@ -83,7 +84,7 @@ impl SignP256 {
             &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
             pkcs8,
         )
-        .map_err(|_| sig::Error::Unspecified)?;
+        .map_err(|_| fail!(sig::Error::Unspecified))?;
         Ok(Self { keypair })
     }
 
@@ -98,7 +99,7 @@ impl SignP256 {
             &ring::signature::ECDSA_P256_SHA256_FIXED_SIGNING,
             pkcs8,
         )
-        .map_err(|_| sig::Error::Unspecified)?;
+        .map_err(|_| fail!(sig::Error::Unspecified))?;
         Ok(Self { keypair })
     }
 }
@@ -133,7 +134,7 @@ impl sig::Sign for SignP256 {
         let sig = self
             .keypair
             .sign(&rng, &message)
-            .map_err(|_| sig::Error::Unspecified)?;
+            .map_err(|_| fail!(sig::Error::Unspecified))?;
         let signature = signature
             .get_mut(..sig.as_ref().len())
             .ok_or(sig::Error::Unspecified)?;

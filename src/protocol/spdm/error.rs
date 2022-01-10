@@ -18,6 +18,7 @@ use crate::protocol::wire::ToWire;
 use crate::protocol::wire::WireEnum as _;
 use crate::protocol::Message;
 use crate::session;
+use crate::Result;
 
 #[cfg(doc)]
 use crate::protocol;
@@ -129,11 +130,11 @@ impl<'wire> FromWire<'wire> for Error<'wire> {
     ) -> Result<Self, wire::Error> {
         let error = RawError::from_wire(r, a)?;
         let if_trivial = move |code: Error<'wire>| {
-            if error.data == 0 && error.extra.is_empty() {
-                Ok(code)
-            } else {
-                Err(wire::Error::OutOfRange)
-            }
+            check!(
+                error.data == 0 && error.extra.is_empty(),
+                wire::Error::OutOfRange
+            );
+            Ok(code)
         };
 
         match error.code {
@@ -143,9 +144,8 @@ impl<'wire> FromWire<'wire> for Error<'wire> {
             0x05 => if_trivial(Self::Unspecified),
             0x06 => if_trivial(Self::DecryptionFailed),
             0x07 => {
-                if error.data & 0x80 == 0 || !error.extra.is_empty() {
-                    return Err(wire::Error::OutOfRange);
-                }
+                check!(error.data & 0x80 != 0, wire::Error::OutOfRange);
+                check!(error.extra.is_empty(), wire::Error::OutOfRange);
                 Ok(Self::Unsupported {
                     command: CommandType::from_wire_value(error.data & 0x7f)
                         .ok_or(wire::Error::OutOfRange)?,
@@ -267,3 +267,5 @@ impl From<session::Error> for Error<'_> {
         Self::Unspecified
     }
 }
+
+debug_from!(Error<'wire> => OutOfMemory, crypto::csrng::Error, crypto::hash::Error, crypto::sig::Error, session::Error);

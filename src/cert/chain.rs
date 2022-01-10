@@ -13,6 +13,7 @@ use crate::cert::Cert;
 use crate::cert::CertFormat;
 use crate::cert::Error;
 use crate::crypto::sig;
+use crate::Result;
 
 /// A trust chain collection.
 ///
@@ -66,9 +67,7 @@ impl<'cert, const LEN: usize> SimpleChain<'cert, LEN> {
         ciphers: &mut impl sig::Ciphers,
         signer: Option<&'cert mut dyn sig::Sign>,
     ) -> Result<Self, Error> {
-        if raw_chain.len() > LEN {
-            return Err(Error::ChainTooLong);
-        }
+        check!(raw_chain.len() <= LEN, Error::ChainTooLong);
 
         let mut chain = ArrayVec::new();
         for (i, &raw_cert) in raw_chain.iter().enumerate() {
@@ -77,26 +76,21 @@ impl<'cert, const LEN: usize> SimpleChain<'cert, LEN> {
             let cert = Cert::parse(raw_cert, format, key, ciphers)?;
 
             let prev = prev.unwrap_or(&cert);
-            if prev.subject() != cert.issuer() {
-                return Err(Error::BadChainLink);
-            }
-            if !prev.supports_cert_signing() {
-                return Err(Error::BadChainLink);
-            }
+            check!(prev.subject() == cert.issuer(), Error::BadChainLink);
+            check!(prev.supports_cert_signing(), Error::BadChainLink);
 
             // None is also ok; it means the format (e.g. CWT) does not support
             // a CA bit.
-            if prev.is_ca_cert() == Some(false) {
-                return Err(Error::BadChainLink);
-            }
+            check!(prev.is_ca_cert() != Some(false), Error::BadChainLink);
 
             // raw_chain.len() - i is the number of certificates that follow
             // `cert`; the path length constraint for `prev` is the number of
             // certs that follow it, except the leaf; these numbers are the
             // same.
-            if !prev.is_within_path_len_constraint(raw_chain.len() - i) {
-                return Err(Error::BadChainLink);
-            }
+            check!(
+                prev.is_within_path_len_constraint(raw_chain.len() - i),
+                Error::BadChainLink
+            );
 
             chain.push(cert);
         }

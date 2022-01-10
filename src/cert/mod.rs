@@ -10,6 +10,7 @@
 
 use crate::crypto::sig;
 use crate::io;
+use crate::Result;
 
 // Note that all parsers leverage Brian Smith's `untrusted` crate to ensure
 // we don't walk off the end of the buffer. We may wind up building this
@@ -125,6 +126,7 @@ impl<'cert> Cert<'cert> {
             CertFormat::RiotX509 => x509::parse(cert, format, key, ciphers),
             CertFormat::OpenDiceCwt => cwt::parse(cert, key, ciphers),
         }
+        .map_err(|e| fail!(e))
     }
 
     /// Returns the slice this certificate was parsed from.

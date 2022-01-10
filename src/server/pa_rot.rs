@@ -24,6 +24,7 @@ use crate::protocol::Req;
 use crate::protocol::Resp;
 use crate::server::Error;
 use crate::session::Session;
+use crate::Result;
 
 use crate::server::handler::prelude::*;
 
@@ -141,11 +142,11 @@ impl<'a> PaRot<'a> {
                 use cerberus::reset_counter::ResetType;
                 // NOTE: Currently, we only handle "local resets" for port 0,
                 // the "self" port.
-                if ctx.req.reset_type != ResetType::Local
-                    || ctx.req.port_id != 0
-                {
-                    return Err(cerberus::Error::OutOfRange);
-                }
+                check!(
+                    ctx.req.reset_type == ResetType::Local
+                        && ctx.req.port_id == 0,
+                    cerberus::Error::OutOfRange
+                );
 
                 Ok(Resp::<cerberus::ResetCounter> {
                     count: ctx.server.opts.reset.resets_since_power_on() as u16,
@@ -153,9 +154,7 @@ impl<'a> PaRot<'a> {
             })
             .handle::<cerberus::DeviceUptime, _>(|ctx| {
                 // NOTE: Currently, we only handle port 0, the "self" port.
-                if ctx.req.port_id != 0 {
-                    return Err(cerberus::Error::OutOfRange);
-                }
+                check!(ctx.req.port_id == 0, cerberus::Error::OutOfRange);
 
                 Ok(Resp::<cerberus::DeviceUptime> {
                     uptime: ctx.server.opts.reset.uptime(),
@@ -374,7 +373,7 @@ impl<'a> PaRot<'a> {
                     alias_cert_hmac,
                 })
             }
-            _ => Err(cerberus::Error::Internal),
+            _ => Err(fail!(cerberus::Error::Internal)),
         }
     }
 

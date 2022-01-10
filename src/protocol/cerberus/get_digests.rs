@@ -56,9 +56,7 @@ protocol_struct! {
 
     fn Response::from_wire(r, arena) {
         let capabilities = r.read_le::<u8>()?;
-        if capabilities != 1 {
-            return Err(wire::Error::OutOfRange);
-        }
+        check!(capabilities == 1, wire::Error::OutOfRange);
 
         let digests = arena.alloc_slice(r.read_le::<u8>()? as usize)?;
         r.read_bytes(digests.as_bytes_mut())?;

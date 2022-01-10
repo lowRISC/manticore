@@ -79,6 +79,7 @@ use crate::hardware::flash;
 use crate::io;
 use crate::mem::OutOfMemory;
 use crate::protocol::wire::WireEnum;
+use crate::Result;
 
 mod container;
 pub use container::Container;

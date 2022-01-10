@@ -24,6 +24,7 @@ use crate::manifest::ManifestType;
 use crate::mem::misalign_of;
 use crate::mem::Arena as _;
 use crate::mem::BumpArena;
+use crate::Result;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

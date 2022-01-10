@@ -30,6 +30,7 @@ use crate::manifest::ManifestType;
 use crate::manifest::Metadata;
 use crate::mem::BumpArena;
 use crate::protocol::wire::WireEnum;
+use crate::Result;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -186,6 +187,8 @@ impl From<sig::Error> for EncodingError {
     }
 }
 
+debug_from!(EncodingError => hash::Error, sig::Error);
+
 impl<E: Element> Container<E> {
     /// Parses a `Container` out of `bytes`.
     ///
@@ -302,14 +305,16 @@ impl<E: Element> Container<E> {
             for node in nodes {
                 // We've run out of hash slots, so this manifest is
                 // unencodeable.
-                if node.hashed && *hash_index == 0xff {
-                    return Err(EncodingError::TooManyElements);
-                }
+                check!(
+                    !node.hashed || *hash_index != 0xff,
+                    EncodingError::TooManyElements
+                );
 
                 // Same here: we've run out of parent indices.
-                if !node.children.is_empty() && *index == 0xff {
-                    return Err(EncodingError::TooManyElements);
-                }
+                check!(
+                    node.children.is_empty() || *index != 0xff,
+                    EncodingError::TooManyElements
+                );
 
                 let data = node.element.to_bytes(padding_byte)?;
                 let len = data
@@ -407,9 +412,10 @@ impl<E: Element> Container<E> {
 
         // NOTE: Due to how manifests are constructed, we cannot use
         // a variable-length signature scheme.
-        if sig_len != signature.len() {
-            return Err(EncodingError::SigError(sig::Error::Unspecified));
-        }
+        check!(
+            sig_len == signature.len(),
+            EncodingError::SigError(sig::Error::Unspecified)
+        );
         bytes.extend_from_slice(&signature);
 
         Ok(bytes)

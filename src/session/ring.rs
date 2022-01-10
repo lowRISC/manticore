@@ -13,6 +13,7 @@ use ring::hmac;
 
 use crate::crypto::hash;
 use crate::session;
+use crate::Result;
 
 /// A [`ring`]-based [`session::Session`].
 pub struct Session {
@@ -112,7 +113,7 @@ impl session::Session for Session {
 
         let our_key = match mem::replace(&mut conn.keys, Keys::None) {
             Keys::Ecdh(our_key) => our_key,
-            _ => return Err(session::Error::BadStateTransition),
+            _ => return Err(fail!(session::Error::BadStateTransition)),
         };
         let their_key =
             ecdh::UnparsedPublicKey::new(&ecdh::ECDH_P256, their_key);

@@ -19,6 +19,7 @@ use crate::protocol::wire::FromWire;
 use crate::protocol::wire::ToWire;
 use crate::protocol::Message;
 use crate::session;
+use crate::Result;
 
 #[cfg(doc)]
 use crate::protocol;
@@ -75,7 +76,7 @@ impl<'wire> FromWire<'wire> for Ack {
         r: &mut R,
         a: &'wire dyn Arena,
     ) -> Result<Self, wire::Error> {
-        RawError::from_wire(r, a)?.try_into()
+        RawError::from_wire(r, a)?.try_into().map_err(|e| fail!(e))
     }
 }
 
@@ -96,7 +97,7 @@ impl From<Ack> for RawError {
 
 impl TryFrom<RawError> for Ack {
     type Error = wire::Error;
-    fn try_from(e: RawError) -> Result<Ack, wire::Error> {
+    fn try_from(e: RawError) -> core::result::Result<Ack, wire::Error> {
         match e {
             RawError {
                 code: 0,
@@ -181,7 +182,7 @@ impl<'wire> FromWire<'wire> for Error {
                 3 => Ok(Self::OutOfRange),
                 4 => Ok(Self::Internal),
                 5 => Ok(Self::UnknownChain),
-                _ => Err(wire::Error::OutOfRange),
+                _ => Err(fail!(wire::Error::OutOfRange)),
             },
             RawError { code: 4, data } => Ok(Self::Unspecified(data)),
             error => Ok(Self::Unknown(error)),
@@ -257,79 +258,4 @@ impl From<session::Error> for Error {
     }
 }
 
-impl<E: SpecificError> From<E> for Error<E> {
-    fn from(e: E) -> Self {
-        Self::Specific(e)
-    }
-}
-
-debug_from!(Error<E> => OutOfMemory, crypto::csrng::Error, crypto::hash::Error, crypto::sig::Error, session::Error);
-debug_from!(Error<E: SpecificError> => E);
-
-/// A type that describes a message-specific error.
-///
-/// This trait is an implementation detail.
-#[doc(hidden)]
-pub trait SpecificError: Sized {
-    /// Converts an error into this error type, if it represents one.
-    fn from_raw(code: u8) -> Result<Self, wire::Error>;
-
-    /// Copies this error into an error code.
-    fn to_raw(&self) -> Result<u8, wire::Error>;
-}
-
-/// An empty [`SpecificError`], for use with messages without interesting error
-/// messages.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum NoSpecificError {}
-impl SpecificError for NoSpecificError {
-    fn from_raw(_: u8) -> Result<Self, wire::Error> {
-        Err(wire::Error::OutOfRange)
-    }
-
-    fn to_raw(&self) -> Result<u8, wire::Error> {
-        match *self {}
-    }
-}
-
-/// Helper for creating specific errors. Compare `wire_enum!`.
-macro_rules! specific_error {
-    (
-        $(#[$emeta:meta])*
-        $vis:vis enum $name:ident {$(
-            $(#[$vmeta:meta])*
-            $var:ident = $code:literal
-        ),* $(,)*}
-    ) => {
-        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        $(#[$emeta])*
-        $vis enum $name {$(
-            $(#[$vmeta])*
-            $var,
-        )*}
-
-        impl $crate::protocol::error::SpecificError for $name {
-            fn from_raw(code: u8) -> Result<Self, $crate::protocol::wire::Error> {
-                match code {
-                    $($code => Ok(Self::$var),)*
-                    _ => Err($crate::protocol::wire::Error::OutOfRange),
-                }
-            }
-            fn to_raw(&self) -> Result<u8, $crate::protocol::wire::Error> {
-                match self {$(
-                    Self::$var => Ok($code),
-                )*}
-            }
-        }
-    };
-}
-
-specific_error! {
-    /// Errors specific to the [`protocol::Challenge`] and related messages.
-    pub enum ChallengeError {
-        /// The requested certificate chain does not exist.
-        UnknownChain = 0x00,
-    }
-}
+debug_from!(Error => OutOfMemory, crypto::csrng::Error, crypto::hash::Error, crypto::sig::Error, session::Error);

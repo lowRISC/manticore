@@ -8,6 +8,7 @@ use core::mem;
 
 use crate::io;
 use crate::io::endian::LeInt;
+use crate::Result;
 
 /// Represents a place that bytes can be written to, such as a `&[u8]`.
 ///
@@ -48,9 +49,7 @@ impl<W: Write + ?Sized> Write for &'_ mut W {
 impl Write for &'_ mut [u8] {
     fn write_bytes(&mut self, buf: &[u8]) -> Result<(), io::Error> {
         let n = buf.len();
-        if self.len() < n {
-            return Err(io::Error::BufferExhausted);
-        }
+        check!(self.len() >= n, io::Error::BufferExhausted);
 
         let (dest, rest) = mem::replace(self, &mut []).split_at_mut(n);
         dest.copy_from_slice(buf);
@@ -89,7 +88,7 @@ impl<W: std::io::Write> Write for StdWrite<W> {
                 Ok(len) => buf = &buf[len..],
                 Err(ErrorKind::Interrupted) => continue,
                 // No good way to propagate this. =/
-                Err(_) => return Err(io::Error::Internal),
+                Err(_) => return Err(fail!(io::Error::Internal)),
             }
         }
     }

@@ -18,6 +18,7 @@ use crate::io::ReadZero;
 use crate::io::Write;
 use crate::mem::Arena;
 use crate::mem::OutOfMemory;
+use crate::Result;
 
 /// A type which can be deserialized from the Cerberus wire format.
 ///
@@ -32,7 +33,7 @@ pub trait FromWire<'wire>: Sized {
 }
 
 /// A marshalling error.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     /// Indicates that something went wrong in an `io` operation.
     Io(io::Error),
@@ -104,7 +105,7 @@ where
         _: &'wire dyn Arena,
     ) -> Result<Self, Error> {
         let wire = <Self as WireEnum>::Wire::read_from(r)?;
-        Self::from_wire_value(wire).ok_or(Error::OutOfRange)
+        Self::from_wire_value(wire).ok_or_else(|| fail!(Error::OutOfRange))
     }
 }
 
