@@ -13,6 +13,7 @@
 //! buffer was read or written. This is especialy useful when used in
 //! conjunction with [`ToWire`]:
 //! ```
+//! # use manticore::Result;
 //! # use manticore::io::*;
 //! # use manticore::protocol::wire::{self, *};
 //! # struct MyMessage;
@@ -36,6 +37,7 @@ use core::mem;
 
 use crate::io;
 use crate::io::Write;
+use crate::Result;
 
 #[cfg(doc)]
 use crate::{io::Error, protocol::wire::ToWire};
@@ -86,9 +88,7 @@ impl<'a> Cursor<'a> {
             .cursor
             .checked_add(n)
             .ok_or(io::Error::BufferExhausted)?;
-        if self.buf.len() < end {
-            return Err(io::Error::BufferExhausted);
-        }
+        check!(self.buf.len() >= end, io::Error::BufferExhausted);
         let output = self.buf[..end].split_at_mut(self.cursor);
         self.cursor = end;
 
@@ -120,7 +120,7 @@ impl<'a> Cursor<'a> {
     /// cursor.seek(SeekPos::Abs(mark))?;
     /// assert_eq!(cursor.consumed_bytes(), b"bfooar");
     ///
-    /// # Ok::<(), Error>(())
+    /// # Ok::<(), manticore::Error<Error>>(())
     /// ```
     pub fn seek(&mut self, pos: SeekPos) -> Result<(), io::Error> {
         let offset = match pos {
@@ -129,12 +129,10 @@ impl<'a> Cursor<'a> {
                 let offset = (self.consumed_len() as isize)
                     .checked_add(offset)
                     .ok_or(io::Error::BufferExhausted)?;
-                if offset < 0 {
-                    return Err(io::Error::BufferExhausted);
-                }
+                check!(offset >= 0, io::Error::BufferExhausted);
                 offset as usize
             }
-            _ => return Err(io::Error::BufferExhausted),
+            _ => return Err(fail!(io::Error::BufferExhausted)),
         };
         self.cursor = offset;
         Ok(())

@@ -10,6 +10,7 @@ use ring::signature::KeyPair as _;
 use ring::signature::RsaPublicKeyComponents;
 
 use crate::crypto::sig;
+use crate::Result;
 
 #[cfg(doc)]
 use crate::crypto;
@@ -61,7 +62,7 @@ impl sig::Verify for Verify256 {
         self.key
             .key
             .verify(scheme, &message, signature)
-            .map_err(|_| sig::Error::Unspecified)
+            .map_err(|_| fail!(sig::Error::Unspecified))
     }
 }
 
@@ -76,7 +77,7 @@ impl Sign256 {
     /// Returns `None` if the key fails to parse.
     pub fn from_pkcs8(pkcs8: &[u8]) -> Result<Self, sig::Error> {
         let keypair = ring::signature::RsaKeyPair::from_pkcs8(pkcs8)
-            .map_err(|_| sig::Error::Unspecified)?;
+            .map_err(|_| fail!(sig::Error::Unspecified))?;
         Ok(Self { keypair })
     }
 
@@ -121,7 +122,7 @@ impl sig::Sign for Sign256 {
         let rng = ring::rand::SystemRandom::new();
         self.keypair
             .sign(scheme, &rng, &message, signature)
-            .map_err(|_| sig::Error::Unspecified)?;
+            .map_err(|_| fail!(sig::Error::Unspecified))?;
         Ok(self.sig_bytes())
     }
 }

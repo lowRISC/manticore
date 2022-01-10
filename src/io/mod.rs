@@ -21,7 +21,7 @@ pub use read::ReadZero;
 pub use write::Write;
 
 /// A generic, low-level I/O error.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {
     /// Indicates that some underlying buffer has been completely used up,
@@ -34,3 +34,5 @@ pub enum Error {
     /// Indicates that an unspecified, internal failure occurred.
     Internal,
 }
+
+debug_from!(Error);

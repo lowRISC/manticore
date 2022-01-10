@@ -4,12 +4,16 @@
 
 //! Cryptographic random numbers.
 
+use crate::Result;
+
 /// An error returned by a CSRNG.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Error {
     /// Indicates an unspecified, internal error.
     Unspecified,
 }
+
+debug_from!(Error);
 
 /// A cryptographically-secure random number generator.
 ///

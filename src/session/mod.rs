@@ -25,6 +25,7 @@
 //! [SP 800-108]: https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-108.pdf
 
 use crate::crypto::hash;
+use crate::Result;
 
 #[cfg(doc)]
 use crate::protocol::cerberus;
@@ -44,6 +45,8 @@ pub enum Error {
     /// Indicates an unspecified, internal error.
     Unspecified,
 }
+
+debug_from!(Error);
 
 /// A secret key returned by a [`Session`].
 pub type Key = [u8; 256 / 8];

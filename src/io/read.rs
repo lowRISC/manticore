@@ -17,6 +17,7 @@ use crate::io;
 use crate::io::endian::LeInt;
 use crate::mem::misalign_of;
 use crate::mem::Arena;
+use crate::Result;
 
 #[cfg(doc)]
 use crate::mem::ArenaExt;
@@ -75,7 +76,7 @@ pub unsafe trait ReadZero<'a>: Read + 'a {
     ) -> Result<&'a [u8], io::Error> {
         let out = arena
             .alloc_raw(layout)
-            .map_err(|_| io::Error::BufferExhausted)?;
+            .map_err(|_| fail!(io::Error::BufferExhausted))?;
         self.read_bytes(out)?;
         Ok(out)
     }
@@ -105,7 +106,8 @@ pub impl<'a, R: ReadZero<'a> + ?Sized> R {
         n: usize,
         arena: &'a dyn Arena,
     ) -> Result<&'a [T], io::Error> {
-        let layout = Layout::array::<T>(n).map_err(|_| io::Error::Internal)?;
+        let layout =
+            Layout::array::<T>(n).map_err(|_| fail!(io::Error::Internal))?;
         let bytes = self.read_direct(arena, layout)?;
         let lv = LayoutVerified::<_, [T]>::new_slice(bytes)
             .expect("read_direct() implemented incorrectly");
@@ -128,9 +130,7 @@ impl<R: Read + ?Sized> Read for &mut R {
 impl Read for &[u8] {
     fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), io::Error> {
         let n = out.len();
-        if self.len() < n {
-            return Err(io::Error::BufferExhausted);
-        }
+        check!(self.len() >= n, io::Error::BufferExhausted);
 
         out.copy_from_slice(&self[..n]);
         *self = &self[n..];
@@ -148,9 +148,7 @@ unsafe impl<'a, 'b: 'a> ReadZero<'a> for &'b [u8] {
         arena: &'a dyn Arena,
         layout: Layout,
     ) -> Result<&'a [u8], io::Error> {
-        if self.len() < layout.size() {
-            return Err(io::Error::BufferExhausted);
-        }
+        check!(self.len() >= layout.size(), io::Error::BufferExhausted);
 
         if misalign_of(self.as_ptr() as usize, layout.align()) == 0 {
             let (out, rest) = self.split_at(layout.size());
@@ -160,7 +158,7 @@ unsafe impl<'a, 'b: 'a> ReadZero<'a> for &'b [u8] {
 
         let out = arena
             .alloc_raw(layout)
-            .map_err(|_| io::Error::BufferExhausted)?;
+            .map_err(|_| fail!(io::Error::BufferExhausted))?;
         self.read_bytes(out)?;
         Ok(out)
     }
@@ -169,9 +167,7 @@ unsafe impl<'a, 'b: 'a> ReadZero<'a> for &'b [u8] {
 impl Read for &mut [u8] {
     fn read_bytes(&mut self, out: &mut [u8]) -> Result<(), io::Error> {
         let n = out.len();
-        if self.len() < n {
-            return Err(io::Error::BufferExhausted);
-        }
+        check!(self.len() >= n, io::Error::BufferExhausted);
 
         out.copy_from_slice(&self[..n]);
         let buf = mem::replace(self, &mut []);
@@ -190,9 +186,7 @@ unsafe impl<'a, 'b: 'a> ReadZero<'a> for &'b mut [u8] {
         arena: &'a dyn Arena,
         layout: Layout,
     ) -> Result<&'a [u8], io::Error> {
-        if self.len() < layout.size() {
-            return Err(io::Error::BufferExhausted);
-        }
+        check!(self.len() >= layout.size(), io::Error::BufferExhausted);
 
         if misalign_of(self.as_ptr() as usize, layout.align()) == 0 {
             let buf = mem::replace(self, &mut []);
@@ -203,7 +197,7 @@ unsafe impl<'a, 'b: 'a> ReadZero<'a> for &'b mut [u8] {
 
         let out = arena
             .alloc_raw(layout)
-            .map_err(|_| io::Error::BufferExhausted)?;
+            .map_err(|_| fail!(io::Error::BufferExhausted))?;
         self.read_bytes(out)?;
         Ok(out)
     }

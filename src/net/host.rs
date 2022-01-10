@@ -10,6 +10,7 @@ use crate::io::Cursor;
 use crate::io::ReadZero;
 use crate::io::Write;
 use crate::net;
+use crate::Result;
 
 /// Represents a physical port that can be used to interact with host devices.
 ///
@@ -25,6 +26,7 @@ use crate::net;
 /// `HostPort` uses the traits [`HostRequest`] and [`HostResponse`] to describe
 /// a generic state machine, where a request is processed and replied to.
 /// ```
+/// # use manticore::Result;
 /// # use manticore::net::{*, host::*};
 /// fn process_request<'req, Header>(port: &mut impl HostPort<'req, Header>) -> Result<(), Error> {
 ///     let req = port.receive()?;
@@ -197,7 +199,7 @@ pub trait HostResponse<'req> {
 ///     &mut resp_bytes, &arena
 /// ).unwrap();
 /// assert_eq!(resp.version, &[0xba; 32]);
-/// # Ok::<(), manticore::net::Error>(())
+/// # Ok::<(), manticore::Error<manticore::net::Error>>(())
 /// ```
 pub struct InMemHost<'buf, Header>(InMemInner<'buf, Header>);
 
@@ -261,9 +263,7 @@ impl<'req, 'buf: 'req, Header: Copy> HostPort<'req, Header>
     fn receive(
         &mut self,
     ) -> Result<&mut dyn HostRequest<'req, Header>, net::Error> {
-        if self.0.rx_header.is_none() {
-            return Err(net::Error::Disconnected);
-        }
+        check!(self.0.rx_header.is_some(), net::Error::Disconnected);
         Ok(&mut self.0)
     }
 }
@@ -272,13 +272,11 @@ impl<'req, 'buf: 'req, Header: Copy> HostRequest<'req, Header>
     for InMemInner<'buf, Header>
 {
     fn header(&self) -> Result<Header, net::Error> {
-        self.rx_header.ok_or(net::Error::OutOfOrder)
+        self.rx_header.ok_or_else(|| fail!(net::Error::OutOfOrder))
     }
 
     fn payload(&mut self) -> Result<&mut dyn ReadZero<'req>, net::Error> {
-        if self.rx_header.is_none() {
-            return Err(net::Error::OutOfOrder);
-        }
+        check!(self.rx_header.is_some(), net::Error::OutOfOrder);
         Ok(&mut self.rx)
     }
 
@@ -296,9 +294,7 @@ impl<'req, 'buf: 'req, Header: Copy> HostResponse<'req>
     for InMemInner<'buf, Header>
 {
     fn sink(&mut self) -> Result<&mut dyn Write, net::Error> {
-        if self.finished {
-            return Err(net::Error::OutOfOrder);
-        }
+        check!(!self.finished, net::Error::OutOfOrder);
         Ok(&mut self.tx)
     }
 

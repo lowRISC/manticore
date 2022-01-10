@@ -56,9 +56,7 @@ protocol_struct! {
         spdm::write_zeros(&mut w, 3)?;
 
         let ct_micros = self.crypto_timeout.as_micros();
-        if !ct_micros.is_power_of_two() {
-            return Err(wire::Error::OutOfRange);
-        }
+        check!(ct_micros.is_power_of_two(), wire::Error::OutOfRange);
         let ct_exp = 8 * mem::size_of_val(&ct_micros) as u32 - ct_micros.leading_zeros() - 1;
         w.write_le(ct_exp as u8)?;
 
@@ -104,9 +102,7 @@ protocol_struct! {
         spdm::write_zeros(&mut w, 3)?;
 
         let ct_micros = self.crypto_timeout.as_micros();
-        if !ct_micros.is_power_of_two() {
-            return Err(wire::Error::OutOfRange);
-        }
+        check!(ct_micros.is_power_of_two(), wire::Error::OutOfRange);
         let ct_exp = 8 * mem::size_of_val(&ct_micros) as u32 - ct_micros.leading_zeros() - 1;
         w.write_le(ct_exp as u8)?;
 

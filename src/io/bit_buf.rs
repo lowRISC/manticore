@@ -16,6 +16,7 @@
 //! is a sequence of reads in the same order.
 
 use crate::io;
+use crate::Result;
 
 /// A queue-like buffer of bits within a byte.
 ///
@@ -70,9 +71,7 @@ impl BitBuf {
     /// least significant bits of a byte.
     #[inline]
     pub fn read_bits(&mut self, n: usize) -> Result<u8, io::Error> {
-        if self.len() < n {
-            return Err(io::Error::BufferExhausted);
-        }
+        check!(self.len() >= n, io::Error::BufferExhausted);
 
         // Avoid the corner-case of `n = 0` entirely, since it can trigger
         // shift underflow.
@@ -98,9 +97,7 @@ impl BitBuf {
     /// of `bits`.
     #[inline]
     pub fn write_bits(&mut self, n: usize, bits: u8) -> Result<(), io::Error> {
-        if self.len() + n > 8 {
-            return Err(io::Error::BufferExhausted);
-        }
+        check!(self.len() + n <= 8, io::Error::BufferExhausted);
 
         let mask = inverse_popcnt(n);
         self.bits = self.bits.wrapping_shl(n as u32);

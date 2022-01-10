@@ -39,6 +39,7 @@ use crate::manifest::TocEntry;
 use crate::manifest::ValidationTime;
 use crate::mem::misalign_of;
 use crate::mem::Arena;
+use crate::Result;
 
 use crate::mem::ArenaExt as _;
 use crate::protocol::wire::WireEnum as _;
@@ -340,11 +341,12 @@ where
             hasher,
         )?;
 
-        if rest.len() < header.version_len as usize {
-            return Err(Error::TooShort {
+        check!(
+            rest.len() >= header.version_len as usize,
+            Error::TooShort {
                 toc_index: self.entry.index(),
-            });
-        }
+            }
+        );
         let (version_str, mut buf) = rest.split_at(header.version_len as usize);
 
         // Align back to 4-byte boundary.
@@ -355,11 +357,12 @@ where
         )?;
 
         let rw_len = mem::size_of::<RwRegion>() * header.rw_count as usize;
-        if buf.len() < rw_len {
-            return Err(Error::TooShort {
+        check!(
+            buf.len() >= rw_len,
+            Error::TooShort {
                 toc_index: self.entry.index(),
-            });
-        }
+            }
+        );
         let (rw_bytes, unparsed_image_regions) = buf.split_at(rw_len);
         // NOTE: This cannot panic, since it checks for alignment (4-byte) and
         // size, which have already been explicitly checked above.
@@ -395,22 +398,24 @@ where
                     0b00 => hash::Algo::Sha256,
                     0b01 => hash::Algo::Sha384,
                     0b10 => hash::Algo::Sha512,
-                    _ => return Err(Error::OutOfRange),
+                    _ => return Err(fail!(Error::OutOfRange)),
                 };
-                if rest.len() < hash_type.bytes() {
-                    return Err(Error::TooShort {
+                check!(
+                    rest.len() >= hash_type.bytes(),
+                    Error::TooShort {
                         toc_index: self.entry.index(),
-                    });
-                }
+                    }
+                );
                 let (_hash, rest) = rest.split_at(hash_type.bytes());
 
                 let ranges_len = img_header.region_count as usize
                     * mem::size_of::<FwRegionRange>();
-                if rest.len() < ranges_len {
-                    return Err(Error::TooShort {
+                check!(
+                    rest.len() >= ranges_len,
+                    Error::TooShort {
                         toc_index: self.entry.index(),
-                    });
-                }
+                    }
+                );
                 let ranges = LayoutVerified::<_, [FwRegionRange]>::new_slice(
                     &rest[..ranges_len],
                 )

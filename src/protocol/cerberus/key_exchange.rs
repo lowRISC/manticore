@@ -73,7 +73,7 @@ protocol_struct! {
                     0b00 => hash::Algo::Sha256,
                     0b01 => hash::Algo::Sha384,
                     0b10 => hash::Algo::Sha512,
-                    _ => return Err(wire::Error::OutOfRange),
+                    _ => return Err(fail!(wire::Error::OutOfRange)),
                 };
                 let pk_len = r.remaining_data();
                 let pk_req = r.read_slice(pk_len, arena)?;

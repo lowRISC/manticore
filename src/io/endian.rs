@@ -11,6 +11,7 @@ use core::mem;
 use crate::io;
 use crate::io::Read;
 use crate::io::Write;
+use crate::Result;
 
 /// A little-endian integer, which can be read and written.
 ///

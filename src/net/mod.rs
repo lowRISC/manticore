@@ -26,7 +26,7 @@ pub mod host;
 use host::HostPort;
 
 /// A networking error.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Error {
     /// Indicates an underlying I/O error.
     Io(io::Error),
@@ -53,7 +53,7 @@ impl From<io::Error> for Error {
 debug_from!(Error => io::Error);
 
 /// A header type, which represents a protocol over the wire.
-pub trait Header: Copy {
+pub trait Header: Copy + Debug {
     /// The command type enum associated with this header.
     type CommandType: Copy + Debug + Eq;
 

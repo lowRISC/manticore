@@ -27,6 +27,7 @@ use crate::manifest::Manifest;
 use crate::manifest::ManifestType;
 use crate::mem::Arena;
 use crate::protocol::wire::WireEnum;
+use crate::Result;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -144,12 +145,12 @@ impl<'entry, 'toc, M: Manifest> TocEntry<'entry, 'toc, M> {
         for data in data_vec {
             hasher.write(data)?;
         }
-        hasher
-            .expect(expected)
-            .map_err(|error| Error::BadElementHash {
-                error,
+        hasher.expect(expected).map_err(|error| {
+            fail!(Error::BadElementHash {
+                error: error.into_inner(),
                 toc_index: self.index(),
             })
+        })
     }
 
     /// Helper for the common case of wanting to read an entry that has some
@@ -259,11 +260,11 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
     /// Returns true if the invariants are upheld.
     fn check_invariants(&self) -> Result<(), Error> {
         for (i, entry) in self.entries.iter().enumerate() {
-            if entry.hash_idx != 0xff
-                && self.hash(entry.hash_idx as usize).is_none()
-            {
-                return Err(Error::BadHashIndex { toc_index: i });
-            }
+            check!(
+                entry.hash_idx == 0xff
+                    || self.hash(entry.hash_idx as usize).is_some(),
+                Error::BadHashIndex { toc_index: i }
+            );
 
             // NOTE: Unfortunately, this check is necessarilly quadratic
             // in the TOC size.
@@ -275,9 +276,7 @@ impl<'toc, M: Manifest> Toc<'toc, M> {
                         break;
                     }
                 }
-                if !has_parent {
-                    return Err(Error::BadParent { toc_index: i });
-                }
+                check!(has_parent, Error::BadParent { toc_index: i });
             }
         }
 
@@ -451,9 +450,10 @@ impl<'f, M: Manifest, Provenance> Container<'f, M, Provenance> {
             verify_arena,
         )?;
 
-        if !hasher.supports(self.toc.hash_type) {
-            return Err(Error::UnsupportedHashType(self.toc.hash_type));
-        }
+        check!(
+            hasher.supports(self.toc.hash_type),
+            Error::UnsupportedHashType(self.toc.hash_type)
+        );
 
         let mut toc_hasher = hasher.new_hash(self.toc.hash_type)?;
         let toc_header = &self.header.as_bytes()[12..];
@@ -463,7 +463,7 @@ impl<'f, M: Manifest, Provenance> Container<'f, M, Provenance> {
 
         toc_hasher
             .expect(expected_toc_hash)
-            .map_err(Error::BadTocHash)
+            .map_err(|e| fail!(Error::BadTocHash(e.into_inner())))
     }
 
     /// Verifies the signature for this `Container`.
@@ -509,26 +509,26 @@ impl<'f, M: Manifest, Provenance> Container<'f, M, Provenance> {
         // TODO(#58): Manticore currently ignores header.sig_type.
         let header = flash.read_object::<RawHeader>(0, toc_arena)?;
 
-        if ManifestType::from_wire_value(header.manifest_type) != Some(M::TYPE)
-        {
-            return Err(Error::BadMagic(header.manifest_type));
-        }
+        check!(
+            ManifestType::from_wire_value(header.manifest_type)
+                == Some(M::TYPE),
+            Error::BadMagic(header.manifest_type)
+        );
 
-        if header.sig_len > header.total_len {
-            return Err(Error::OutOfRange);
-        }
+        check!(header.sig_len <= header.total_len, Error::OutOfRange);
 
         let hash_type = match header.hash_type {
             0b00 => hash::Algo::Sha256,
             0b01 => hash::Algo::Sha384,
             0b10 => hash::Algo::Sha512,
-            _ => return Err(Error::OutOfRange),
+            _ => return Err(fail!(Error::OutOfRange)),
         };
 
         // Unused values are currently required to be zeroed by the spec.
-        if header.reserved1 != 0 || header.reserved2 != 0 {
-            return Err(Error::OutOfRange);
-        }
+        check!(
+            header.reserved1 == 0 && header.reserved2 == 0,
+            Error::OutOfRange
+        );
 
         let mut cursor = mem::size_of::<RawHeader>() as u32;
         let entries = flash.read_slice::<RawTocEntry>(

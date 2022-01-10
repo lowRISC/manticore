@@ -17,6 +17,7 @@ use crate::manifest::Parse;
 use crate::manifest::ParsedManifest;
 use crate::manifest::TocEntry;
 use crate::mem::Arena;
+use crate::Result;
 
 /// An identifier for the platform a manifest is for.
 pub struct PlatformId<'a, 'f, Manifest> {

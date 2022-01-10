@@ -98,45 +98,96 @@ impl<E: fmt::Display> fmt::Display for Error<E> {
 /// impl. We work around this by calling this macro for every Manticore
 /// error definition that has `From` impls.
 macro_rules! debug_from {
-    // An error generic over one type with a single trait bound
+    // Match an error generic over one type with a single trait bound
     ($e:ident<$trait:ident: $bound:path> => $($f:ty),+ $(,)?) => {$(
         impl<$trait: $bound> From<$crate::Error<$f>> for $crate::Error<$e<$trait>> {
             fn from(e: $crate::Error<$f>) -> Self {
                 e.cast()
             }
         }
-    )*};
-    // An error generic over one type
-    ($e:ident<$trait:ident> => $($f:ty),+ $(,)?) => {$(
-        impl<$trait> From<$crate::Error<$f>> for $crate::Error<$e<$trait>> {
+
+        impl<$trait: $bound> From<$f> for $crate::Error<$e<$trait>> {
+            fn from(e: $f) -> Self {
+                Self::__new(e.into())
+            }
+        }
+    )*
+
+        impl<$trait: $bound> From<$e<$trait>> for $crate::Error<$e<$trait>> {
+            fn from(e: $e<$trait>) -> Self {
+                Self::__new(e.into())
+            }
+        }
+    };
+
+    // Match an error generic over some parameters without bounds
+    ($e:ident<$tparams:tt> => $($f:ty),+ $(,)?) => {$(
+        impl<$tparams> From<$crate::Error<$f>> for $crate::Error<$e<$tparams>> {
             fn from(e: $crate::Error<$f>) -> Self {
                 e.cast()
             }
         }
-    )*};
+
+        impl<$tparams> From<$f> for $crate::Error<$e<$tparams>> {
+            fn from(e: $f) -> Self {
+                Self::__new(e.into())
+            }
+        }
+    )*
+
+        impl<$tparams> From<$e<$tparams>> for $crate::Error<$e<$tparams>> {
+            fn from(e: $e<$tparams>) -> Self {
+                Self::__new(e.into())
+            }
+        }
+    };
+
+    // Match an error without generic parameters
     ($e:ty => $($f:ty),+ $(,)?) => {$(
         impl From<$crate::Error<$f>> for $crate::Error<$e> {
             fn from(e: $crate::Error<$f>) -> Self {
                 e.cast()
             }
         }
-    )*};
+
+        impl From<$f> for $crate::Error<$e> {
+            fn from(e: $f) -> Self {
+                Self::__new(e.into())
+            }
+        }
+    )*
+
+        impl From<$e> for $crate::Error<$e> {
+            fn from(e: $e) -> Self {
+                Self::__new(e.into())
+            }
+        }
+    };
+
+    ($e:ty) => {
+        impl From<$e> for $crate::Error<$e> {
+            fn from(e: $e) -> Self {
+                Self::__new(e.into())
+            }
+        }
+    };
 }
 
 /// Checks a condition, logging if it fails.
 ///
 /// If the condition does not hold, constructs the given error, logs it, and
 /// returns out of the current function with it.
+#[macro_export]
 macro_rules! check {
     ($cond:expr, $error:expr) => {
         if !$cond {
             let error = $error;
-            fail!(
+            return Err($crate::fail!(
                 error,
                 "check failure: `{}`; returned {:?}",
                 stringify!($cond),
                 error,
-            )?;
+            ));
         }
     };
 }
@@ -147,19 +198,21 @@ macro_rules! check {
 ///
 /// For example, instead of writing `foo.ok_or(MyError)`, instead write
 /// `foo.ok_or_else(|| fail!(MyError))`.
+#[macro_export]
 macro_rules! fail {
     ($error:expr, $($format:tt)+) => {{
-        error!($($format)+);
-        Err($crate::debug::Error::__new($error))
+        $crate::error!($($format)+);
+        $crate::Error::__new($error)
     }};
     ($error:expr) => {{
         let error = $error;
-        error!("generated error: `{:?}`", error);
-        Err($crate::debug::Error::__new(error))
+        $crate::error!("generated error: `{:?}`", error);
+        $crate::Error::__new(error)
     }};
 }
 
 /// Redactable version of [`log::trace!()`].
+#[macro_export]
 macro_rules! trace {
     ($($args:tt)*) => {
         #[cfg(feature = "log")]
@@ -168,6 +221,7 @@ macro_rules! trace {
 }
 
 /// Redactable version of [`log::info!()`].
+#[macro_export]
 macro_rules! info {
     ($($args:tt)*) => {
         #[cfg(feature = "log")]
@@ -176,6 +230,7 @@ macro_rules! info {
 }
 
 /// Redactable version of [`log::warn!()`].
+#[macro_export]
 macro_rules! warn {
     ($($args:tt)*) => {
         #[cfg(feature = "log")]
@@ -184,6 +239,7 @@ macro_rules! warn {
 }
 
 /// Redactable version of [`log::error!()`].
+#[macro_export]
 macro_rules! error {
     ($($args:tt)*) => {
         #[cfg(feature = "log")]

@@ -5,6 +5,7 @@
 //! Algorithm-generic signature traits.
 
 use crate::protocol::cerberus::capabilities;
+use crate::Result;
 
 /// An error returned by a signature operation.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -12,6 +13,8 @@ pub enum Error {
     /// Indicates an unspecified, internal error.
     Unspecified,
 }
+
+debug_from!(Error);
 
 /// A signature-verification engine, already primed with a key.
 ///

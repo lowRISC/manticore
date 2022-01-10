@@ -11,6 +11,7 @@
 use crate::mem::Arena;
 use crate::mem::ArenaExt as _;
 use crate::mem::OutOfMemory;
+use crate::Result;
 
 #[cfg(feature = "arbitrary-derive")]
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
@@ -67,6 +68,8 @@ pub enum Error {
     /// Indicates an unspecified, internal error.
     Unspecified,
 }
+
+debug_from!(Error);
 
 /// A hashing engine, which maintains the state for one digest.
 ///

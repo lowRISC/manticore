@@ -10,6 +10,7 @@ use ring::rand::SecureRandom as _;
 use ring::rand::SystemRandom;
 
 use crate::crypto::csrng;
+use crate::Result;
 
 #[cfg(doc)]
 use crate::crypto;
@@ -36,6 +37,8 @@ impl Default for Csrng {
 
 impl csrng::Csrng for Csrng {
     fn fill(&mut self, buf: &mut [u8]) -> Result<(), csrng::Error> {
-        self.inner.fill(buf).map_err(|_| csrng::Error::Unspecified)
+        self.inner
+            .fill(buf)
+            .map_err(|_| fail!(csrng::Error::Unspecified))
     }
 }

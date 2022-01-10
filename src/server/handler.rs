@@ -79,6 +79,7 @@ use crate::protocol::wire::ToWire as _;
 use crate::protocol::Message;
 use crate::protocol::Req;
 use crate::protocol::Resp;
+use crate::Result;
 
 /// A `*`-importable prelude that pulls in only the names that are necessary
 /// to make `Handler` work.
@@ -88,7 +89,7 @@ pub mod prelude {
 }
 
 /// An error returned by a request handler.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Error<Header>
 where
     Header: net::Header,
@@ -309,7 +310,7 @@ impl<Prev, Command, F, const B: bool> Cons<Prev, Command, F, B> {
             Err(err) => {
                 let reply =
                     request.reply(original_header.reply_with_error())?;
-                err.to_wire(reply.sink()?)?;
+                err.into_inner().to_wire(reply.sink()?)?;
                 reply.finish()?;
                 Ok(())
             }
@@ -390,8 +391,9 @@ where
         let r = request.payload()?;
         let req_buf = arena
             .alloc_slice::<u8>(r.remaining_data())
-            .map_err(wire::Error::from)?;
-        r.read_bytes(req_buf).map_err(wire::Error::from)?;
+            .map_err(|e| wire::Error::from(e.into_inner()))?;
+        r.read_bytes(req_buf)
+            .map_err(|e| wire::Error::from(e.into_inner()))?;
 
         // Note: `{ req_buf }` produces a copy of req_buf, so that the from_wire
         // argument becomes an rvalue. Thus, `from_wire` does not mutate the
@@ -422,7 +424,7 @@ where
         _: &mut dyn net::host::HostRequest<'req, Header>,
         _: &'req dyn Arena,
     ) -> Result<(), Error<Header>> {
-        Err(Error::UnhandledCommand(header.command()))
+        Err(fail!(Error::UnhandledCommand(header.command())))
     }
 }
 
@@ -497,10 +499,10 @@ mod test {
             req,
         );
 
-        assert!(matches!(
+        assert_eq!(
             resp,
-            Err(Error::UnhandledCommand(CommandType::FirmwareVersion))
-        ));
+            Err(Error::UnhandledCommand(CommandType::FirmwareVersion).into())
+        );
     }
 
     #[test]
@@ -557,10 +559,10 @@ mod test {
             req,
         );
 
-        assert!(matches!(
+        assert_eq!(
             resp,
-            Err(Error::UnhandledCommand(CommandType::DeviceId))
-        ));
+            Err(fail!(Error::UnhandledCommand(CommandType::DeviceId)))
+        );
         assert!(!handler_called);
     }
 
