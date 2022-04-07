@@ -158,6 +158,7 @@ derive_borrowed! {
         cfg_attr(feature = "serde", derive(serde::Deserialize)),
         cfg_attr(feature = "arbitrary-derive", derive(Arbitrary)),
     )]
+    // TODO(#151): Change to tuple variants.
     pub enum Identifier<'a> {
         /// Identifier of type Version. Set when `IdentifierType::Version` is set
         /// in request. Uses a 4-byte identifier.
