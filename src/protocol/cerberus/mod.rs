@@ -28,6 +28,9 @@ pub use get_cert::GetCert;
 pub mod get_host_state;
 pub use get_host_state::GetHostState;
 
+pub mod get_pfm_id;
+pub use get_pfm_id::GetPfmId;
+
 pub mod challenge;
 pub use challenge::Challenge;
 
@@ -90,6 +93,10 @@ wire_enum! {
         ///
         /// See [`GetHostState`].
         GetHostState = 0x40,
+        /// A request for the Platform Firmware Manifest ID.
+        ///
+        /// See [`GetPfmId`]
+        GetPfmId = 0x59,
         /// A request for the number of times the device has been reset since
         /// POR.
         ///
@@ -130,6 +137,7 @@ impl From<u8> for CommandType {
             0x82 => CommandType::GetCert,
             0x83 => CommandType::Challenge,
             0x40 => CommandType::GetHostState,
+            0x59 => CommandType::GetPfmId,
             0x87 => CommandType::ResetCounter,
             0xa0 => CommandType::DeviceUptime,
             0xa1 => CommandType::RequestCounter,
