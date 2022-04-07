@@ -11,6 +11,7 @@ manticore::protocol::cerberus::DeviceUptime
 manticore::protocol::cerberus::GetDigests
 manticore::protocol::cerberus::GetCert
 manticore::protocol::cerberus::GetHostState
+manticore::protocol::cerberus::GetPfmId
 manticore::protocol::cerberus::FirmwareVersion
 manticore::protocol::cerberus::KeyExchange
 manticore::protocol::cerberus::RequestCounter
