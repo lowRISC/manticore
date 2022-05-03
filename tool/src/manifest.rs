@@ -98,6 +98,7 @@ impl Manifest {
                             "failed to sign PFM"
                         )
                     }
+                    m => panic!("unsupported manifest: {:?}", m),
                 };
 
                 check!(w.write_all(&manifest), "failed to write manifest");
@@ -165,6 +166,7 @@ impl Manifest {
                         };
                         check!(r, "failed to serialize PFM");
                     }
+                    Some(m) => panic!("unsupported manifest: {:?}", m),
                     None => {
                         check!(
                             Err(format!(

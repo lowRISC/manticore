@@ -92,6 +92,7 @@ pub use generic::*;
 
 #[cfg(feature = "std")]
 pub mod owned;
+pub mod pcd;
 pub mod pfm;
 
 #[cfg(test)]
@@ -105,11 +106,12 @@ wire_enum! {
     ///
     /// This enum represents the "magic number" `u16` value in a maniest header.
     pub enum ManifestType: u16 {
-        /// A ["Platform Firmware Manifest"], a manifest which describes
+        /// A ["Platform Firmware Manifest"][pfm], a manifest which describes
         /// firmware that is allowed to run on a platfrom.
-        ///
-        /// ["Platform Firmware Manifest"]: pfm/index.html
         Pfm = 0x706d,
+        /// A ["Platform Configuration Descriptor"][pcd], a manifest which describes
+        /// devices an RoT is connected to.
+        Pcd = 0x8ebc,
     }
 }
 
